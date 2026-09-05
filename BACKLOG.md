@@ -1,0 +1,23 @@
+# Backlog
+
+Operational items. Parked here so they stop presenting themselves as strategy — direction lives in [SPONSOR-STRATEGY-REVIEW.md](./SPONSOR-STRATEGY-REVIEW.md).
+
+## Unblocked, do when convenient
+- [ ] Submit the CRE Confidential Workflows access form. Not a blocker — the local simulator runs without waiting, and a CLI simulation qualifies for the track.
+- [ ] Decide whether to approach Circle through `circle.com/join-stablefx`. Its own CTA is "Become a design partner", which is the Oct-31-gate FX signer path, not just a hackathon key.
+- [ ] Delete the stale untracked copies of the business docs from this working tree; they are canonical in `~/signa-batches` now.
+- [ ] Make this repository public before Sep 16. Every sponsor track requires open source.
+
+## Verify before the workstream that depends on it
+- [ ] Does Subgraph Studio index Arc Testnet, or only the Sepolia leg? Gates Workstream E.
+- [ ] Which chains can CRE capability DONs write to? Fixes Workstream B's settlement chain.
+- [ ] Does `testnet.arcscan.app` support source verification, and via which API?
+- [ ] Is testnet EURC obtainable in useful quantities, or must it be mocked?
+- [ ] Which documented Arc EVM divergences touch our contracts?
+
+## Batches artifact — separate repo, separate deadline
+Tracked in `~/signa-batches/SUBMISSION-CONTROL.md`. All of it needs founder input: testnet identities and funding, `ETHERSCAN_API_KEY`, outreach approval, personal application fields, the adversity answer, the founder video, final claims consent.
+
+## Known debt
+- [ ] `ARC-SYSTEM-DESIGN.md` and `SYSTEM-ARCHITECTURE.md` overlap on the Arc bindings. Fold the Arc doc into the architecture doc once the port starts, rather than maintaining both.
+- [ ] The dashboard shell is not wired to anything. It becomes real in Workstream A or C, whichever lands first.
