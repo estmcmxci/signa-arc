@@ -104,22 +104,20 @@ sequenceDiagram
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Unfunded
-    Unfunded --> Covered: facility funded + first credentials accepted
-    Covered --> Covered: credential refreshed, ratio holds
-    Covered --> ReserveOnly: available line down to reserve floor
-    ReserveOnly --> Covered: repayment or hedge increase
-    Covered --> Breached: ratio below policy, or credential expired
-    ReserveOnly --> Breached: ratio below policy
-    Breached --> Curing: cure window opened
-    Curing --> Covered: fresh credential restores ratio
-    Curing --> Defaulted: cure window elapsed
-    Breached --> Waived: quorum-approved waiver, Workstream C
-    Waived --> Covered: waiver expires, ratio restored
-    Defaulted --> [*]
+    [*] --> UNASSESSED
+    UNASSESSED --> COMPLIANT: valid coverage meets minCoverageBps
+    UNASSESSED --> CURE: valid evaluation below threshold
+    COMPLIANT --> CURE: coverage becomes insufficient
+    CURE --> BREACH: cure deadline passes without restoration
+    CURE --> COMPLIANT: fresh credentials restore the ratio
+    BREACH --> COMPLIANT: fresh credentials restore the ratio
+    CURE --> WAIVED: admin creates a bounded waiver
+    BREACH --> WAIVED: admin creates a bounded waiver
+    WAIVED --> COMPLIANT: waiver expires or is revoked, then re-sync
+    WAIVED --> CURE: waiver expires or is revoked, then re-sync
 ```
 
-Every transition emits an event. That event stream *is* the auditable policy history the thesis claims — and the input to Workstream E.
+These are the canonical states from `PROTOTYPE-SPEC.md` §8, not new vocabulary. Draws are allowed only in `COMPLIANT` or under an active `WAIVED`; entering `CURE` blocks draws immediately, because a cure period is time to remedy, not permission to add exposure. `BREACH` adds no liquidation or seizure behaviour. Every transition emits an event, and that event stream *is* the auditable policy history the thesis claims — and the input to Workstream E.
 
 ## 5. Arc-specific bindings
 
