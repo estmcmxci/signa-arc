@@ -1,0 +1,25 @@
+# Foundry build output
+contracts/cache/
+contracts/out/
+broadcast/
+
+# Local secrets and deployment inputs
+.env
+contracts/.env
+apps/dashboard/.env.local
+scenarios/.env
+
+# JavaScript package output (later prototype phases)
+node_modules/
+.next/
+dist/
+
+# Belt-and-braces: never commit any env file except examples
+.env*
+!.env.example
+!**/.env.example
+*.key
+*.pem
+keystore/
+.DS_Store
+**/.DS_Store
