@@ -23,3 +23,19 @@ dist/
 keystore/
 .DS_Store
 **/.DS_Store
+
+# Business, claims and outreach material — lives in the private signa-batches repo.
+# This repository goes public for ETHOnline; none of the below may appear in it.
+APPLICATION-DRAFT.md
+SUBMISSION-CONTROL.md
+CLAIMS-EVIDENCE-LEDGER.md
+FOUNDER-PROFILE.md
+FOUNDER-VIDEO-SCRIPT.md
+OUTREACH-PLAN.md
+ONE-PAGE-INTEGRATION-BRIEF.md
+FIRST-ROUND-DESIGN-PARTNER-RESEARCH.md
+FINAL-BATCH-READINESS-PROBE.md
+EXTERNAL-RESEARCH-*.md
+EXECUTION-PLAN.md
+VALIDATION-LOG.md
+research/
