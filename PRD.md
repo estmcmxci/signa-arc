@@ -50,7 +50,7 @@ Short forms of the answers that recur. Full versions live in the private narrati
 - **S-6** Public repository with CI green, before submission.
 
 ### In — ship in priority order after S-1..S-6 are green
-- **S-7** ENS verifier registry on ENSv2 Sepolia with live revocation (Workstream D).
+- **S-7** ENS on ENSv2 Sepolia: a named facility profile whose records resolve to the facility's contracts and policy, with verifier subnames beneath it carrying EAC attest roles, and live revocation changing a capital outcome (Workstream D). Design in `SPONSOR-STRATEGY-REVIEW.md` §D.
 - **S-8** Privy organisation wallet, default-deny policy, reserve rule, quorum waiver (Workstream C).
 - **S-9** CRE confidential credential via CLI simulation (Workstream B).
 - **S-10** Subgraph over lifecycle events, only if Subgraph Studio indexes the chosen chain (Workstream E).
