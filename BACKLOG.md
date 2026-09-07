@@ -18,6 +18,11 @@ Operational items. Parked here so they stop presenting themselves as strategy �
 ## Batches artifact — separate repo, separate deadline
 Tracked in `~/signa-batches/SUBMISSION-CONTROL.md`. All of it needs founder input: testnet identities and funding, `ETHERSCAN_API_KEY`, outreach approval, personal application fields, the adversity answer, the founder video, final claims consent.
 
+## Design decisions to carry into the EED
+
+- [ ] **Cross-check the exposure credential against the vault's own ledger.** The vault independently knows how much USDC it disbursed and how much came back — a record no external party signs. An exposure credential that is arithmetically inconsistent with that history (claiming a book far smaller than what was lent, net of repayments) is the one place in the machine where a false assertion is *mechanically* detectable rather than merely attributable. Cheap to add, and it closes part of the honest gap on the exposure leg. Surfaced in the 2026-09-07 walkthrough; not built, not designed in detail.
+- [ ] Selection rule, not code: the exposure issuer must be a party that answers to the lender (servicer, controlled receivable account), never one aligned with the borrower. Document it in the prototype spec's roles section as a deployment requirement.
+
 ## Known debt
 - [ ] `ARC-SYSTEM-DESIGN.md` and `SYSTEM-ARCHITECTURE.md` overlap on the Arc bindings. Fold the Arc doc into the architecture doc once the port starts, rather than maintaining both.
 - [ ] The dashboard shell is not wired to anything. It becomes real in Workstream A or C, whichever lands first.
