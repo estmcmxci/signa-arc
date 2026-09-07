@@ -99,3 +99,24 @@ This walkthrough demonstrates contract behavior, not a real lender, borrower, pr
 
 Record a clean screen capture after the live run and retain stills for the compliant, cure, restored, and breach states. If the live public RPC is rate-limited during the application video, show the recorded Base Sepolia receipt links and explain that the dashboard is reading the same deployed contracts; never substitute local hashes while calling them Sepolia evidence.
 
+---
+
+# ETHOnline demo — Arc, 90 seconds
+
+Separate from the deterministic local walkthrough above. This is the submission recording for Workstream A, and it lands on the refusal rather than the successful draw — every DeFi demo has a successful transaction; almost none has a transaction that is correctly refused.
+
+| Time | Beat |
+|---|---|
+| 0:00–0:15 | A lender funds a EURC-denominated loan book with USDC on Arc. Facility policy on screen: minimum coverage, cure window, reserve floor. |
+| 0:15–0:35 | Borrower draws. The engine evaluates inside the same transaction. **Permitted** — USDC moves. Explorer link visible. |
+| 0:35–0:55 | The hedge credential refreshes with reduced notional. `syncCovenant` flips the facility to `CURE`. The **same draw, same amount, is now refused with a reason code.** |
+| 0:55–1:15 | Cure: a fresh credential restores the ratio, `restoreCompliance` runs, the draw succeeds again. |
+| 1:15–1:30 | The boundary statement, below. |
+
+## The boundary statement
+
+Say this out loud rather than hiding it in a README:
+
+> "One thing here is fake: the broker. The hedge facts come from a fixture shaped like Ebury's API, because Ebury does not hand hackathon teams a key. In a real deployment that is replaced by a confirmation the lender already has contractual rights to receive. Everything downstream of that line is live onchain — and here is the line."
+
+Then show the seam working: point the adapter at a different fixture, live, and let the facility change state on screen. Demonstrating that the boundary is real beats any amount of simulated data. **Do not** dress the mock up with generated or Monte Carlo feeds — elaborate fakery reads worse than a clearly labelled stub, because it looks like an absence being disguised.

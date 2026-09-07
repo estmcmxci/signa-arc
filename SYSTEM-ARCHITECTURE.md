@@ -109,6 +109,22 @@ graph TB
 | **Privy** | Enforces the policy where money actually leaves, and makes waivers m-of-n | Reserve mechanics and waiver governance are ours to build and unilateral |
 | **The Graph** | Makes the policy history answerable after the fact | Events exist but nobody can ask "was this draw released while uncovered?" |
 
+### Two flavours of hedge issuer
+
+The hedge leg has two shapes, and supporting both is what makes provider-neutrality demonstrable rather than merely claimed.
+
+| | **Offchain hedge** | **Onchain hedge** |
+|---|---|---|
+| Instrument | Forward or NDF at a bank or broker | Perpetual position on an onchain venue — Avantis on Base trades forex, e.g. USDJPY |
+| How it is attested | A verifier, or a CRE workflow calling the broker's authenticated API from inside a TEE | A reader observing chain state — no key, no API, no counterparty cooperation |
+| Trust chain | Broker → attestor → credential | Chain → credential |
+| Privacy problem | Real: positions and thresholds must not become public | None: it is already public |
+| Maturity | A date, matched against the loan's | **None — it is rolling**, funded, and liquidatable |
+
+The onchain version answers kill condition 3 directly: if no FX provider will expose authenticated state, an onchain hedge needs nobody's permission to be observed. It is not a full substitute — the instrument is different — but it removes "nobody will give us data" as a terminal risk.
+
+**The instrument problem it creates.** A perp has no maturity, so it fails `maturity + maturityTolerance >= exposureMaturity` as written. It is not a defect in the rule; the rule is correct and the instrument genuinely does not match a dated exposure. Supporting it needs its own instrument class carrying a heavier haircut plus a margin-health condition, because an underfunded perp can be liquidated precisely when the currency moves — the moment the hedge is needed. Designed, not built, and deliberately out of scope for the ETHOnline window.
+
 **Two independent belts.** Note that the capital plane is enforced twice — onchain by `CovenantVault` and off-chain by the Privy policy at signing time. That redundancy is deliberate: the contract cannot be bypassed by an operator with a key, and the wallet cannot be bypassed by a contract bug.
 
 ---
