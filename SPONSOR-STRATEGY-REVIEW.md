@@ -48,6 +48,8 @@ Scored against the four product functions: **F1** authenticate hedge + exposure 
 
 **Thesis fit:** the frozen boundary says the hedge source is "a regulated FX provider or lender-approved independent verifier," and never says how approval is granted or withdrawn. This is that mechanism. Revocation is not a feature we bolted on for a prize — it is the missing half of F1.
 
+**ENS's own framing, 2026-09-04** (x.com/ensdomains/status/2095912038514245718): *"Tokenized assets are moving beyond experiments and into real financial markets. As they spread across chains, exchanges, custodians, and lending protocols, the market needs a dependable way to identify what each token represents. ENS can provide that registry layer."* Our credentials are not tokens, but the question is the same — what does this assertion represent, and who stands behind it — and our answer is a verifier namespace where the right to attest is a revocable role. Quote it beside the track submission: they described the registry layer for financial assets; we built it for the assertions a credit facility runs on.
+
 **Why first:** lowest execution risk on the board. The EAC role model, permissioned registry and permissioned resolver are already familiar ground. It also clears the track's hardest-sounding bar — *"functional demo, not just hard-coded values"* — automatically, because the whole point is a live registry.
 
 **Cost:** ~1 day. **Risks:** ENSv2 contracts are documented as non-final; 15 holders per role per resource (irrelevant at facility scale); this leg lives on Sepolia, so the demo spans two chains.
