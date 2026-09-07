@@ -78,6 +78,15 @@ Scored against the four product functions: **F1** authenticate hedge + exposure 
 
 **Thesis fit:** this answers the objection that currently has no answer. No originator will publish its hedge book or its covenant thresholds, and every version of this product that requires them is dead on arrival. Confidential Workflows make the credential verifiable without making it public, and DON consensus verifies the enclave attestation — so F1 stops being "our server said so." Chainlink's own example list includes *"privacy-preserving risk assessment and policy enforcement,"* which is a description of our product written by someone else.
 
+**What it actually buys: one fewer party to trust.** This is the reframe that matters, and it should lead the submission rather than the privacy feature. Compare the two evidence models:
+
+- *Verifier model:* a party reads the broker's system, forms a view, and signs a claim. The lender trusts that party's honesty and competence.
+- *CRE model:* the workflow calls the **broker's own authenticated API from inside the enclave**, with a credential that never leaves it, and attests to what that API returned.
+
+The second deletes a layer of discretion. The assertion stops being "a verifier says the hedge exists" and becomes "the counterparty's own system of record returned this, and a TEE attests to the fetch." It does not prove the broker's records are true — nothing short of the FX provider signing directly does that, which is the data-side evidence gate in `PRODUCT-THESIS.md`. But a regulated counterparty misreporting its own trade book is a categorically smaller risk than an intermediary with an opinion, and it is the same risk credit markets already accept from custodians and administrators.
+
+So CRE is not "we used a sponsor's privacy feature." It is **the trust chain shortened by one party**, and it is the strongest answer available to the first question any lender asks: *what if my verifier lies?*
+
 **Why fourth despite the value:** smallest pool ($2,000 + a $500 continuity challenge) and the newest toolchain here (WASM, Go or TS SDK, new CLI). The architecture is worth more than the prize — it is the answer we will reuse in every lender conversation whether or not it places.
 
 **Cost:** ~1.5 days including toolchain ramp. **Risks:** verify which chains the capability DON can write to before choosing the settlement chain for this leg.
