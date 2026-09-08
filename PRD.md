@@ -106,6 +106,7 @@ Short forms of the answers that recur. Full versions live in the private narrati
 - **R-F3-7** Waivers: admin only; bounded by `maxWaiverDuration`; require `reasonCommitment`; emit start and end; expiry triggers re-evaluation, not restoration. Under Privy, creation requires m-of-n quorum.
 - **R-F3-8** `syncCovenant()` is permissionless and emits ratio, status, reason, inputs, cure deadline.
 - **R-F3-9** Restoration requires current credentials and a fresh onchain evaluation. Time alone restores nothing.
+- **R-F3-10** The decision plane is exposed as a **coverage gate** — a single interface, e.g. `ICoverageGate.assess(facilityId, amount) → (verdict, reason)` — callable by any host vault. `CovenantVault` is the **reference host** that implements it, not the only host. The gate answers one question only: is this facility's FX coverage sufficient for this draw. It must not grow into a generic covenant engine (thesis kill condition 9).
 
 ### F4 — Record
 - **R-F4-1** Every state transition emits an event carrying the inputs that produced it.
@@ -157,11 +158,23 @@ Qualification requirements copied from the prize pages, restated as conditions w
 
 **The Graph** — live data from a Graph provider, no mocks; public repo; 2–4 minute video; choose one pool, Continuity or Start Fresh, never both.
 
-## 11. Non-goals
+## 11. Roadmap — what v0 is, and what it is not yet
+
+| Version | Shape | Status |
+|---|---|---|
+| **v0 — this build** | Coverage gate interface + `CovenantVault` as reference host. Signa is the facility *and* the gate. | ETHOnline scope |
+| **v1** | One external host — a Kasu pool, a Centrifuge tranche, a Morpho curator's vault — calls the gate before releasing a draw. Signa is the gate; the lender's own vault is the facility. | The design-partner milestone; same conversation the Oct 31 gate requires |
+| v2 | Multiple hosts, multiple hedge issuers per facility, onchain hedge instrument class | After v1 evidence |
+
+The hook model resolves a tension in the thesis: the exclusions say Signa does not replace a lender's vault, yet the prototype ships one. v0's vault is the proof the gate works; the gate is the product. A `MockHostVault` in a demo does **not** advance v0 to v1 — that is a mock calling a mock.
+
+**Category consequence:** Financing until v1. DeFi becomes an honest secondary the day one external host calls the hook, not before.
+
+## 12. Non-goals
 
 Everything in `PRODUCT-THESIS.md` "Explicit exclusions." Plus for this window: production security, audits, legal enforceability, real funds, multiple facilities in the UI, portfolio netting, price oracles, mark-to-market, ZK.
 
-## 12. Risks
+## 13. Risks
 
 | Risk | Consequence | Mitigation |
 |---|---|---|
@@ -173,7 +186,7 @@ Everything in `PRODUCT-THESIS.md` "Explicit exclusions." Plus for this window: p
 | Subgraph Studio does not index Arc | S-10 impossible on Arc | Verify first; index the Sepolia leg or drop S-10 |
 | Five workstreams in nine days | Nothing finishes | Priority order in §4; ENS/Privy/CRE/Graph are cut in reverse order, never Arc |
 
-## 13. Open questions
+## 14. Open questions
 
 - Does `testnet.arcscan.app` support source verification, and via which API?
 - Is testnet EURC obtainable in useful quantities, or mocked?

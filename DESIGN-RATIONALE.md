@@ -91,6 +91,9 @@ An **onchain hedge** (Avantis on Base trades forex) removes the question entirel
 - **A real onchain position is a stretch goal for this window and the plan for the next one.** Deferred to the Bankr buildathon, where the instrument-class question can be answered properly.
 - **Five sponsors is not prize-chasing, and the proof is a diagram.** Layer 1 of the architecture has no sponsor names and predates the prize list; each vendor implements a plane that already existed; and roughly $30K of tracks were declined because nothing in the machine needed them. Naming the declined prizes is the whole answer.
 
+### The gate is the product; the vault is the proof
+"Primitive" hides a fork. **Signa-as-vault** holds the USDC and gates itself — Signa is the facility. **Signa-as-hook** lets the lender's existing vault hold the USDC and call Signa before releasing a draw — Signa is the gate. The hook is the primitive, and it is the shape the thesis already implies: the exclusions say Signa does not replace a lender's vault, yet the prototype builds one. Resolving that: `CovenantVault` is the reference host proving the gate works; `ICoverageGate` is what ships. The cost in this window is one interface. The guardrail is that the gate answers one question only — is this facility's FX coverage sufficient for this draw — because a generic covenant engine is kill condition 9 (an undifferentiated Fence competitor). The category stays Financing until an external host actually calls the hook; a mock host calling a mock gate proves nothing.
+
 ## 6. Ideas surfaced, not yet built
 
 | Idea | Where it lives | Status |
