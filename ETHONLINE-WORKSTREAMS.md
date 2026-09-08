@@ -31,7 +31,7 @@ Two artifacts, one thesis. This is deliberate and must stay clean, because the B
 | Claim posture | Governed by `SUBMISSION-CONTROL.md` gates | Hackathon artifact; may use mocks where disclosed |
 | Shared | F1–F4 core: credential schema, coverage engine, policy vocabulary | same |
 
-**Repo mechanics.** `~/base-batches-004-fx-coverage` is **not its own git repository** — it currently sits inside the home-directory repo, which is also why `SUBMISSION-CONTROL.md` lists "Immutable public source and CI" as `BLOCKED — REPOSITORY DECISION`. A fork therefore is not `git branch`; it is:
+**Repo mechanics** *(historical — resolved 2026-09-05: this directory is now the standalone repo `estmcmxci/signa`, and the Batches artifact lives separately in `~/signa-batches` / `estmcmxci/signa-batches`)*. At the time of writing, the working directory was **not its own git repository** — it currently sits inside the home-directory repo, which is also why `SUBMISSION-CONTROL.md` lists "Immutable public source and CI" as `BLOCKED — REPOSITORY DECISION`. A fork therefore is not `git branch`; it is:
 
 1. `git init` this directory as a standalone repo, with a `.gitignore` that excludes `contracts/.env`, keystores, `node_modules`, and `.DS_Store` **before** the first commit;
 2. tag the commit the Batches application will cite;
