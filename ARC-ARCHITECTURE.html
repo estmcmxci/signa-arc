@@ -1,0 +1,628 @@
+<title>Signa on Arc</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --paper:      #F8F9F7;
+    --surface:    #FFFFFF;
+    --sunk:       #F1F3F0;
+    --ink:        #16191C;
+    --slate:      #59616B;
+    --faint:      #868D95;
+    --rule:       #DCE0DC;
+    --accent:     #2C6E63;
+    --accent-dim: #E4EDEA;
+    --refuse:     #A2412E;
+    --refuse-dim: #F5E6E2;
+    --cure:       #8A6620;
+    --cure-dim:   #F4EDDD;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #14171A;
+      --surface:    #1B1F23;
+      --sunk:       #191D21;
+      --ink:        #E9E7E2;
+      --slate:      #9BA3AC;
+      --faint:      #7B838C;
+      --rule:       #2D3339;
+      --accent:     #63B8A7;
+      --accent-dim: #1D2E2C;
+      --refuse:     #DD8871;
+      --refuse-dim: #33221E;
+      --cure:       #D7AA55;
+      --cure-dim:   #2E2718;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:      #14171A;
+    --surface:    #1B1F23;
+    --sunk:       #191D21;
+    --ink:        #E9E7E2;
+    --slate:      #9BA3AC;
+    --faint:      #7B838C;
+    --rule:       #2D3339;
+    --accent:     #63B8A7;
+    --accent-dim: #1D2E2C;
+    --refuse:     #DD8871;
+    --refuse-dim: #33221E;
+    --cure:       #D7AA55;
+    --cure-dim:   #2E2718;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 56px 32px 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 56px;
+  }
+
+  /* ---- header ---- */
+  header { display: flex; flex-direction: column; gap: 18px; }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+
+  h1 {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-weight: 500;
+    font-size: clamp(30px, 4.6vw, 46px);
+    line-height: 1.12;
+    letter-spacing: -0.018em;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .thesis {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-size: clamp(17px, 2.1vw, 20px);
+    line-height: 1.5;
+    color: var(--slate);
+    max-width: 62ch;
+    margin: 0;
+    text-wrap: pretty;
+  }
+
+  .chainstrip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    background: var(--surface);
+    overflow: hidden;
+    margin-top: 6px;
+  }
+  .chainstrip div {
+    flex: 1 1 150px;
+    padding: 13px 16px;
+    border-right: 1px solid var(--rule);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .chainstrip div:last-child { border-right: none; }
+  .chainstrip dt {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  .chainstrip dd {
+    margin: 0;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- sections ---- */
+  section { display: flex; flex-direction: column; gap: 18px; }
+
+  h2 {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-weight: 500;
+    font-size: 25px;
+    letter-spacing: -0.01em;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .lede { max-width: 68ch; margin: 0; color: var(--slate); }
+  p { margin: 0; max-width: 68ch; }
+  p + p { margin-top: 12px; }
+
+  strong { font-weight: 600; color: var(--ink); }
+
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.88em;
+    background: var(--sunk);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 1px 5px;
+    color: var(--ink);
+  }
+
+  /* ---- figures ---- */
+  figure {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .canvas {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 22px;
+    overflow-x: auto;
+  }
+  .canvas svg { display: block; width: 100%; min-width: 660px; height: auto; }
+  figcaption {
+    font-size: 13px;
+    color: var(--slate);
+    max-width: 72ch;
+    line-height: 1.55;
+  }
+  figcaption b { color: var(--ink); font-weight: 600; }
+
+  /* svg type */
+  .s-box   { fill: var(--surface); stroke: currentColor; stroke-width: 1.15; opacity: 1; }
+  .s-name  { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; font-weight: 500; fill: var(--ink); }
+  .s-sub   { font-family: "IBM Plex Sans", sans-serif; font-size: 11px; fill: var(--slate); }
+  .s-edge  { font-family: "IBM Plex Sans", sans-serif; font-size: 10.5px; fill: var(--slate); }
+  .s-zone  { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10px; letter-spacing: 0.12em; fill: var(--faint); }
+  .s-line  { stroke: currentColor; stroke-width: 1.15; fill: none; opacity: 0.55; }
+  .s-flow  { stroke: var(--accent); stroke-width: 1.8; fill: none; }
+  .s-dash  { stroke: currentColor; stroke-width: 1.15; fill: none; stroke-dasharray: 4 4; opacity: 0.4; }
+
+  /* ---- callout ---- */
+  .hazard {
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--cure);
+    background: var(--surface);
+    border-radius: 3px;
+    padding: 20px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .hazard h3 {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--cure);
+    margin: 0;
+  }
+  .units {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    gap: 6px 18px;
+    align-items: baseline;
+    font-variant-numeric: tabular-nums;
+  }
+  .units span:nth-child(3n+2) { color: var(--accent); font-weight: 500; }
+  .units span:nth-child(3n+3) { color: var(--slate); font-family: "IBM Plex Sans", sans-serif; font-size: 12px; }
+
+  /* ---- tables ---- */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+  caption {
+    text-align: left;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--faint);
+    padding-bottom: 9px;
+  }
+  th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--faint);
+    padding: 0 14px 8px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  td {
+    padding: 9px 14px 9px 0;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: baseline;
+  }
+  td:first-child {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  td.val { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .tablewrap { overflow-x: auto; }
+
+  /* ---- demo steps ---- */
+  ol.steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  ol.steps li {
+    background: var(--surface);
+    padding: 15px 18px;
+    display: grid;
+    grid-template-columns: 26px 1fr auto;
+    gap: 16px;
+    align-items: baseline;
+  }
+  .num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--faint);
+    font-variant-numeric: tabular-nums;
+  }
+  .verdict {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    padding: 3px 9px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .v-permit { color: var(--accent); background: var(--accent-dim); }
+  .v-refuse { color: var(--refuse); background: var(--refuse-dim); }
+  .v-cure   { color: var(--cure);   background: var(--cure-dim); }
+
+  footer {
+    border-top: 1px solid var(--rule);
+    padding-top: 22px;
+    font-size: 12.5px;
+    color: var(--faint);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  footer a { color: var(--slate); }
+
+  @media (max-width: 620px) {
+    .page { padding: 40px 20px 72px; gap: 44px; }
+    ol.steps li { grid-template-columns: 22px 1fr; }
+    .verdict { grid-column: 2; justify-self: start; }
+  }
+</style>
+
+<div class="page">
+
+  <header>
+    <div class="eyebrow">Signa · ETHOnline 2026 · Arc track</div>
+    <h1>Coverage as a condition of capital, on Circle&rsquo;s chain</h1>
+    <p class="thesis">A credit originator owes investors USDC while its loans repay in euros. The hedge protecting that gap sits at a bank; the capital sits in a vault that cannot see it. Signa puts the lender&rsquo;s coverage covenant inside the transaction that releases money.</p>
+    <dl class="chainstrip">
+      <div><dt>Chain</dt><dd>Arc Testnet</dd></div>
+      <div><dt>Chain ID</dt><dd>5042002</dd></div>
+      <div><dt>Gas</dt><dd>USDC</dd></div>
+      <div><dt>Finality</dt><dd>&lt; 1s</dd></div>
+      <div><dt>Facility</dt><dd>USDC</dd></div>
+      <div><dt>Exposure</dt><dd>EURC</dd></div>
+    </dl>
+  </header>
+
+  <section>
+    <h2>The machine</h2>
+    <p class="lede">Four contracts on Arc. Two signers who do not answer to each other. One vault that will not move a dollar until both have been re-read.</p>
+
+    <figure>
+      <div class="canvas">
+        <svg viewBox="0 0 1020 500" role="img" aria-label="Architecture diagram: an exposure issuer and a hedge issuer sign credentials offchain; a facility admin writes policy. On Arc, the CredentialRegistry and FacilityRegistry feed the CoverageEngine, which answers through the ICoverageGate interface to the CovenantVault, which holds USDC and releases it to the borrower.">
+          <defs>
+            <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" />
+            </marker>
+            <marker id="ar-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)" />
+            </marker>
+          </defs>
+
+          <text class="s-zone" x="24" y="30">OFFCHAIN</text>
+          <text class="s-zone" x="286" y="30">ARC TESTNET · 5042002</text>
+
+          <line class="s-dash" x1="248" y1="42" x2="248" y2="470" />
+          <rect x="270" y="42" width="726" height="428" rx="4" fill="var(--sunk)" stroke="currentColor" stroke-width="1" opacity="0.5" />
+
+          <!-- offchain actors -->
+          <rect class="s-box" x="24" y="58" width="184" height="66" rx="3" />
+          <text class="s-name" x="38" y="82">Exposure issuer</text>
+          <text class="s-sub"  x="38" y="100">Servicer. Answers to</text>
+          <text class="s-sub"  x="38" y="114">the lender, not the borrower.</text>
+
+          <rect class="s-box" x="24" y="146" width="184" height="66" rx="3" />
+          <text class="s-name" x="38" y="170">Hedge issuer</text>
+          <text class="s-sub"  x="38" y="188">Verifier of the broker&rsquo;s</text>
+          <text class="s-sub"  x="38" y="202">own confirmations.</text>
+
+          <rect class="s-box" x="24" y="326" width="184" height="66" rx="3" />
+          <text class="s-name" x="38" y="350">Facility admin</text>
+          <text class="s-sub"  x="38" y="368">The lender&rsquo;s key. Writes</text>
+          <text class="s-sub"  x="38" y="382">policy, approves issuers.</text>
+
+          <!-- onchain contracts -->
+          <rect class="s-box" x="292" y="70" width="180" height="86" rx="3" />
+          <text class="s-name" x="306" y="94">CredentialRegistry</text>
+          <text class="s-sub"  x="306" y="113">EIP-712, bound to</text>
+          <text class="s-sub"  x="306" y="127">chain 5042002.</text>
+          <text class="s-sub"  x="306" y="145">Sequence &amp; revocation.</text>
+
+          <rect class="s-box" x="292" y="306" width="180" height="86" rx="3" />
+          <text class="s-name" x="306" y="330">FacilityRegistry</text>
+          <text class="s-sub"  x="306" y="349">Coverage floor, haircut,</text>
+          <text class="s-sub"  x="306" y="363">freshness, tolerance,</text>
+          <text class="s-sub"  x="306" y="377">reserve, approved issuers.</text>
+
+          <rect class="s-box" x="512" y="168" width="176" height="126" rx="3" />
+          <text class="s-name" x="526" y="192">CoverageEngine</text>
+          <text class="s-sub"  x="526" y="212">Is it current?</text>
+          <text class="s-sub"  x="526" y="228">Is it the latest?</text>
+          <text class="s-sub"  x="526" y="244">Is it unique?</text>
+          <text class="s-sub"  x="526" y="266">Haircut, cap at exposure,</text>
+          <text class="s-sub"  x="526" y="280">emit a reason code.</text>
+
+          <!-- the gate membrane -->
+          <rect x="716" y="168" width="40" height="126" rx="3" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1.3" />
+          <text class="s-name" x="736" y="231" text-anchor="middle" transform="rotate(-90 736 231)" fill="var(--accent)">ICoverageGate</text>
+
+          <rect class="s-box" x="800" y="168" width="176" height="126" rx="3" />
+          <text class="s-name" x="814" y="192">CovenantVault</text>
+          <text class="s-sub"  x="814" y="212">Holds the facility&rsquo;s USDC.</text>
+          <text class="s-sub"  x="814" y="228">Reference host &mdash;</text>
+          <text class="s-sub"  x="814" y="242">the first of many.</text>
+          <text class="s-sub"  x="814" y="264">draw · repay · reserve</text>
+          <text class="s-sub"  x="814" y="278">cure · waive · restore</text>
+
+          <rect x="800" y="392" width="176" height="56" rx="3" fill="none" stroke="currentColor" stroke-width="1.15" stroke-dasharray="4 4" opacity="0.5" />
+          <text class="s-name" x="814" y="416">Borrower</text>
+          <text class="s-sub"  x="814" y="434">Holds no key in the machine.</text>
+
+          <!-- edges -->
+          <path class="s-line" d="M 208 84 L 284 100" marker-end="url(#ar)" />
+          <text class="s-edge" x="216" y="78">ExposureCredential</text>
+
+          <path class="s-line" d="M 208 174 L 284 132" marker-end="url(#ar)" />
+          <text class="s-edge" x="216" y="152">HedgeCredential</text>
+
+          <path class="s-line" d="M 208 356 L 284 352" marker-end="url(#ar)" />
+          <text class="s-edge" x="216" y="342">policy</text>
+
+          <path class="s-line" d="M 472 130 L 506 190" marker-end="url(#ar)" />
+          <text class="s-edge" x="478" y="152">facts</text>
+
+          <path class="s-line" d="M 472 336 L 506 274" marker-end="url(#ar)" />
+          <text class="s-edge" x="478" y="316">rules</text>
+
+          <path class="s-flow" d="M 688 231 L 712 231" marker-end="url(#ar-a)" />
+          <path class="s-flow" d="M 758 231 L 794 231" marker-end="url(#ar-a)" />
+          <text class="s-edge" x="776" y="222" text-anchor="middle" fill="var(--accent)">verdict</text>
+
+          <path class="s-flow" d="M 888 294 L 888 386" marker-end="url(#ar-a)" />
+          <text class="s-edge" x="898" y="344" fill="var(--accent)">USDC, only if permitted</text>
+
+          <path class="s-dash" d="M 800 282 C 760 330, 700 320, 700 300" marker-end="url(#ar)" />
+          <text class="s-edge" x="694" y="344" text-anchor="middle">re-asked inside every draw</text>
+        </svg>
+      </div>
+      <figcaption><b>Figure 1.</b> Two independent signers assert facts offchain; the lender&rsquo;s rules and the lender&rsquo;s dollars both sit on Arc. The engine never holds money and the vault never decides &mdash; the gate is the only thing that connects them, which is why a second host can replace the vault without touching the ruling.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>What happens inside a draw</h2>
+    <p class="lede">This is the whole product claim, and it fits in one transaction. No cached verdict authorises capital &mdash; the operator asking for money is what triggers the re-reading of every credential.</p>
+
+    <figure>
+      <div class="canvas">
+        <svg viewBox="0 0 1020 264" role="img" aria-label="Sequence inside a single draw transaction: re-read credentials, test admissibility, compute coverage, compare against policy, check the reserve, then either transfer USDC or revert with a reason code. All steps occur in one transaction with sub-second finality.">
+          <defs>
+            <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" />
+            </marker>
+          </defs>
+
+          <rect class="s-box" x="12" y="66" width="120" height="58" rx="3" />
+          <text class="s-name" x="72" y="90" text-anchor="middle">draw(amount)</text>
+          <text class="s-sub"  x="72" y="108" text-anchor="middle">operator calls</text>
+
+          <path class="s-line" d="M 132 95 L 158 95" marker-end="url(#ar2)" />
+
+          <rect class="s-box" x="160" y="66" width="126" height="58" rx="3" />
+          <text class="s-sub" x="223" y="88" text-anchor="middle">re-read both</text>
+          <text class="s-sub" x="223" y="104" text-anchor="middle">credentials</text>
+
+          <path class="s-line" d="M 286 95 L 312 95" marker-end="url(#ar2)" />
+
+          <rect class="s-box" x="314" y="66" width="126" height="58" rx="3" />
+          <text class="s-sub" x="377" y="88" text-anchor="middle">current · latest</text>
+          <text class="s-sub" x="377" y="104" text-anchor="middle">· unique?</text>
+
+          <path class="s-line" d="M 440 95 L 466 95" marker-end="url(#ar2)" />
+
+          <rect class="s-box" x="468" y="66" width="126" height="58" rx="3" />
+          <text class="s-sub" x="531" y="88" text-anchor="middle">haircut, cap</text>
+          <text class="s-sub" x="531" y="104" text-anchor="middle">at exposure</text>
+
+          <path class="s-line" d="M 594 95 L 620 95" marker-end="url(#ar2)" />
+
+          <rect class="s-box" x="622" y="66" width="126" height="58" rx="3" />
+          <text class="s-sub" x="685" y="88" text-anchor="middle">ratio vs floor</text>
+          <text class="s-sub" x="685" y="104" text-anchor="middle">+ reserve test</text>
+
+          <path class="s-line" d="M 748 95 L 782 76" marker-end="url(#ar2)" />
+          <path class="s-line" d="M 748 95 L 782 148" marker-end="url(#ar2)" />
+
+          <rect x="786" y="42" width="216" height="52" rx="3" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1.3" />
+          <text class="s-name" x="800" y="64" fill="var(--accent)">transfer USDC</text>
+          <text class="s-sub"  x="800" y="82">Drawn emitted with the inputs</text>
+
+          <rect x="786" y="122" width="216" height="52" rx="3" fill="var(--refuse-dim)" stroke="var(--refuse)" stroke-width="1.3" />
+          <text class="s-name" x="800" y="144" fill="var(--refuse)">revert</text>
+          <text class="s-sub"  x="800" y="162">DrawNotAllowed(CURE)</text>
+
+          <path class="s-dash" d="M 12 196 L 12 208 L 748 208 L 748 196" />
+          <text class="s-edge" x="380" y="228" text-anchor="middle">one transaction · one block · sub-second finality on Arc</text>
+          <text class="s-edge" x="380" y="246" text-anchor="middle" opacity="0.75">nothing between these steps can change, because there is no between</text>
+        </svg>
+      </div>
+      <figcaption><b>Figure 2.</b> The gap this closes: operations reconciles coverage on a calendar, but capital leaves on demand. Anything that re-evaluates on a schedule can be right on Monday and wrong on Tuesday afternoon. Re-evaluating <em>inside</em> the draw is the difference between a covenant that describes and a covenant that governs.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Where Signa sits, and why spot-only FX is not a conflict</h2>
+    <p class="lede">Arc ships an FX engine. StableFX is an RFQ venue with payment-versus-payment settlement, USDC and EURC today, expanding to regional stablecoins &mdash; and it is <strong>spot</strong>. No forwards, no NDFs, no swaps. That is not a problem for this design. It is the reason the design exists.</p>
+
+    <figure>
+      <div class="canvas">
+        <svg viewBox="0 0 1020 330" role="img" aria-label="Three stacked layers: execution, where StableFX and bank FX desks move currency and which exists today; the instrument layer, where forwards and NDFs carry the risk offchain at a bank, which exists but has no onchain equivalent on Arc; and the control layer, deciding whether capital may move, which is empty and is where Signa sits.">
+          <text class="s-zone" x="14" y="24">LAYER</text>
+          <text class="s-zone" x="286" y="24">WHAT IT DOES</text>
+          <text class="s-zone" x="720" y="24">STATUS ON ARC TODAY</text>
+
+          <rect class="s-box" x="14" y="38" width="988" height="78" rx="3" />
+          <text class="s-name" x="30" y="66">Execution</text>
+          <text class="s-sub"  x="30" y="86">StableFX · a bank&rsquo;s FX desk</text>
+          <text class="s-sub"  x="30" y="102">RFQ, PvP settlement</text>
+          <text class="s-sub"  x="286" y="72">Moves the currency. Converts euros to dollars</text>
+          <text class="s-sub"  x="286" y="90">at a price, right now.</text>
+          <text class="s-name" x="720" y="72" fill="var(--accent)">Built. Circle ships it.</text>
+          <text class="s-sub"  x="720" y="92">Permissioned, spot only.</text>
+
+          <rect class="s-box" x="14" y="126" width="988" height="78" rx="3" />
+          <text class="s-name" x="30" y="154">Instrument</text>
+          <text class="s-sub"  x="30" y="174">Forward · NDF · swap</text>
+          <text class="s-sub"  x="30" y="190">Ebury, Santander, a broker</text>
+          <text class="s-sub"  x="286" y="160">Carries the risk over time. This is the thing</text>
+          <text class="s-sub"  x="286" y="178">a lender&rsquo;s covenant is actually about.</text>
+          <text class="s-name" x="720" y="160">Exists &mdash; offchain, at a bank.</text>
+          <text class="s-sub"  x="720" y="180">No onchain equivalent yet.</text>
+
+          <rect x="14" y="214" width="988" height="82" rx="3" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1.6" />
+          <text class="s-name" x="30" y="242" fill="var(--accent)">Control</text>
+          <text class="s-sub"  x="30" y="262">Signa coverage gate</text>
+          <text class="s-sub"  x="30" y="278">on Arc, beside the money</text>
+          <text class="s-sub"  x="286" y="248">Rules on whether an attested hedge is admissible</text>
+          <text class="s-sub"  x="286" y="266">under this lender&rsquo;s policy, and gates the draw on it.</text>
+          <text class="s-name" x="720" y="248" fill="var(--accent)">Empty. This is us.</text>
+          <text class="s-sub"  x="720" y="268">Arc names onchain credit and</text>
+          <text class="s-sub"  x="720" y="284">FX perpetuals as target uses.</text>
+
+          <text class="s-edge" x="14" y="320">Signa never creates, holds, or counterparties a hedge. It consumes a signed assertion about one &mdash; from a bank, a broker, or eventually an onchain venue.</text>
+        </svg>
+      </div>
+      <figcaption><b>Figure 3.</b> Circle built the leg that moves currency and explicitly not the leg that makes coverage a condition of capital. Because the engine consumes a <code>HedgeCredential</code> rather than a position, the instrument underneath can be a bank forward today and an onchain perpetual later without the ruling logic changing. Signa does not compete with the people selling hedges. It makes what they sell financeable.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>The hazard Arc introduces</h2>
+    <div class="hazard">
+      <h3>Two decimal representations of the same dollar</h3>
+      <div class="units">
+        <span>native USDC (gas)</span><span>18 decimals</span><span>pays for the transaction</span>
+        <span>USDC ERC-20 <code>0x3600…0000</code></span><span>6 decimals</span><span>the facility balance</span>
+        <span>EURC <code>0x89B5…D72a</code></span><span>6 decimals</span><span>the exposure and the hedge</span>
+      </div>
+      <p>If an 18-decimal figure and a 6-decimal figure meet inside the coverage ratio, the result is not visibly broken. It reads as <strong>100% when the truth is a millionth of a percent</strong> &mdash; and the vault, believing itself compliant, releases the capital. That is precisely the failure this product exists to prevent, caused by the chain chosen to prevent it on.</p>
+      <p>The rule that makes it safe is one line: <strong>the vault touches only the ERC-20 interface; native 18-decimal USDC pays gas and is never accounted.</strong> One normalisation boundary at the credential edge, pinned by a test written before anything is ported.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>The demo</h2>
+    <p class="lede">Four transactions on Arc Testnet. The same draw call, for the same amount, succeeding and then failing because the evidence underneath it changed.</p>
+    <ol class="steps">
+      <li>
+        <span class="num">01</span>
+        <span>Facility funded with USDC. Both credentials accepted from distinct issuers. Coverage reads 100%.</span>
+        <span class="verdict v-permit">DRAW PERMITTED</span>
+      </li>
+      <li>
+        <span class="num">02</span>
+        <span>The hedge issuer posts a fresh credential with reduced notional &mdash; a partial settlement. <code>syncCovenant</code> moves the facility.</span>
+        <span class="verdict v-cure">CURE · 68%</span>
+      </li>
+      <li>
+        <span class="num">03</span>
+        <span>The identical draw, unchanged in every parameter, is refused with a reason code rather than a colour.</span>
+        <span class="verdict v-refuse">DrawNotAllowed</span>
+      </li>
+      <li>
+        <span class="num">04</span>
+        <span>A fresh hedge credential restores cover. Restoration requires a new evaluation &mdash; time alone restores nothing.</span>
+        <span class="verdict v-permit">DRAW PERMITTED</span>
+      </li>
+    </ol>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Policy in force during the demo</caption>
+        <thead>
+          <tr><th>Parameter</th><th>Value</th><th>What it governs</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>minCoverageBps</td><td class="val">10000</td><td>Hedged notional must fully cover the exposure</td></tr>
+          <tr><td>defaultHaircutBps</td><td class="val">500</td><td>5% discount applied to every hedge before it counts</td></tr>
+          <tr><td>credentialMaxAge</td><td class="val">24h</td><td>Evidence older than this is not evidence</td></tr>
+          <tr><td>maturityTolerance</td><td class="val">7d</td><td>How early a hedge may mature against the exposure</td></tr>
+          <tr><td>reserveAmount</td><td class="val">10%</td><td>USDC that no draw may consume</td></tr>
+          <tr><td>cure window</td><td class="val">5d</td><td>Time to remedy before breach &mdash; not permission to draw</td></tr>
+          <tr><td>maxWaiverDuration</td><td class="val">3d</td><td>Hard ceiling on any admin waiver</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>What is deliberately not here</h2>
+    <p>The hedge feed is a fixture shaped like a broker&rsquo;s API, labelled as such on screen and in the repository. The conversion payload is shaped like StableFX and is a recorded mock &mdash; the live API is permissioned to vetted institutions. No bank has agreed to sign a credential. Nothing in this build executes a derivative, takes custody, originates a loan, liquidates a position, or issues a token.</p>
+    <p>The vault shipped here is the <strong>reference host</strong>, not the product. The product is the gate it calls. A second host &mdash; a pool, a tranche, a curator&rsquo;s vault &mdash; calling <code>assess</code> before releasing its own draw is the milestone that follows, and it requires a lender, not more code.</p>
+  </section>
+
+  <footer>
+    <div>Signa &mdash; FX coverage controls for onchain credit. Built for ETHOnline 2026, Arc track.</div>
+    <div>Requirements and acceptance criteria: <code>PRD.md</code> · Scope for this window: <code>CUTLIST.md</code> · Reasoning: <code>DESIGN-RATIONALE.md</code></div>
+  </footer>
+
+</div>
