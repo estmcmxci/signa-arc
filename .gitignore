@@ -39,3 +39,6 @@ EXTERNAL-RESEARCH-*.md
 EXECUTION-PLAN.md
 VALIDATION-LOG.md
 research/
+
+# Local Claude Code settings (machine-specific). Vendored skills ARE committed.
+.claude/settings.local.json
