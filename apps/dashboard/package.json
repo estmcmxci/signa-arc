@@ -9,10 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "viem": "^2.37.5"
+    "viem": "^2.56.3"
   },
   "devDependencies": {
     "vite": "^7.2.2"
   }
 }
-

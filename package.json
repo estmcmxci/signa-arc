@@ -23,7 +23,7 @@
   "dependencies": {
     "@fx-coverage/credentials": "workspace:*",
     "@fx-coverage/provider-adapter": "workspace:*",
-    "viem": "^2.37.5",
+    "viem": "^2.56.3",
     "zod": "^4.1.11"
   },
   "devDependencies": {
