@@ -190,6 +190,8 @@ Result: byte-for-byte the same failure as E4 — `{"ok":false,"error":{"code":"U
 4. **A native transfer can revert on a sufficient balance** — Arc docs cite *"the blocklist or zero-address rules."*
    → **Relevant to us:** `draw()` transfers to the borrower. A blocklisted borrower reverts for a reason that has nothing to do with coverage. Do not debug that live for the first time on camera.
 5. **Gas is cheap and dollar-denominated.** Testnet transactions have averaged about $0.004.
+6. **`cast send` exits `0` on a reverted transaction.** ✅ Observed in E5: an explicit `--gas-limit` broadcast to the zero address produced receipt `status 0x0`, `gasUsed 21000`, and a `revertReason` — while the process exit code was `0`.
+   → **Relevant to us:** any scenario, deploy script, or CI step that treats exit code as success will report a green run containing a failed transaction. **Assert `receipt.status == 0x1` on every broadcast.** This is PRD acceptance criterion A-9.
 
 ✅ **E5, 2026-09-09:** native transfer to zero reverted with `Zero address not allowed`; contract ERC-20 transfer to zero reverted with `ERC20: transfer to the zero address`. Both are `Error(string)` (`0x08c379a0`), not a custom error or `false` return. Insufficient balance and allowance also reverted with strings in E2. Blocklist behavior remains ⚠️ documented, untested. Full commands/errors and the failed native receipt are under §7.
 

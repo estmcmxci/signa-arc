@@ -151,6 +151,7 @@ The demo is the acceptance test. Each line must be reproducible on Arc Testnet w
 - **A-6** The same trade ID submitted twice is counted once.
 - **A-7** Coverage of 140% is displayed as 140% and counted as 100%.
 - **A-8** The boundary statement is spoken in the video and the mock seam is shown working.
+- **A-9** Every transaction in the demo asserts `receipt.status == 0x1`. Process exit code is not evidence: E5 observed `cast send` exit `0` on a receipt with status `0x0`, so a scenario that checks exit codes will report success on a reverted transaction. Applies to the scenario runner, the deploy script, and any CI step that broadcasts.
 
 ## 10. Sponsor track acceptance
 
@@ -198,6 +199,8 @@ Everything in `PRODUCT-THESIS.md` "Explicit exclusions." Plus for this window: p
 | ~~Mainnet launch on deadline day~~ | **Retired.** Mainnet is Sept 30, a separate deadline | Ship testnet by the 13th; schedule the mainnet deploy for the week of the 16th |
 | Frontend treated as polish | Disqualified from Arc regardless of contract quality | S-5 is a qualification requirement (§10); it ships on the 11th, not the 12th |
 | Unit semantics of the coverage ratio | A ratio that divides EUR by USD is wrong in a way tests may not catch | Settle it before the fixture lands — see §14 |
+| Broadcast tooling exits 0 on a reverted transaction | A green demo run containing a failed transaction, handed to a judge as evidence | A-9: assert receipt status everywhere, never process exit |
+| `Deploy.s.sol` still targets Base | Deploy fails or silently uses `MockUSDC` instead of Arc USDC | Swap the `84532` chain guard for `5042002` and `MockUSDC` for `0x3600…0000` before S-1. The script *pattern* is verified working on Arc (E1) |
 | Repo not public in time | Every track disqualified | S-6 is a must-ship gate, not a cleanup task |
 | Subgraph Studio does not index Arc | S-10 impossible on Arc | Verify first; index the Sepolia leg or drop S-10 |
 | Five workstreams in nine days | Nothing finishes | Priority order in §4; ENS/Privy/CRE/Graph are cut in reverse order, never Arc |
@@ -207,6 +210,9 @@ Everything in `PRODUCT-THESIS.md` "Explicit exclusions." Plus for this window: p
 - Does `testnet.arcscan.app` support source verification, and via which API?
 - ~~Is testnet EURC obtainable in useful quantities, or mocked?~~ **Answered.** EURC is a first-class Arc token at `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a`, 6 decimals, from the Circle faucet. Not a bridged wrapper.
 - **Does the vault ever touch the EURC contract, or is EUR only a denomination?** As written, the vault holds and moves USDC; the exposure is EUR-denominated but no EURC moves. That satisfies "meaningful use of Arc and USDC" but a judge may expect the EURC contract to appear. Decide before recording.
+- ~~Does `forge script --broadcast` work against Arc?~~ **Answered — yes** (E1). Both `forge create` and multi-contract scripts with dependent constructor args succeed under 0.8.30/Prague. See `ARC-FIELD-NOTES.md` §7 Q1.
+- ~~Does the USDC predeploy support the contract `approve`/`transferFrom`/`transfer` path?~~ **Answered — yes** (E2), verified on-chain from a contract. `IERC20Settlement` works unchanged.
+- ~~Does Blockscout verification render source?~~ **Answered — yes** (E3), with and without constructor args, no API key.
 - **Which currency is `outstandingValue` denominated in?** The code implies the settlement currency: `remainingNotional` is mapped from `remaining_buy_amount` (the buy leg, USD), and coverage compares it directly against `outstandingValue`. `ETHONLINE-WORKSTREAMS.md` §1 instead says "hedged EURC notional ÷ EURC exposure." Those are not the same ratio. The code's reading is unit-coherent — a USD-delivering forward against a USD obligation — and the workstreams line should be corrected, not the code. Confirm before the fixture is signed.
 - Which chains can CRE capability DONs write to?
 - Which pool for The Graph, if it ships: Continuity (repo predates the hackathon) or Start Fresh?
