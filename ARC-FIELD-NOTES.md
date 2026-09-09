@@ -106,6 +106,38 @@ cast send $ADDR "syncCovenant()" --rpc-url $ARC_TESTNET_RPC_URL --private-key $P
 
 Constructor args go through `cast abi-encode` and `--constructor-args`.
 
+### Smoke execution, 2026-09-09 — in progress
+
+✅ Executed: `cast chain-id --rpc-url https://rpc.testnet.arc.network` returned `5042002` with Foundry `1.5.0-stable`. The sandboxed attempt panicked with `Attempted to create a NULL object.` in `system-configuration-0.6.1/src/dynamic_store.rs:154`; running outside the sandbox succeeded. This is an environment failure, not evidence of an Arc RPC incompatibility. The deploy/verify commands above remain ⚠️ untested; E1–E3 have not yet run. Use encrypted keystores for those experiments, not the private-key flags shown above.
+
+✅ E4 executed with `@metamask/agent-wallet/6.2.0` on Node `v24.1.0`:
+
+```bash
+mm wallet sign-typed-data --chain-id 5042002 --payload '<HedgeCredential JSON>' \
+  --wait --wallet-timeout 60 \
+  --intent 'Arc E4 smoke test: dummy HedgeCredential, no deployed facility or transaction'
+```
+
+Here `<HedgeCredential JSON>` abbreviates the actual inline JSON passed, not a runnable literal. It used the exact `hedgeCredentialTypes` in `packages/credentials/src/index.ts`, domain name `FXCoverageCredentials`, version `1`, chain ID `5042002`, and dummy verifying contract `0x0000000000000000000000000000000000000001`. Message: facility ID = 32 bytes of `11`; trade commitment = 32 bytes of `22`; base/quote = `0x455552` / `0x555344`; remaining notional = `1000000`; maturity = `1790000000`; status = `0`; observedAt = `1788985800`; validUntil = `1788989400`; sequence = `1`; source commitment = 32 bytes of `33`. Integer fields other than status were JSON decimal strings.
+
+Result: `{"ok":false,"error":{"code":"UNSUPPORTED_CHAIN","message":"No EVM chain configured for chainId 5042002.","hint":"Run `mm chains list` to see supported chains, then pass a valid chain name, numeric chain id, or CAIP-2 id."}}`. No signature was returned; viem recovery could not be performed. `mm wallet address` returned server-mode address `0x9bff63174618a7660c566ef4b5d6bf484fa5034b`. No transaction or faucet funding was needed for this offchain attempt.
+
+✅ Experiment A executed 2026-09-09, same mm `6.2.0` / Node `v24.1.0`, in `~/arc-lab`. E4 ran through a **server** wallet, so its failure could have come from either the local CLI or MetaMask's backend. BYOK signs locally, which separates the two.
+
+A disposable BIP-39 mnemonic was generated with viem's `generateMnemonic` and put straight into the macOS Keychain (service `arc-lab-byok-20260909`); it was never printed and no private key was exported. `mm init --wallet byok` reported `{"walletMode":"byok","mnemonicEncrypted":true}`, and `mm wallet show` then reported mode `byok`, walletId `byok:evm:0`, address `0x09058676dfaD73F0c1899FfC0D1E7F5a41A607Db` — identical to viem's own `mnemonicToAccount` derivation of the same mnemonic, so the local key path is sound. The server wallet was not touched; `~/.metamask` was backed up to `~/.metamask.backup-pre-byok-20260909` first, and the CLI was afterwards returned to server mode with `ensv2-e2e` (`0x9bff…034b`) re-selected as active.
+
+```bash
+mm wallet sign-typed-data --chain-id 5042002 --payload "$(cat payload.json)" \
+  --wait --wallet-timeout 60 \
+  --intent 'Experiment A: BYOK EIP-712 HedgeCredential on Arc, no deployed facility or transaction'
+```
+
+The payload was rebuilt from `packages/credentials/src/index.ts` — domain name `FXCoverageCredentials`, version `1`, chainId `5042002`, verifying contract `0x0000000000000000000000000000000000000001`, `hedgeCredentialTypes` verbatim, primaryType `HedgeCredential`, and the identical E4 message fixture.
+
+Result: byte-for-byte the same failure as E4 — `{"ok":false,"error":{"code":"UNSUPPORTED_CHAIN","message":"No EVM chain configured for chainId 5042002."}}`. Under `--verbose` the throw lands immediately after `[progress] Submitting...`, with only `Checking authentication` / `Session loaded` before it and no wallet or signing job ever created. No signature, so viem recovery was again impossible.
+
+**Control (does *not* count as an Arc result).** The same payload with `chainId` swapped to `1` in both the flag and the domain returned `{"ok":true,"data":{"mode":"byok","address":"0x0905…07Db","status":"APPROVED"}}` — so the schema, the payload encoding and the BYOK wallet are all accepted, and chain resolution is the only thing that fired on Arc. But note what the control did *not* return: **no `signature` field**, with or without `--wait`, in either `--json` or text output. ⚠️ In this version's BYOK path a signature is approved but never handed back, which is a second, independent blocker sitting behind the chain gate. The minified `dist/chunks/cliWalletExecutor-Wa0Yy_Wm.js` calls the SDK with `wait:!1` and spreads `signature` only when present, which is consistent with that observation — but the minified window did not let us confirm that site is BYOK-specific, so the *mechanism* stays ⚠️ while the missing signature is ✅ observed. That chunk also references an internal `allowDomainChainIdMismatch` option which the CLI never exposes as a flag.
+
 **Key handling:** Circle's skill is explicit that `--private-key` on the command line is *"acceptable only for local testing"* and that non-local deploys should use an encrypted keystore or `cast wallet import`. Testnet counts as non-local for this rule. `.env*` stays gitignored.
 
 ## 5. Documented gotchas
@@ -132,6 +164,7 @@ Constructor args go through `cast abi-encode` and `--constructor-args`.
 | 3 | Which currency is `outstandingValue` denominated in? | The code implies settlement currency (USD): `remainingNotional` maps from `remaining_buy_amount`, the buy leg, and is compared directly against `outstandingValue`. `ETHONLINE-WORKSTREAMS.md` §1 instead says "hedged EURC notional ÷ EURC exposure." Different ratios. The code's reading is unit-coherent; the workstreams line is the one to correct. |
 | 4 | Are there EVM divergences from the Osaka baseline that touch our contracts? | `PRD.md` §13. Our Solidity is conservative — no exotic opcodes — so rated low, but read the list rather than assume. |
 | 5 | Do the two issuer keys need gas at all? | They sign EIP-712 offchain and a keeper submits. If so, only the deployer, admin, operator and keeper need funding. |
+| 6 | ~~Can `mm wallet sign-typed-data` sign an Arc HedgeCredential despite missing Arc chain support?~~ | ✅ **Answered — no, in both wallet modes. E4 (server) + Experiment A (BYOK), executed 2026-09-09:** mm `6.2.0` returns `UNSUPPORTED_CHAIN` / `No EVM chain configured for chainId 5042002.` for the repo's exact schema and Arc domain, identically whether the wallet is a server wallet or a local BYOK key. The gate is **local and mode-independent**: it fires before any wallet job is created, so MetaMask's backend is never reached and no server-side chain policy is implicated. A chainId-1 control on the identical payload was `APPROVED`, which isolates chain resolution as the sole cause of the Arc failure. **Closed for this version.** Neither the direct CLI path nor a `customEvmChains` patch is on the demo path — the credential issuers sign with viem directly (see Q5). Invocation, control and the second blocker in §4. |
 
 ## 8. Corrections
 
@@ -139,6 +172,9 @@ Things we believed and then disproved. Kept so we do not re-learn them.
 
 | Date | Believed | Actually |
 |---|---|---|
+| 2026-09-09 | mm might sign an Arc credential because the chain ID is only EIP-712 domain data | ✅ E4: mm `6.2.0` rejects `--chain-id 5042002` with `UNSUPPORTED_CHAIN`: `No EVM chain configured for chainId 5042002.` No signature produced; viem recovery untested. |
+| 2026-09-09 | E4's `UNSUPPORTED_CHAIN` might have come from MetaMask's backend, since E4 ran through a server wallet — leaving open that a server-side chain policy was the real gate | ✅ **Experiment A:** BYOK mode, which signs locally, fails identically. The throw lands right after `Submitting...` with no wallet job created, so the request never leaves the machine. The blocker is the local chain resolver alone. Both wallets' `policyYaml` do list `allowed_chains` without `5042002`, but that policy is never consulted — the resolver throws first. |
+| 2026-09-09 | Adding a `customEvmChains` entry would be enough to make `mm wallet sign-typed-data` usable for Arc credentials | ⚠️ Not sufficient on its own. The chainId-1 control was `APPROVED` and still returned **no signature** in BYOK mode, with or without `--wait`. Clearing the chain gate would expose a second blocker, not a working path. Untested in server mode. |
 | 2026-09-09 | The faucet limit would force the demo's scale, possibly onto `MockUSDC` | Irrelevant. Coverage is a ratio; fractional USDC proves the same thing. Overweighted a non-issue. |
 | 2026-09-09 | The `0x3600…` USDC might be a restricted precompile that breaks `approve`/`transferFrom` | Full standard ERC-20 API, confirmed in Arc's docs. `IERC20Settlement` works unchanged. |
 | 2026-09-09 | Push-to-mainnet was a deadline-day trap (`PRD.md` §13) | Mainnet is a **separate Sept 30 deadline**, decoupled from submission entirely. |
