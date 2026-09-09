@@ -2,7 +2,7 @@
 
 **Created:** 2026-09-05
 **Status:** Design. Layer 1 is built and locally tested; Layers 2 and 3 are specified, not deployed.
-**Vocabulary:** taken verbatim from [PRODUCT-THESIS.md](./PRODUCT-THESIS.md) and [PROTOTYPE-SPEC.md](./PROTOTYPE-SPEC.md). No new terms are invented here.
+**Vocabulary:** taken verbatim from `PRODUCT-THESIS.md` (private) and [PROTOTYPE-SPEC.md](./PROTOTYPE-SPEC.md). No new terms are invented here.
 
 Read this before building anything. It answers one question: **what happens, in order, between a hedge existing somewhere offchain and a dollar of USDC being allowed to leave a vault.**
 

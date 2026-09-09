@@ -3,8 +3,8 @@
 **Created:** 2026-09-07
 **Window:** now → **2026-09-13, 12:00 pm EDT** (ETHOnline submission close, verified on the live rules page)
 **Arc mainnet:** a separate deadline — **2026-09-30**. Not a submission risk. See §10.
-**Authority:** [PRODUCT-THESIS.md](./PRODUCT-THESIS.md) owns scope and vocabulary; [PROTOTYPE-SPEC.md](./PROTOTYPE-SPEC.md) owns the reference rules; [SPONSOR-STRATEGY-REVIEW.md](./SPONSOR-STRATEGY-REVIEW.md) owns direction; [SYSTEM-ARCHITECTURE.md](./SYSTEM-ARCHITECTURE.md) owns the mechanism. This document turns those into requirements with IDs so the build can point at them.
-**Scope for the remaining window:** [CUTLIST.md](./CUTLIST.md) — one workstream, Arc, everything else cut. It supersedes the build order in `ETHONLINE-WORKSTREAMS.md` §6.
+**Authority:** `PRODUCT-THESIS.md` (private) owns scope and vocabulary; [PROTOTYPE-SPEC.md](./PROTOTYPE-SPEC.md) owns the reference rules; `SPONSOR-STRATEGY-REVIEW.md` (private) owns direction; [SYSTEM-ARCHITECTURE.md](./SYSTEM-ARCHITECTURE.md) owns the mechanism. This document turns those into requirements with IDs so the build can point at them.
+**Scope for the remaining window:** `CUTLIST.md` (private) — one workstream, Arc, everything else cut. It supersedes the build order in `ETHONLINE-WORKSTREAMS.md` §6.
 **Chain facts:** [ARC-FIELD-NOTES.md](./ARC-FIELD-NOTES.md) — what we have verified about Arc, with sources and dates. Circle's own guidance is vendored verbatim at `.claude/skills/use-arc/SKILL.md`.
 **Mechanism, drawn:** [ARC-ARCHITECTURE.html](./ARC-ARCHITECTURE.html) — the four contracts, the two issuers, and what happens inside a draw. Doubles as the architecture diagram the Arc track requires.
 **Claims rule:** nothing here is deployed. Every sponsor named is an integration target, never a partner.
@@ -160,13 +160,9 @@ Qualification requirements copied from the prize pages, restated as conditions w
 
 *The frontend is a qualification requirement, not polish.* S-5 is load-bearing.
 
-| Track | Total | Without mainnet | Ours |
-|---|---|---|---|
-| **Best DeFi/Onchain Finance Application** | **$3,500** | **$1,000** | **Target** |
-| Best Agentic Economy w/ Circle Agent Stack | $3,500 | $1,000 | No agent in this product |
-| Best DeFi or Agentic Application (Continuity) | $3,000 | $1,000 | We build in-window |
+Arc runs three tracks. **Best DeFi/Onchain Finance Application** is ours — the agentic track needs an agent this product does not have, and the continuity track is for work that predates the window.
 
-**"$2,500 awarded only if deployed to Arc Mainnet by Sept 30."** The mainnet portion is decoupled from the submission deadline. Submit testnet on the 13th; deploy mainnet in the week after. Two thirds of the track's value sits on the far side of the deadline and costs zero hackathon hours.
+Each track carries a condition worth recording: a portion is **"awarded only if deployed to Arc Mainnet by Sept 30."** That is a separate deadline from the submission. Ship testnet by the 13th and deploy mainnet the week after; chasing mainnet before submission trades a certainty for a bonus.
 
 **ENS** — built on ENSv2 Sepolia; ENSv2 central, not cosmetic; functional demo with no hard-coded values; video or live demo; open source. Our proof of "not cosmetic" is live revocation changing a capital outcome.
 
@@ -199,7 +195,7 @@ Everything in `PRODUCT-THESIS.md` "Explicit exclusions." Plus for this window: p
 | Decimals mismatch on Arc | Wrong verdict, silently — capital released that should be paused | R-F2-7: failing test first, single normalisation boundary |
 | Arc EVM divergences from Osaka baseline | Contract behaviour differs from local tests | Read the divergence list before deploying; re-run the suite against Arc RPC |
 | CRE confidential beta access | Live run unavailable | CLI simulation qualifies; design the confidential handler as an added path |
-| ~~Mainnet launch on deadline day~~ | **Retired.** Mainnet is Sept 30, a separate deadline worth $2,500 | Ship testnet by the 13th; schedule the mainnet deploy for the week of the 16th |
+| ~~Mainnet launch on deadline day~~ | **Retired.** Mainnet is Sept 30, a separate deadline | Ship testnet by the 13th; schedule the mainnet deploy for the week of the 16th |
 | Frontend treated as polish | Disqualified from Arc regardless of contract quality | S-5 is a qualification requirement (§10); it ships on the 11th, not the 12th |
 | Unit semantics of the coverage ratio | A ratio that divides EUR by USD is wrong in a way tests may not catch | Settle it before the fixture lands — see §14 |
 | Repo not public in time | Every track disqualified | S-6 is a must-ship gate, not a cleanup task |
@@ -219,7 +215,7 @@ Everything in `PRODUCT-THESIS.md` "Explicit exclusions." Plus for this window: p
 
 ## Next session
 
-This PRD is the contract. Scope for the remaining window lives in [CUTLIST.md](./CUTLIST.md), which replaces the Engineering Execution Doc described below — at four days, writing an EED costs the morning the decimals test needs. The brief below is retained for the fuller build after submission.
+This PRD is the contract. Scope for the remaining window lives in `CUTLIST.md` (private), which replaces the Engineering Execution Doc described below — at four days, writing an EED costs the morning the decimals test needs. The brief below is retained for the fuller build after submission.
 
 > **First read `DESIGN-RATIONALE.md`** — it carries the reasoning behind every rule below, distilled from the walkthrough that preceded this PRD; without it the requirements look arbitrary. Then read `PRD.md`, `SYSTEM-ARCHITECTURE.md`, `ARC-SYSTEM-DESIGN.md`, `SPONSOR-STRATEGY-REVIEW.md`, `DEMO-WALKTHROUGH.md`, and `BACKLOG.md` in `~/signa`. Then inspect `contracts/src`, `packages/credentials`, `packages/provider-adapter`, `scripts/`, and `scenarios/`. Produce `EED.md` covering: the decimals normalisation and its failing test (R-F2-7) as task one; contract changes for Arc, including the EIP-712 domain for chain `5042002`; the CREATE2 deployment plan, four-identity setup, and deployment manifest; fixture and adapter changes for a EURC exposure and a StableFX-shaped quote; dashboard wiring to the manifest; then integration points and ship/cut gates for ENS (S-7), Privy (S-8), CRE (S-9), and the subgraph (S-10). Sequence it by day from the 8th to the 16th, with a named cut decision on the 14th. Reference PRD requirement IDs throughout. Do not start building until the EED exists.
 

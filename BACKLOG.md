@@ -1,6 +1,6 @@
 # Backlog
 
-Operational items. Parked here so they stop presenting themselves as strategy — direction lives in [SPONSOR-STRATEGY-REVIEW.md](./SPONSOR-STRATEGY-REVIEW.md).
+Operational items. Parked here so they stop presenting themselves as strategy — direction lives in `SPONSOR-STRATEGY-REVIEW.md` (private).
 
 ## Unblocked, do when convenient
 - [ ] Submit the CRE Confidential Workflows access form. Not a blocker — the local simulator runs without waiting, and a CLI simulation qualifies for the track.

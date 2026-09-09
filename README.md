@@ -8,7 +8,7 @@ This repository demonstrates one narrow claim: independently authenticated expos
 
 The product is an **FX coverage-control layer for onchain credit**. It does not recommend, arrange, execute, custody, or represent ownership of an FX derivative. An authorized signature proves who asserted defined fields; it does not independently prove the legal existence or enforceability of an offchain hedge.
 
-The frozen product boundary is in [PRODUCT-THESIS.md](./PRODUCT-THESIS.md), the implementation authority is [PROTOTYPE-SPEC.md](./PROTOTYPE-SPEC.md), and public claim constraints are in [CLAIMS-EVIDENCE-LEDGER.md](./CLAIMS-EVIDENCE-LEDGER.md).
+The frozen product boundary is in `PRODUCT-THESIS.md` (private), the implementation authority is [PROTOTYPE-SPEC.md](./PROTOTYPE-SPEC.md), and public claim constraints are in `CLAIMS-EVIDENCE-LEDGER.md` (private).
 
 ## What currently works
 

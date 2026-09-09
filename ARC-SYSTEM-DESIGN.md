@@ -2,7 +2,7 @@
 
 **Created:** 2026-09-05
 **Status:** Design only. Nothing in here is built or deployed.
-**Governing docs:** [SPONSOR-STRATEGY-REVIEW.md](./SPONSOR-STRATEGY-REVIEW.md) is the north star; [PRODUCT-THESIS.md](./PRODUCT-THESIS.md) controls scope and vocabulary; [ETHONLINE-WORKSTREAMS.md](./ETHONLINE-WORKSTREAMS.md) holds the verified sponsor facts.
+**Governing docs:** `SPONSOR-STRATEGY-REVIEW.md` (private) is the north star; `PRODUCT-THESIS.md` (private) controls scope and vocabulary; `ETHONLINE-WORKSTREAMS.md` (private) holds the verified sponsor facts.
 **Target:** Arc Testnet, chain ID `5042002`.
 
 ## 1. The abstract system

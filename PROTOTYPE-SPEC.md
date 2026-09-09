@@ -3,8 +3,8 @@
 **Status:** Implementation in progress — local acceptance passed; Base Sepolia and public-evidence gates pending  
 **Target network:** Base Sepolia (`84532`)  
 **Target completion:** 2026-09-02  
-**Product authority:** [PRODUCT-THESIS.md](./PRODUCT-THESIS.md)  
-**Public-claims authority:** [CLAIMS-EVIDENCE-LEDGER.md](./CLAIMS-EVIDENCE-LEDGER.md)
+**Product authority:** `PRODUCT-THESIS.md` (private)  
+**Public-claims authority:** `CLAIMS-EVIDENCE-LEDGER.md` (private)
 
 ## 1. Evidence objective
 

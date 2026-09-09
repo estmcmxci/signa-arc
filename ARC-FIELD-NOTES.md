@@ -141,7 +141,7 @@ Things we believed and then disproved. Kept so we do not re-learn them.
 |---|---|---|
 | 2026-09-09 | The faucet limit would force the demo's scale, possibly onto `MockUSDC` | Irrelevant. Coverage is a ratio; fractional USDC proves the same thing. Overweighted a non-issue. |
 | 2026-09-09 | The `0x3600…` USDC might be a restricted precompile that breaks `approve`/`transferFrom` | Full standard ERC-20 API, confirmed in Arc's docs. `IERC20Settlement` works unchanged. |
-| 2026-09-09 | Push-to-mainnet was a deadline-day trap (`PRD.md` §13, `ETHONLINE-WORKSTREAMS.md` §1) | Mainnet is a **separate Sept 30 deadline** worth $2,500. Decoupled from submission entirely. |
+| 2026-09-09 | Push-to-mainnet was a deadline-day trap (`PRD.md` §13) | Mainnet is a **separate Sept 30 deadline**, decoupled from submission entirely. |
 | 2026-09-09 | ETHOnline closed 2026-09-16 | **2026-09-13, 12:00 pm EDT.** |
 | 2026-09-09 | Arc's RPC was `rpc.testnet.arc.io` (from Arc's own tutorial) | `rpc.testnet.arc.network`, per Circle's skill and viem's shipped definition. |
 
