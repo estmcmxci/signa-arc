@@ -6,6 +6,19 @@ import {
   type Hex,
 } from "viem";
 
+// R-F2-7 — the single decimals boundary. Every amount reaching a credential is
+// in the canonical 6-decimal ERC-20 view; nothing else gets past decimals.ts.
+export {
+  CANONICAL_DECIMALS,
+  NATIVE_DECIMALS,
+  NATIVE_TO_CANONICAL,
+  MAX_PLAUSIBLE_CANONICAL,
+  AmountScaleError,
+  toCanonical,
+  toCanonicalExact,
+  assertCanonicalScale,
+} from "./decimals.ts";
+
 export const CREDENTIAL_DOMAIN_NAME = "FXCoverageCredentials" as const;
 export const CREDENTIAL_DOMAIN_VERSION = "1" as const;
 
