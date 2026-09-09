@@ -50,7 +50,8 @@ Order matters: the Batches artifact must not depend on anything built for ETHOnl
 Verified against `docs.arc.io` and `developers.circle.com`, 2026-09-05.
 
 - **Arc is an EVM-compatible L1** targeting the Osaka EVM baseline, with documented runtime divergences from Ethereum (`docs.arc.io/arc/references/evm-differences.md`).
-- **Testnet parameters:** name `Arc Testnet`, chain ID **5042002** (`0x4CC1B2`), RPC `https://rpc.testnet.arc.io`, WSS `wss://rpc.testnet.arc.io`, explorer `https://testnet.arcscan.app`, faucet `https://faucet.circle.com`. Circle's wallet APIs refer to the chain as `ARC-TESTNET`. Mainnet is not live.
+- **Testnet parameters:** name `Arc Testnet`, chain ID **5042002** (`0x4CEF52`), RPC `https://rpc.testnet.arc.network`, WSS `wss://rpc.testnet.arc.network`, explorer `https://testnet.arcscan.app`, faucet `https://faucet.circle.com`. Circle's wallet APIs refer to the chain as `ARC-TESTNET`. Mainnet is not live.
+  **Corrected 2026-09-09:** the hex was previously `0x4CC1B2`, which is 5030322 — a different chain. The RPC host was `arc.io`; Circle's own skill and viem's shipped `arcTestnet` both use `arc.network`. Canonical constants now live in [ARC-FIELD-NOTES.md](./ARC-FIELD-NOTES.md) §1.
 - **Gas is paid in USDC, at 18 decimals.** This is the single largest porting hazard: ERC-20 USDC is 6 decimals, and our coverage math is written against that assumption.
 - **StableFX** is Circle's "institutional-grade stablecoin FX engine built on Arc": request a quote for a pair, accept it via API (offchain execution), settle through **smart-contract escrow on Arc with payment-versus-payment**. Pairs today are **USDC and EURC only**. It is **spot conversion — no forwards, no NDFs**. An API key requires a Circle representative.
 - **App Kit** provides Bridge, Swap, Send, and Unified Balance flows. Other named products: Circle Wallets, Circle Contracts, CCTP, Gateway.

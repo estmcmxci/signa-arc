@@ -12,7 +12,7 @@ Operational items. Parked here so they stop presenting themselves as strategy �
 - [ ] Does Subgraph Studio index Arc Testnet, or only the Sepolia leg? Gates Workstream E.
 - [ ] Which chains can CRE capability DONs write to? Fixes Workstream B's settlement chain.
 - [ ] Does `testnet.arcscan.app` support source verification, and via which API?
-- [ ] Is testnet EURC obtainable in useful quantities, or must it be mocked?
+- [x] ~~Is testnet EURC obtainable in useful quantities, or must it be mocked?~~ Answered 2026-09-09: first-class token, `0x89B5…D72a`, 6 dec, Circle faucet. See `ARC-FIELD-NOTES.md` §2.
 - [ ] Which documented Arc EVM divergences touch our contracts?
 
 ## Batches artifact — separate repo, separate deadline

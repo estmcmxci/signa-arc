@@ -197,6 +197,6 @@ StableFX TEST key (rep-gated, mocked instead) · App Kit · Gateway.
 
 - Whether Sepolia-style **source verification exists on `testnet.arcscan.app`**, and which verifier API it speaks.
 - Which **EVM divergences** from the Osaka baseline touch our contracts.
-- Whether the faucet dispenses enough native USDC for a five-contract deploy plus a scenario run.
+- ~~Whether the faucet dispenses enough native USDC for a five-contract deploy plus a scenario run.~~ Answered 2026-09-09: 20 USDC per address per chain every 2 hours, against ~$0.004 per transaction. Ample. And it does not bound the demo either way — coverage is a ratio, so the facility is denominated fractionally. See `ARC-FIELD-NOTES.md` §6.
 - Whether **EURC on Arc testnet is mintable/obtainable** in test quantities, or must be mocked.
 - Mainnet addresses, unpublished until 2026-09-16.

@@ -1,8 +1,12 @@
 # PRD — Signa Coverage Controls, ETHOnline 2026 build
 
 **Created:** 2026-09-07
-**Window:** now → **2026-09-16** (ETHOnline submission; Arc mainnet launches the same day)
-**Authority:** [PRODUCT-THESIS.md](./PRODUCT-THESIS.md) owns scope and vocabulary; [PROTOTYPE-SPEC.md](./PROTOTYPE-SPEC.md) owns the reference rules; [SPONSOR-STRATEGY-REVIEW.md](./SPONSOR-STRATEGY-REVIEW.md) owns direction; [SYSTEM-ARCHITECTURE.md](./SYSTEM-ARCHITECTURE.md) owns the mechanism. This document turns those into requirements with IDs so the EED can point at them.
+**Window:** now → **2026-09-13, 12:00 pm EDT** (ETHOnline submission close, verified on the live rules page)
+**Arc mainnet:** a separate deadline — **2026-09-30**. Not a submission risk. See §10.
+**Authority:** [PRODUCT-THESIS.md](./PRODUCT-THESIS.md) owns scope and vocabulary; [PROTOTYPE-SPEC.md](./PROTOTYPE-SPEC.md) owns the reference rules; [SPONSOR-STRATEGY-REVIEW.md](./SPONSOR-STRATEGY-REVIEW.md) owns direction; [SYSTEM-ARCHITECTURE.md](./SYSTEM-ARCHITECTURE.md) owns the mechanism. This document turns those into requirements with IDs so the build can point at them.
+**Scope for the remaining window:** [CUTLIST.md](./CUTLIST.md) — one workstream, Arc, everything else cut. It supersedes the build order in `ETHONLINE-WORKSTREAMS.md` §6.
+**Chain facts:** [ARC-FIELD-NOTES.md](./ARC-FIELD-NOTES.md) — what we have verified about Arc, with sources and dates. Circle's own guidance is vendored verbatim at `.claude/skills/use-arc/SKILL.md`.
+**Mechanism, drawn:** [ARC-ARCHITECTURE.html](./ARC-ARCHITECTURE.html) — the four contracts, the two issuers, and what happens inside a draw. Doubles as the architecture diagram the Arc track requires.
 **Claims rule:** nothing here is deployed. Every sponsor named is an integration target, never a partner.
 
 ---
@@ -38,6 +42,8 @@ Short forms of the answers that recur. Full versions live in the private narrati
 - **"Five sponsors is prize-chasing."** Layer 1 of the architecture has no sponsor names in it and predates the prize list. Each vendor implements a plane that already existed. We declined Hedera, World, 1inch, Uniswap, and Ledger because nothing in the machine needed them.
 - **"What if the verifier lies?"** Then the credit agreement fails the same way today, a month later. We make it attributable, immediate, revocable, and enumerable — and with CRE, we read the broker's own system rather than a summary of it.
 - **"Circle already does FX."** StableFX is spot conversion, USDC/EURC, no forwards or NDFs. Circle built the conversion leg and explicitly not the coverage leg. *Circle converts currency; nobody makes coverage a condition of capital.*
+  **Verified 2026-09-09** against Circle's own documentation: StableFX is an RFQ venue with PvP settlement through `FxEscrow` (`0xd68256f4D69C6BbEcB873D8588AE0Dc6B8E22E10`), permissioned to vetted institutions, spot only — no forwards, NDFs, or swaps. Arc's own post on 24/7 onchain FX discusses no hedging instruments, no term FX, and no credit or exposure framework. The gap is real on Circle's own chain, and Arc's published target uses include "onchain credit" and "stablecoin FX perpetuals."
+- **"So what is actually on Arc, if the hedge is offchain?"** The policy, the credentials, the decision, and the money. The hedge is offchain because that is where hedges are. The point is that capital on Arc becomes conditional on something that is not.
 
 ## 4. Scope
 
@@ -48,6 +54,8 @@ Short forms of the answers that recur. Full versions live in the private narrati
 - **S-4** The 90-second demo in [DEMO-WALKTHROUGH.md](./DEMO-WALKTHROUGH.md): permitted draw → refusal in `CURE` → cure → draw again.
 - **S-5** Operator dashboard reading a deployment manifest: state, ratio, available line, reason codes, receipts.
 - **S-6** Public repository with CI green, before submission.
+- **S-A** Architecture diagram and a video that names the Arc bounty. Both are explicit qualification requirements, not presentation polish. `ARC-ARCHITECTURE.html` satisfies the diagram.
+- **S-B** A EUR/USD forward fixture set for the Arc build (`arc-forward-*.json`). The existing `mock-forward-*.json` files are USD/COP and stay with the local coffee scenario; Arc has no COP stablecoin.
 
 ### In — ship in priority order after S-1..S-6 are green
 - **S-7** ENS on ENSv2 Sepolia: a named facility profile whose records resolve to the facility's contracts and policy, with verifier subnames beneath it carrying EAC attest roles, and live revocation changing a capital outcome (Workstream D). Design in `SPONSOR-STRATEGY-REVIEW.md` §D.
@@ -148,7 +156,17 @@ The demo is the acceptance test. Each line must be reproducible on Arc Testnet w
 
 Qualification requirements copied from the prize pages, restated as conditions we can check.
 
-**Arc** — working frontend and backend; architecture diagram; video and presentation naming the bounty; repo link. Meaningful use of Arc and USDC; conditional payment / treasury flow. *Push-to-mainnet track:* deploy to mainnet on the 16th only if testnet evidence is already complete.
+**Arc** — verified 2026-09-09 on the live prize page. Requirements are identical across all three Arc tracks, verbatim: "Functional MVP and diagram: Projects must demonstrate a working frontend and backend plus an architecture diagram"; "Video demonstration + presentation… outlining the project's core functions and its effective use of Circle's Developer tools/tech… supported by detailed documentation"; "Link to GitHub/Replit repo".
+
+*The frontend is a qualification requirement, not polish.* S-5 is load-bearing.
+
+| Track | Total | Without mainnet | Ours |
+|---|---|---|---|
+| **Best DeFi/Onchain Finance Application** | **$3,500** | **$1,000** | **Target** |
+| Best Agentic Economy w/ Circle Agent Stack | $3,500 | $1,000 | No agent in this product |
+| Best DeFi or Agentic Application (Continuity) | $3,000 | $1,000 | We build in-window |
+
+**"$2,500 awarded only if deployed to Arc Mainnet by Sept 30."** The mainnet portion is decoupled from the submission deadline. Submit testnet on the 13th; deploy mainnet in the week after. Two thirds of the track's value sits on the far side of the deadline and costs zero hackathon hours.
 
 **ENS** — built on ENSv2 Sepolia; ENSv2 central, not cosmetic; functional demo with no hard-coded values; video or live demo; open source. Our proof of "not cosmetic" is live revocation changing a capital outcome.
 
@@ -181,7 +199,9 @@ Everything in `PRODUCT-THESIS.md` "Explicit exclusions." Plus for this window: p
 | Decimals mismatch on Arc | Wrong verdict, silently — capital released that should be paused | R-F2-7: failing test first, single normalisation boundary |
 | Arc EVM divergences from Osaka baseline | Contract behaviour differs from local tests | Read the divergence list before deploying; re-run the suite against Arc RPC |
 | CRE confidential beta access | Live run unavailable | CLI simulation qualifies; design the confidential handler as an added path |
-| Mainnet launch on deadline day | Chasing it breaks the submission | Qualify on testnet; mainnet is a final-hours bonus |
+| ~~Mainnet launch on deadline day~~ | **Retired.** Mainnet is Sept 30, a separate deadline worth $2,500 | Ship testnet by the 13th; schedule the mainnet deploy for the week of the 16th |
+| Frontend treated as polish | Disqualified from Arc regardless of contract quality | S-5 is a qualification requirement (§10); it ships on the 11th, not the 12th |
+| Unit semantics of the coverage ratio | A ratio that divides EUR by USD is wrong in a way tests may not catch | Settle it before the fixture lands — see §14 |
 | Repo not public in time | Every track disqualified | S-6 is a must-ship gate, not a cleanup task |
 | Subgraph Studio does not index Arc | S-10 impossible on Arc | Verify first; index the Sepolia leg or drop S-10 |
 | Five workstreams in nine days | Nothing finishes | Priority order in §4; ENS/Privy/CRE/Graph are cut in reverse order, never Arc |
@@ -189,15 +209,17 @@ Everything in `PRODUCT-THESIS.md` "Explicit exclusions." Plus for this window: p
 ## 14. Open questions
 
 - Does `testnet.arcscan.app` support source verification, and via which API?
-- Is testnet EURC obtainable in useful quantities, or mocked?
+- ~~Is testnet EURC obtainable in useful quantities, or mocked?~~ **Answered.** EURC is a first-class Arc token at `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a`, 6 decimals, from the Circle faucet. Not a bridged wrapper.
+- **Does the vault ever touch the EURC contract, or is EUR only a denomination?** As written, the vault holds and moves USDC; the exposure is EUR-denominated but no EURC moves. That satisfies "meaningful use of Arc and USDC" but a judge may expect the EURC contract to appear. Decide before recording.
+- **Which currency is `outstandingValue` denominated in?** The code implies the settlement currency: `remainingNotional` is mapped from `remaining_buy_amount` (the buy leg, USD), and coverage compares it directly against `outstandingValue`. `ETHONLINE-WORKSTREAMS.md` §1 instead says "hedged EURC notional ÷ EURC exposure." Those are not the same ratio. The code's reading is unit-coherent — a USD-delivering forward against a USD obligation — and the workstreams line should be corrected, not the code. Confirm before the fixture is signed.
 - Which chains can CRE capability DONs write to?
 - Which pool for The Graph, if it ships: Continuity (repo predates the hackathon) or Start Fresh?
 
 ---
 
-## Next session — create the EED
+## Next session
 
-This PRD is the contract. The next document is the **Engineering Execution Doc**, and the session was parked here so it can be built cold. To resume:
+This PRD is the contract. Scope for the remaining window lives in [CUTLIST.md](./CUTLIST.md), which replaces the Engineering Execution Doc described below — at four days, writing an EED costs the morning the decimals test needs. The brief below is retained for the fuller build after submission.
 
 > **First read `DESIGN-RATIONALE.md`** — it carries the reasoning behind every rule below, distilled from the walkthrough that preceded this PRD; without it the requirements look arbitrary. Then read `PRD.md`, `SYSTEM-ARCHITECTURE.md`, `ARC-SYSTEM-DESIGN.md`, `SPONSOR-STRATEGY-REVIEW.md`, `DEMO-WALKTHROUGH.md`, and `BACKLOG.md` in `~/signa`. Then inspect `contracts/src`, `packages/credentials`, `packages/provider-adapter`, `scripts/`, and `scenarios/`. Produce `EED.md` covering: the decimals normalisation and its failing test (R-F2-7) as task one; contract changes for Arc, including the EIP-712 domain for chain `5042002`; the CREATE2 deployment plan, four-identity setup, and deployment manifest; fixture and adapter changes for a EURC exposure and a StableFX-shaped quote; dashboard wiring to the manifest; then integration points and ship/cut gates for ENS (S-7), Privy (S-8), CRE (S-9), and the subgraph (S-10). Sequence it by day from the 8th to the 16th, with a named cut decision on the 14th. Reference PRD requirement IDs throughout. Do not start building until the EED exists.
 
