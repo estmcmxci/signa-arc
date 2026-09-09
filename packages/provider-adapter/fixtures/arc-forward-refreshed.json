@@ -1,0 +1,17 @@
+{
+  "mock": true,
+  "disclaimer": "Mock provider data — no Ebury connection or endorsement.",
+  "provider_name": "Fictional Treasury Desk",
+  "trade": {
+    "id": "ARC-EUR-USD-001",
+    "buy_currency": "USD",
+    "sell_currency": "EUR",
+    "remaining_buy_amount": "0.720000",
+    "maturity_date": "2027-03-15T08:00:00.000Z",
+    "status": "partially_funded",
+    "updated_at": "2026-09-10T09:00:00.000Z",
+    "credential_valid_until": "2026-09-11T09:00:00.000Z",
+    "sequence": 2,
+    "receipt_reference": "FICTIONAL-ARC-RECEIPT-002"
+  }
+}
