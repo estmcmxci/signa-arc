@@ -12,11 +12,6 @@
     "test:contracts": "forge test --offline",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:ts": "node --import tsx --test packages/*/test/*.test.ts scripts/test/*.test.ts",
-    "scenario:coffee": "node --import tsx scenarios/coffee-facility.ts",
-    "scenario:sepolia": "node --import tsx scenarios/base-sepolia.ts",
-    "index:base-ecosystem": "node scripts/index-base-ecosystem.mjs",
-    "preflight:sepolia": "node --import tsx scripts/base-sepolia-preflight.ts",
-    "manifest:deployment": "node --import tsx scripts/deployment-manifest.ts",
     "dashboard:build": "pnpm --filter @fx-coverage/dashboard build",
     "check": "pnpm build:contracts && pnpm typecheck && pnpm test:ts && pnpm test:contracts && pnpm dashboard:build"
   },
