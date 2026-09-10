@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Covenant waiver approvals</title>
+<style>
+  :root { color-scheme: light dark; --muted: #6b7280; --ok: #15803d; --bad: #b91c1c; --line: #d1d5db; font-family: ui-sans-serif, system-ui, sans-serif; }
+  body { max-width: 980px; margin: 2rem auto; padding: 0 1rem; line-height: 1.45; }
+  h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.05rem; margin: 0 0 0.5rem; }
+  .muted { color: var(--muted); font-size: 0.9rem; }
+  section, article { border: 1px solid var(--line); border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+  .mono, code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; word-break: break-all; }
+  pre { white-space: pre-wrap; }
+  .row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+  .badge { border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.8rem; border: 1px solid var(--line); }
+  .ok { color: var(--ok); }
+  .bad { color: var(--bad); }
+  button { padding: 0.4rem 0.8rem; cursor: pointer; }
+  input { padding: 0.35rem; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 0.8rem; margin: 0.5rem 0; }
+  dt { color: var(--muted); }
+  #error { color: var(--bad); white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>Covenant waiver approvals</h1>
+<p class="muted">
+  A waiver is the one action where a person overrides the covenant: it permits a draw that coverage
+  says should be refused. So it takes two approvers. Each approver signs in their own browser with a
+  key that never leaves it. This server holds Privy's app secret and no approver key. Privy signs the
+  transaction only after both approvals, and this server checks the signed transaction against what
+  was approved before broadcasting it to Arc.
+</p>
+<div id="error" role="alert"></div>
+
+<section>
+  <h2>Facility</h2>
+  <dl id="info"><dt>Loading</dt><dd>…</dd></dl>
+</section>
+
+<section>
+  <h2>You are approving as</h2>
+  <div class="row">
+    <input id="approver-name" placeholder="Approver name, e.g. Risk" />
+    <button id="use-approver">Use</button>
+  </div>
+  <div id="approver" class="muted">No approver selected.</div>
+</section>
+
+<section id="propose-section">
+  <h2>Propose</h2>
+  <form id="propose-waiver" class="row">
+    <label>Duration in hours <input id="duration" type="number" min="1" step="1" value="24" /></label>
+    <input id="reason" size="48" placeholder="Reason, e.g. hedge verifier outage, ticket OPS-1234" />
+    <button type="submit">Propose waiver</button>
+  </form>
+  <p class="muted">Only the reason's hash goes on chain, as the waiver's reason commitment.</p>
+  <div class="row">
+    <button id="propose-revoke">Propose waiver revocation</button>
+    <button id="propose-setup">Propose next facility setup step</button>
+  </div>
+</section>
+
+<h2>Proposals</h2>
+<div id="actions" class="muted">None yet.</div>
+
+<script>
+'use strict';
+const ALG = { name: 'ECDSA', namedCurve: 'P-256' };
+const CREATE_WAIVER_SELECTOR = '0x6738bca7';
+const $ = (selector) => document.querySelector(selector);
+const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const b64 = (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer)));
+const unb64 = (text) => Uint8Array.from(atob(text.trim()), (c) => c.charCodeAt(0));
+const short = (text) => (text && text.length > 20 ? `${text.slice(0, 10)}…${text.slice(-8)}` : text);
+const openDetails = new Set();
+let approver = null;
+let lastActions = [];
+let info = {};
+
+function showError(error) {
+  $('#error').textContent = error ? String(error.message || error) : '';
+}
+
+async function run(task) {
+  showError(null);
+  try { await task(); } catch (error) { showError(error); }
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json' } });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || `${response.status} ${response.statusText}`);
+  return body;
+}
+
+// Approver keys: one per name in this origin's IndexedDB. Private keys are created or imported
+// non-extractable, so page scripts can sign with them but can never read them back out.
+function keyStore(mode, operation) {
+  return new Promise((resolve, reject) => {
+    const open = indexedDB.open('signa-approver-keys', 1);
+    open.onupgradeneeded = () => open.result.createObjectStore('keys');
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const transaction = open.result.transaction('keys', mode);
+      const request = operation(transaction.objectStore('keys'));
+      transaction.oncomplete = () => resolve(request.result);
+      transaction.onerror = () => reject(transaction.error);
+    };
+  });
+}
+
+async function useApprover(name) {
+  const stored = await keyStore('readonly', (store) => store.get(name));
+  approver = { name, ...(stored || {}) };
+  localStorage.setItem('signa-approver', name);
+  renderApprover();
+  renderActions(lastActions);
+}
+
+function renderApprover() {
+  const box = $('#approver');
+  if (!approver) { box.textContent = 'No approver selected.'; return; }
+  box.innerHTML = approver.publicKey
+    ? `<p><strong>${esc(approver.name)}</strong> holds a P-256 key in this browser. Public key, for the Privy key quorum:</p>
+       <p class="mono">${esc(approver.publicKey)}</p>
+       <button id="forget-key">Forget this key</button>`
+    : `<p><strong>${esc(approver.name)}</strong> has no key in this browser yet.</p>
+       <button id="create-key">Create a key here</button>
+       <p class="muted">Or import an existing base64 PKCS8 key, such as one scripts/smoke.ts wrote:</p>
+       <div class="row"><input id="import-pkcs8" size="64" placeholder="base64 PKCS8 private key" /><button id="import-key">Import</button></div>`;
+  $('#create-key')?.addEventListener('click', () => run(createKey));
+  $('#import-key')?.addEventListener('click', () => run(() => importKey($('#import-pkcs8').value)));
+  $('#forget-key')?.addEventListener('click', () => run(forgetKey));
+}
+
+async function storeKey(publicKey, privateKey) {
+  await keyStore('readwrite', (store) => store.put({ publicKey, privateKey }, approver.name));
+  await useApprover(approver.name);
+}
+
+async function createKey() {
+  const pair = await crypto.subtle.generateKey(ALG, false, ['sign', 'verify']);
+  await storeKey(b64(await crypto.subtle.exportKey('spki', pair.publicKey)), pair.privateKey);
+}
+
+async function importKey(encoded) {
+  const pkcs8 = unb64(encoded.trim().replace(/^wallet-auth:/, ''));
+  const readable = await crypto.subtle.importKey('pkcs8', pkcs8, ALG, true, ['sign']);
+  const { kty, crv, x, y } = await crypto.subtle.exportKey('jwk', readable);
+  const publicKey = await crypto.subtle.importKey('jwk', { kty, crv, x, y }, ALG, true, ['verify']);
+  await storeKey(b64(await crypto.subtle.exportKey('spki', publicKey)), await crypto.subtle.importKey('pkcs8', pkcs8, ALG, false, ['sign']));
+}
+
+async function forgetKey() {
+  if (!confirm(`Delete ${approver.name}'s key from this browser? It cannot be recovered.`)) return;
+  await keyStore('readwrite', (store) => store.delete(approver.name));
+  await useApprover(approver.name);
+}
+
+// Reads the transaction out of the exact text being signed, so what is shown is what is signed.
+function inspect(action) {
+  const checks = [];
+  let decoded = '';
+  try {
+    const payload = JSON.parse(action.signingPayload);
+    const tx = payload.body?.params?.transaction || {};
+    const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+    checks.push(['signs a transaction (eth_signTransaction)', payload.body?.method === 'eth_signTransaction']);
+    checks.push(['target contract matches', same(tx.to, action.call.to)]);
+    checks.push(['calldata matches', same(tx.data, action.call.data)]);
+    checks.push(['chain is Arc Testnet', BigInt(tx.chain_id) === BigInt(action.call.chainId)]);
+    checks.push(['nonce matches', BigInt(tx.nonce) === BigInt(action.call.nonce)]);
+    checks.push(['moves no value', BigInt(tx.value ?? 0) === 0n]);
+    const data = String(tx.data);
+    if (data.startsWith(CREATE_WAIVER_SELECTOR) && data.length === 138) {
+      decoded = `createWaiver: ${parseInt(data.slice(10, 74), 16)} seconds, reason commitment 0x${data.slice(74)}`;
+    }
+  } catch (error) {
+    checks.push([`payload is readable (${error.message})`, false]);
+  }
+  return { checks, decoded, ok: checks.every(([, ok]) => ok) };
+}
+
+function renderActions(actions) {
+  lastActions = actions;
+  const container = $('#actions');
+  if (!actions.length) { container.textContent = 'None yet.'; return; }
+  container.innerHTML = '';
+  for (const action of actions) {
+    const mine = approver?.publicKey ? action.approvals.members.find((member) => member.publicKey === approver.publicKey) : undefined;
+    const signedCount = action.approvals.members.filter((member) => member.signedAt).length;
+    const inspection = action.signingPayload ? inspect(action) : null;
+    const article = document.createElement('article');
+    article.innerHTML = `
+      <div class="row"><strong>${esc(action.kind)}</strong><span class="badge">${esc(action.status)}</span>
+        <span class="muted">${signedCount} of ${esc(action.approvals.threshold)} approvals · expires ${new Date(action.expiresAt).toLocaleString()}</span></div>
+      <p>${esc(action.description)}</p>
+      ${action.reason ? `<p><strong>Stated reason:</strong> ${esc(action.reason)}</p>` : ''}
+      <dl>
+        <dt>Call</dt><dd class="mono">${esc(action.call.functionName)}(${action.call.args.map(esc).join(', ')})</dd>
+        <dt>Contract</dt><dd class="mono">${esc(action.call.to)}</dd>
+        <dt>Nonce · gas · fee cap</dt><dd class="mono">${esc(action.call.nonce)} · ${esc(action.call.gasLimit)} · ${esc(action.call.maxFeePerGasWei)} wei</dd>
+        <dt>Approvers</dt><dd>${action.approvals.members.map((member) => `<div class="mono">${member.signedAt ? '<span class="ok">signed</span>' : 'waiting'} · ${esc(short(member.publicKey))}${member.publicKey === approver?.publicKey ? ' <strong>(you)</strong>' : ''}</div>`).join('')}</dd>
+      </dl>
+      ${inspection ? `<details><summary>What you sign: ${inspection.ok ? '<span class="ok">matches the call above</span>' : '<span class="bad">does NOT match the call above</span>'}</summary>
+        <ul>${inspection.checks.map(([label, ok]) => `<li class="${ok ? 'ok' : 'bad'}">${ok ? 'yes' : 'NO'}: ${esc(label)}</li>`).join('')}</ul>
+        ${inspection.decoded ? `<p class="mono">${esc(inspection.decoded)}</p>` : ''}
+        <pre>${esc(action.signingPayload)}</pre></details>` : ''}
+      ${action.broadcast ? `<p>On Arc: <a href="${esc(action.broadcast.explorerUrl)}" target="_blank" rel="noreferrer" class="mono">${esc(short(action.broadcast.hash))}</a>,
+        receipt <strong class="${action.broadcast.status === 'success' ? 'ok' : 'bad'}">${esc(action.broadcast.status)}</strong>${action.broadcast.waiverEndsAt ? `, waiver ends ${new Date(Number(action.broadcast.waiverEndsAt) * 1000).toLocaleString()}` : ''}</p>` : ''}
+      <div class="row buttons"></div>`;
+    const details = article.querySelector('details');
+    if (details) {
+      details.open = openDetails.has(action.intentId);
+      details.addEventListener('toggle', () => (details.open ? openDetails.add(action.intentId) : openDetails.delete(action.intentId)));
+    }
+    const buttons = article.querySelector('.buttons');
+    const button = (label, handler) => {
+      const element = document.createElement('button');
+      element.textContent = label;
+      element.addEventListener('click', () => run(handler));
+      buttons.append(element);
+    };
+    if (action.status === 'pending' && mine && !mine.signedAt && approver.privateKey && inspection?.ok) {
+      button(`Approve as ${approver.name}`, () => approve(action));
+    }
+    if (action.status === 'pending') button('Reject', () => post(action, 'reject'));
+    if (action.status === 'executed' && !action.broadcast) button('Verify and broadcast to Arc', () => post(action, 'execute'));
+    container.append(article);
+  }
+}
+
+async function approve(action) {
+  const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, approver.privateKey, new TextEncoder().encode(action.signingPayload));
+  await api(`/api/actions/${encodeURIComponent(action.intentId)}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ publicKey: approver.publicKey, signature: b64(signature), encoding: 'p1363', timestamp: Date.now() }),
+  });
+  await refresh();
+}
+
+async function post(action, verb) {
+  await api(`/api/actions/${encodeURIComponent(action.intentId)}/${verb}`, { method: 'POST' });
+  await refresh();
+}
+
+function renderInfo() {
+  const link = (kind, value) => (value
+    ? `<a class="mono" href="${esc(info.explorer)}/${kind}/${esc(value)}" target="_blank" rel="noreferrer">${esc(value)}</a>`
+    : '<span class="muted">not set</span>');
+  $('#propose-section').hidden = !info.walletId;
+  if (!info.walletId) {
+    $('#info').innerHTML = `<dt>Setup</dt><dd>No Privy wallet yet. Each approver picks a name below and creates a key in this browser.
+      Then run <code>scripts/smoke.ts --public-keys=&lt;first&gt;,&lt;second&gt;</code> with both public keys and set PRIVY_WALLET_ID.</dd>`;
+    return;
+  }
+  const status = info.vaultStatus;
+  $('#info').innerHTML = `
+    <dt>Chain</dt><dd>Arc Testnet (${esc(info.chainId)})</dd>
+    <dt>Admin wallet</dt><dd>${link('address', info.walletAddress)} <span class="muted">Privy wallet ${esc(info.walletId)}, owned by ${esc(info.walletOwnerId ?? 'nobody')}</span></dd>
+    <dt>Vault</dt><dd>${link('address', info.vault)}</dd>
+    <dt>Covenant state</dt><dd>${status ? `${esc(status.covenantState)}${status.activeWaiver ? `, waiver active until ${new Date(Number(status.waiverEndsAt) * 1000).toLocaleString()}` : ''}` : '<span class="muted">no vault yet: finish facility setup</span>'}</dd>
+    <dt>Quorum facility</dt><dd class="mono">${esc(info.quorumFacilityId)}</dd>
+    <dt>Longest waiver</dt><dd>${esc(info.maxWaiverDurationSeconds / 3600)} hours</dd>`;
+}
+
+async function refresh() {
+  info = await api('/api/info');
+  renderInfo();
+  if (info.walletId) renderActions(await api('/api/actions'));
+}
+
+$('#use-approver').addEventListener('click', () => run(() => useApprover($('#approver-name').value.trim() || 'Approver')));
+$('#propose-waiver').addEventListener('submit', (event) => {
+  event.preventDefault();
+  run(async () => {
+    await api('/api/waivers', { method: 'POST', body: JSON.stringify({ durationSeconds: Math.round(Number($('#duration').value) * 3600), reason: $('#reason').value }) });
+    await refresh();
+  });
+});
+$('#propose-revoke').addEventListener('click', () => run(async () => { await api('/api/waivers/revoke', { method: 'POST' }); await refresh(); }));
+$('#propose-setup').addEventListener('click', () => run(async () => {
+  const result = await api('/api/setup/next', { method: 'POST' });
+  if (result.complete) alert(result.description);
+  await refresh();
+}));
+
+const remembered = localStorage.getItem('signa-approver');
+if (remembered) { $('#approver-name').value = remembered; run(() => useApprover(remembered)); }
+run(refresh);
+setInterval(() => refresh().catch(showError), 5000);
+</script>
+</body>
+</html>
