@@ -1,9 +1,12 @@
 /// <reference types="vite/client" />
 import {
+  BaseError,
+  ContractFunctionRevertedError,
   createPublicClient,
   createWalletClient,
   custom,
   decodeEventLog,
+  formatUnits,
   http,
   type Abi,
   type Address,
@@ -94,11 +97,6 @@ type HistoryItem = {
   blockNumber: bigint;
   summary: string;
 };
-type DrawPreview =
-  | { status: "idle" }
-  | { status: "pending" }
-  | { status: "ready"; allowed: boolean; reason: number; amount: bigint }
-  | { status: "error"; message: string };
 type ArcEvidenceStep = {
   action?: unknown;
   transactionHash?: unknown;
@@ -121,15 +119,32 @@ type LiveState = {
   history: HistoryItem[];
 };
 
+// The three outcomes a write can settle into (research §5.1). Only the last one is an
+// error — a refusal is the coverage gate working, not the software breaking.
+type WriteOutcome =
+  | { kind: "permitted"; request: unknown }
+  | { kind: "refused"; code: string; args: readonly unknown[] }
+  | { kind: "reverted"; reason: string }
+  | { kind: "abi-drift"; signature: Hex }
+  | { kind: "errored"; message: string };
+
+type GateState =
+  | { status: "idle" }
+  | { status: "pending"; amount: bigint }
+  | { status: "permitted"; amount: bigint; request: unknown }
+  | { status: "refused"; amount: bigint; code: string; args: readonly unknown[] }
+  | { status: "errored"; amount: bigint; message: string };
+
+type ActionOutcome = { action: string; outcome: WriteOutcome };
+
 const facilityRegistryAbi = (facilityRegistryJson as ArtifactJson).abi;
 const credentialRegistryAbi = (credentialRegistryJson as ArtifactJson).abi;
 const coverageEngineAbi = (coverageEngineJson as ArtifactJson).abi;
 const covenantVaultAbi = (covenantVaultJson as ArtifactJson).abi;
 const mockTokenAbi = (mockTokenJson as ArtifactJson).abi;
 
-// Referenced, never moved (E-DEC-2, E-EUR-1 … E-EUR-5). The loan book this facility
-// covers is EURC-denominated; this vault never holds, transfers, or approves EURC.
-const EURC_ADDRESS: Address = "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a";
+// Fallback only — the real manifest carries this at `exposureDenomination` (E-EUR-1).
+const FALLBACK_EURC_ADDRESS: Address = "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a";
 
 const manifestState: ManifestState = loadManifest();
 const manifest: ArcTestnetManifest | undefined =
@@ -148,6 +163,74 @@ const addresses = manifest
       covenantVault: manifest.contracts.covenantVault.address,
     }
   : undefined;
+const exposureAsset = manifest?.exposureDenomination?.referenceAsset ?? {
+  address: FALLBACK_EURC_ADDRESS,
+  decimals: 6,
+  symbol: "EURC",
+};
+
+// Text label + shape, never colour alone (WCAG 1.4.1). BREACH is magenta, not red, so
+// red stays free to mean the software failed (research §4.3, gitlab.com/design green+magenta).
+// Declared before `render()` is first invoked below — it is called unconditionally on
+// the initial synchronous render, so it must not sit in a later const's temporal dead zone.
+const STATE_GLYPH: Record<string, string> = {
+  UNASSESSED: "○",
+  COMPLIANT: "●",
+  CURE: "▲",
+  BREACH: "⬣",
+  WAIVED: "⊘",
+  "READ FAILED": "■",
+};
+const covenantStates = ["UNASSESSED", "COMPLIANT", "CURE", "BREACH", "WAIVED"];
+const hedgeStatuses = ["ACTIVE", "CANCELLED", "SETTLED", "DISPUTED"];
+const exposureReasons = [
+  "ELIGIBLE",
+  "MISSING",
+  "ZERO_VALUE",
+  "ISSUER_NOT_APPROVED",
+  "PAIR_MISMATCH",
+  "NOT_YET_OBSERVED",
+  "EXPIRED",
+  "STALE",
+  "REVOKED",
+  "ISSUER_AUTHORIZATION_STALE",
+];
+const hedgeReasons = [
+  "ELIGIBLE",
+  "MISSING",
+  "ISSUER_NOT_APPROVED",
+  "SAME_AS_EXPOSURE_ISSUER",
+  "PAIR_MISMATCH",
+  "NOT_ACTIVE",
+  "NOT_YET_OBSERVED",
+  "EXPIRED",
+  "STALE",
+  "MATURITY_MISMATCH",
+  "REVOKED",
+  "ISSUER_AUTHORIZATION_STALE",
+];
+// CoverageEngine.ResultReason (contracts/src/CoverageEngine.sol). RESERVE_VIOLATION is
+// the fifth member, added alongside ICoverageGate.assess — evaluate() never returns it,
+// only assess() does (and, transitively, a simulated draw()), when the draw would
+// breach reserveAmount.
+const resultReasons = [
+  "NONE",
+  "MISSING_EXPOSURE",
+  "INVALID_EXPOSURE",
+  "BELOW_THRESHOLD",
+  "RESERVE_VIOLATION",
+];
+
+// Also declared ahead of `render()`/`refreshGate()`: calling an async function runs its
+// body synchronously up to the first `await`, so the initial `void refreshGate()` below
+// reaches `formatUsd` (via the "pending" gate copy) before the module finishes evaluating
+// — anything that path touches has to be initialized above this line, not just above the
+// bottom-of-file convention the rest of the formatting helpers otherwise follow.
+const usdFormatter = new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+  useGrouping: true,
+});
 
 const publicClient = createPublicClient({ chain: arcTestnet, transport: http(rpcUrl) });
 const rootElement = document.querySelector<HTMLDivElement>("#app");
@@ -161,11 +244,18 @@ let message = configured ? "Reading current onchain state…" : "Arc deployment 
 let errorMessage = "";
 let lastRefreshedAt: number | undefined;
 let stale = false;
-let drawPreview: DrawPreview = { status: "idle" };
+let amountValue = "100000";
+let gate: GateState = { status: "idle" };
+let gateRequestId = 0;
+let gateDebounce: ReturnType<typeof setTimeout> | undefined;
+let lastActionOutcome: ActionOutcome | undefined;
 const arcEvidence = loadArcEvidence();
 
 render();
-if (configured) void refreshLive();
+if (configured) {
+  void refreshLive();
+  void refreshGate();
+}
 
 async function refreshLive() {
   if (!configured || !facilityId || !addresses) return;
@@ -235,45 +325,97 @@ async function refreshLive() {
   }
 }
 
-async function previewDraw() {
-  if (!configured || !facilityId || !addresses) return;
-  let amount: bigint;
+// --- The coverage gate: simulate before every write (research §5.4, §6.4) ---------
+
+async function simulateWrite(
+  functionName: string,
+  args: readonly unknown[],
+  account: Address,
+): Promise<WriteOutcome> {
+  if (!addresses) return { kind: "errored", message: "No deployment configured." };
   try {
-    amount = parseSixDecimals(document.querySelector<HTMLInputElement>("#amount")?.value ?? "0");
+    const { request } = await publicClient.simulateContract({
+      address: addresses.covenantVault,
+      abi: covenantVaultAbi,
+      functionName,
+      args,
+      account,
+      chain: arcTestnet,
+    } as never);
+    return { kind: "permitted", request };
   } catch (error) {
-    drawPreview = { status: "error", message: errorText(error) };
-    render();
+    if (error instanceof BaseError) {
+      const revert = error.walk((e) => e instanceof ContractFunctionRevertedError);
+      if (revert instanceof ContractFunctionRevertedError) {
+        if (revert.data?.errorName) {
+          return { kind: "refused", code: revert.data.errorName, args: revert.data.args ?? [] };
+        }
+        if (revert.signature) return { kind: "abi-drift", signature: revert.signature };
+        if (revert.reason) return { kind: "reverted", reason: revert.reason };
+      }
+    }
+    return { kind: "errored", message: errorText(error) };
+  }
+}
+
+function scheduleGateRefresh() {
+  if (gateDebounce) clearTimeout(gateDebounce);
+  gateDebounce = setTimeout(() => void refreshGate(), 250);
+}
+
+// Always-on preflight for `draw`. Re-run on amount change and after every state
+// refresh, so the gate strip is never news by the time the operator clicks Draw.
+async function refreshGate() {
+  if (!configured || !facilityId || !addresses || !manifest) {
+    gate = { status: "idle" };
+    renderGate();
     return;
   }
-  drawPreview = { status: "pending" };
-  render();
+  const requestId = ++gateRequestId;
+  let amount: bigint;
   try {
-    // assess() measures the reserve against msg.sender's balance of the settlement
-    // asset. Read-only, that is whoever the RPC call is sent "from" — nonsense unless
-    // pinned to the vault, which is who calls it for real inside draw(). See EED §1.
-    const [allowed, reason] = (await publicClient.readContract({
-      address: addresses.coverageEngine,
-      abi: coverageEngineAbi,
-      functionName: "assess",
-      args: [facilityId, amount],
-      account: addresses.covenantVault,
-    } as never)) as [boolean, number];
-    drawPreview = { status: "ready", allowed, reason, amount };
-  } catch (error) {
-    drawPreview = { status: "error", message: errorText(error) };
+    amount = parseSixDecimals(amountValue);
+  } catch {
+    gate = { status: "idle" };
+    renderGate();
+    return;
   }
-  render();
+  gate = { status: "pending", amount };
+  renderGate();
+  const account = walletAddress ?? manifest.roles.operator;
+  const outcome = await simulateWrite("draw", [amount], account);
+  if (requestId !== gateRequestId) return; // a newer simulate superseded this one
+  gate =
+    outcome.kind === "permitted"
+      ? { status: "permitted", amount, request: outcome.request }
+      : outcome.kind === "refused"
+        ? { status: "refused", amount, code: outcome.code, args: outcome.args }
+        : {
+            status: "errored",
+            amount,
+            message:
+              outcome.kind === "reverted"
+                ? outcome.reason
+                : outcome.kind === "abi-drift"
+                  ? `ABI drift — unknown selector ${outcome.signature}`
+                  : outcome.message,
+          };
+  renderGate();
 }
 
 function render() {
-  const stateName = live ? covenantStates[live.state] ?? "UNKNOWN" : "UNCONFIGURED";
+  const stateName = live
+    ? covenantStates[live.state] ?? "UNKNOWN"
+    : configured
+      ? "READ FAILED"
+      : "UNCONFIGURED";
   const coverage = live?.coverage;
   root.innerHTML = `
     <main class="shell">
-      <div class="truth-banner">Arc Testnet 5042002 / fictional facility / mock provider data — ${manifestBadge()}</div>
+      <div class="truth-banner">Arc Testnet 5042002 · fictional facility · mock provider data — ${manifestBadge()}</div>
       <header class="masthead">
         <div>
-          <div class="eyebrow">FX coverage control desk</div>
+          <div class="eyebrow">{ FX coverage control desk }</div>
           <h1>Capital moves only when coverage holds.</h1>
           <p class="lede">A fictional EURC-denominated loan book demonstrates how independently signed exposure and hedge state can govern a USDC credit vault on Arc. The exposure feed is shaped like a servicer/bank confirmation and the hedge feed is shaped like a StableFX RFQ receipt — both are labelled mocks; no bank or venue is integrated. This interface reads the contracts; it does not price, recommend, or execute a derivative.</p>
         </div>
@@ -287,11 +429,11 @@ function render() {
 
       ${manifestNotice()}
       ${staleNotice()}
-      ${errorMessage ? `<div class="notice">${escapeHtml(errorMessage)}</div>` : ""}
+      ${errorMessage ? `<div class="notice notice-error">${escapeHtml(errorMessage)}</div>` : ""}
 
       <section class="metrics" aria-label="Current coverage metrics">
-        ${metric("Covenant state", stateName, `status-${stateName.toLowerCase()}`, stale)}
-        ${metric("Counted coverage", coverage ? formatBps(coverage.coverageBps) : "—", "", stale)}
+        ${metric("Covenant state", stateGlyph(stateName) + " " + stateName, `status-${stateName.toLowerCase().replace(/\s+/g, "-")}`, stale, false)}
+        ${metric("Counted coverage", coverage ? formatBps(coverage.coverageBps) : "—", "hero-figure", stale)}
         ${metric("Authenticated exposure", coverage ? formatUsd(coverage.outstandingValue) : "—", "", stale)}
         ${metric("Available to draw", live ? formatUsd(live.availableToDraw) : "—", "", stale)}
       </section>
@@ -313,17 +455,17 @@ function render() {
         </article>
 
         <article class="panel">
-          <div class="panel-head"><div><div class="section-kicker">Actions</div><h2>Fresh onchain evaluation</h2></div><button id="connect" class="action">${walletAddress ? short(walletAddress) : "Connect wallet"}</button></div>
+          <div class="panel-head"><div><div class="section-kicker">Actions</div><h2>Coverage gate</h2></div><button id="connect" class="action">${walletAddress ? short(walletAddress) : "Connect wallet"}</button></div>
+          <div id="draw-gate" class="gate gate-${gate.status}">${gateMarkup()}</div>
           <div class="controls">
-            <input id="amount" inputmode="decimal" value="100000" aria-label="Amount in mock USD" />
-            <button id="preview" ${disabledRead()}>Preview draw</button>
+            <input id="amount" inputmode="decimal" value="${escapeHtml(amountValue)}" aria-label="Amount in mock USD" class="num" />
             <button id="sync" class="action-primary" ${disabled()}>Sync covenant</button>
             <button id="restore" ${disabled()}>Restore</button>
             <button id="draw" ${disabled()}>Draw mUSD</button>
             <button id="repay" ${disabled()}>Repay mUSD</button>
           </div>
-          ${previewLine()}
-          <p class="footer-note">Every draw evaluates current credentials in the same transaction via <span class="mono">ICoverageGate.assess</span>; the gate rules, it never authorises from a cached verdict. Reverted draws cannot persist a state transition; any account can then call sync to record cure or breach. Repayment remains available in every state.</p>
+          ${actionOutcomeMarkup()}
+          <p class="footer-note">Every write is simulated first via <span class="mono">simulateContract</span>; a refusal is decoded from the vault's own custom error and shown before anything is signed. The Draw button stays enabled when held — a refusal is the gate working, not a reason to hide the control.</p>
           <p class="footer-note mono">${escapeHtml(message)}</p>
         </article>
       </section>
@@ -338,23 +480,25 @@ function render() {
             ${datum("Observed", live ? formatTimestamp(live.exposure.credential.observedAt) : "—")}
             ${datum("Expires", live ? formatTimestamp(live.exposure.credential.validUntil) : "—")}
             ${datum("Source commitment", live ? hashSpan(live.exposure.credential.sourceCommitment) : "—")}
-            ${datum("Denominating asset (referenced only)", eurcLink())}
+            ${datum(`Denominating asset (${exposureAsset.symbol}, referenced only)`, eurcLink())}
           </div>
-          <p class="footer-note">The exposure is a loan book in a servicing system, asserted under a signed <span class="mono">ExposureCredential</span> — never an onchain balance. EURC above is linked for context only: this vault never transfers, holds, or approves it. The portfolio is denominated in EUR; the facility is funded, drawn and repaid in USDC.</p>
+          <p class="footer-note">${escapeHtml(manifest?.exposureDenomination?.note ?? "The exposure is a loan book in a servicing system, asserted under a signed ExposureCredential — never an onchain balance. The reference asset above is linked for context only: this vault never transfers, holds, or approves it. The portfolio is denominated in EUR; the facility is funded, drawn and repaid in USDC.")}</p>
         </article>
 
         <article class="panel">
           <div class="panel-head"><div><div class="section-kicker">Computed onchain</div><h2>Coverage result</h2></div><span class="mono">${coverage ? (resultReasons[coverage.resultReason] ?? "UNKNOWN") : "—"}</span></div>
+          ${coverageBar()}
           <div class="policy-grid">
             ${datum("Gross eligible", coverage ? formatUsd(coverage.grossEligible) : "—")}
             ${datum("Gross coverage (uncapped)", coverage ? formatGrossBps(coverage) : "—")}
             ${datum("Counted eligible", coverage ? formatUsd(coverage.countedEligible) : "—")}
             ${datum("Counted coverage", coverage ? formatBps(coverage.coverageBps) : "—")}
             ${datum("Required", coverage ? formatBps(coverage.requiredCoverageBps) : "—")}
+            ${datum("Delta to threshold", coverage ? formatBpsDelta(coverage.coverageBps, coverage.requiredCoverageBps) : "—")}
             ${datum("Eligible hedges", coverage ? `${coverage.eligibleHedgeCount} / ${coverage.totalHedgeCount}` : "—")}
             ${datum("Assessed", coverage ? String(coverage.assessed) : "—")}
           </div>
-          <p class="footer-note">Gross and counted coverage are shown separately by design: over-hedging is visible in the gross figure, but only the counted figure — capped at 100% of the exposure — ever governs a draw (EED §6, R-F2-3).</p>
+          <p class="footer-note">Gross and counted coverage are shown separately by design: over-hedging is visible in the gross figure (hatched above the cap), but only the counted figure — capped at 100% of the exposure — ever governs a draw (EED §6, R-F2-3).</p>
         </article>
       </section>
 
@@ -362,7 +506,7 @@ function render() {
         <div class="panel-head"><div><div class="section-kicker">Independent source B</div><h2>Active hedge credentials</h2></div><span class="mono">${live?.hedges.length ?? 0} active IDs</span></div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Committed trade ID</th><th>Issuer</th><th>Remaining</th><th>Status</th><th>Maturity</th><th>Expires</th><th>Eligibility</th></tr></thead>
+            <thead><tr><th>Committed trade ID</th><th>Issuer</th><th class="num">Remaining</th><th>Status</th><th>Maturity</th><th>Expires</th><th>Eligibility</th></tr></thead>
             <tbody>${hedgeRows()}</tbody>
           </table>
         </div>
@@ -386,11 +530,14 @@ function render() {
 
 function bindActions() {
   document.querySelector("#connect")?.addEventListener("click", () => void connectWallet());
-  document.querySelector("#preview")?.addEventListener("click", () => void previewDraw());
   document.querySelector("#sync")?.addEventListener("click", () => void execute("sync"));
   document.querySelector("#restore")?.addEventListener("click", () => void execute("restore"));
   document.querySelector("#draw")?.addEventListener("click", () => void execute("draw"));
   document.querySelector("#repay")?.addEventListener("click", () => void execute("repay"));
+  document.querySelector<HTMLInputElement>("#amount")?.addEventListener("input", (event) => {
+    amountValue = (event.target as HTMLInputElement).value;
+    scheduleGateRefresh();
+  });
 }
 
 async function connectWallet() {
@@ -410,6 +557,7 @@ async function connectWallet() {
     errorMessage = errorText(error);
   }
   render();
+  void refreshGate();
 }
 
 async function execute(action: "sync" | "restore" | "draw" | "repay") {
@@ -421,9 +569,7 @@ async function execute(action: "sync" | "restore" | "draw" | "repay") {
   let amount = 0n;
   try {
     if (action === "draw" || action === "repay") {
-      amount = parseSixDecimals(
-        document.querySelector<HTMLInputElement>("#amount")?.value ?? "0",
-      );
+      amount = parseSixDecimals(amountValue);
     }
   } catch (error) {
     errorMessage = errorText(error);
@@ -432,7 +578,8 @@ async function execute(action: "sync" | "restore" | "draw" | "repay") {
   }
   busy = true;
   errorMessage = "";
-  message = `Waiting for ${action} transaction…`;
+  lastActionOutcome = undefined;
+  message = `Preparing ${action}…`;
   render();
   try {
     const wallet = createWalletClient({ chain: arcTestnet, transport: custom(window.ethereum as never) });
@@ -442,6 +589,15 @@ async function execute(action: "sync" | "restore" | "draw" | "repay") {
     await wallet.switchChain({ id: arcTestnet.id });
 
     if (action === "repay") {
+      // repay()'s only real refusal (InvalidAmount) is checked before transferFrom, so
+      // it simulates correctly even with no allowance yet. A transferFrom-shaped revert
+      // here is a missing-approval precondition, not a covenant decision — fall through.
+      const preflight = await simulateWrite("repay", [amount], account);
+      if (preflight.kind === "refused" || preflight.kind === "abi-drift") {
+        lastActionOutcome = { action, outcome: preflight };
+        message = "Repay held before signing — see below.";
+        return;
+      }
       await writeAndWait(wallet, account, addresses.token, mockTokenAbi, "approve", [
         addresses.covenantVault,
         amount,
@@ -457,23 +613,24 @@ async function execute(action: "sync" | "restore" | "draw" | "repay") {
             ? "restoreCompliance"
             : "draw";
       const args = action === "draw" ? [amount] : [];
-      await writeAndWait(
-        wallet,
-        account,
-        addresses.covenantVault,
-        covenantVaultAbi,
-        functionName,
-        args,
-      );
+      const outcome = await simulateWrite(functionName, args, account);
+      if (outcome.kind !== "permitted") {
+        lastActionOutcome = { action, outcome };
+        message = `${capitalize(action)} held before signing — see below.`;
+        return;
+      }
+      await writeSimulatedRequest(wallet, outcome.request);
     }
+    lastActionOutcome = { action, outcome: { kind: "permitted", request: undefined } };
     message = `${action} confirmed. Refreshing contract state…`;
     await refreshLive();
   } catch (error) {
     errorMessage = errorText(error);
-    message = `${action} did not confirm.`;
+    message = `${action} did not complete.`;
   } finally {
     busy = false;
     render();
+    void refreshGate();
   }
 }
 
@@ -495,6 +652,16 @@ async function writeAndWait(
   } as never);
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
   if (receipt.status !== "success") throw new Error(`${functionName} reverted`);
+}
+
+// Reuses the exact request simulateContract returned — the canonical viem pairing,
+// so what was simulated is what gets sent (research §5.4/§6.4).
+async function writeSimulatedRequest(wallet: ReturnType<typeof createWalletClient>, request: unknown) {
+  const hash = await wallet.writeContract(request as never);
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status !== "success") {
+    throw new Error("Transaction reverted on-chain after simulation passed — state changed between simulate and send.");
+  }
 }
 
 async function loadHistory(): Promise<HistoryItem[]> {
@@ -581,28 +748,146 @@ function staleNotice() {
   return `<div class="notice"><strong>STALE:</strong> the last live read failed. The state shown below is the last successful read, from ${since} — it is not confirmed current compliance.</div>`;
 }
 
-function previewLine() {
-  if (drawPreview.status === "idle") return "";
-  if (drawPreview.status === "pending") {
-    return `<p class="footer-note mono">Previewing assess()…</p>`;
+// --- Refusal copy: control as the actor, plain sentence before the code (§5.7) ----
+
+function decodeCustomError(
+  code: string,
+  args: readonly unknown[],
+): { headline: string; body: string; remedy: string } {
+  if (code === "DrawNotAllowed") {
+    const state = typeof args[0] === "number" ? covenantStates[args[0]] ?? "UNKNOWN" : "UNKNOWN";
+    const coverageLine = live?.coverage
+      ? `Coverage is ${formatBps(live.coverage.coverageBps)}. Facility requires ${formatBps(live.coverage.requiredCoverageBps)}.`
+      : "";
+    return {
+      headline: "The coverage covenant holds this draw.",
+      body: `${coverageLine} Covenant state is ${state}.`.trim(),
+      remedy:
+        "To release this draw, add eligible cover or repay to reduce exposure — repayment is available in every state. Often the cause is a stale credential: sync after a fresh attestation.",
+    };
   }
-  if (drawPreview.status === "error") {
-    return `<p class="footer-note mono">Preview failed: ${escapeHtml(drawPreview.message)}</p>`;
+  if (code === "ReserveViolation") {
+    const [balance, requested, reserve] = args as [bigint, bigint, bigint];
+    return {
+      headline: "The retained reserve holds this draw.",
+      body: `Drawing ${formatUsd(requested)} would leave ${formatUsd(balance - requested)} in the vault, below the ${formatUsd(reserve)} reserve floor.`,
+      remedy: "Reduce the amount, or deposit additional funds first.",
+    };
   }
-  const label = drawPreview.allowed ? "ALLOWED" : "REFUSED";
-  const cls = drawPreview.allowed ? "status-compliant" : "status-breach";
-  return `<p class="footer-note mono"><span class="${cls}">${label}</span> — ${resultReasons[drawPreview.reason] ?? "UNKNOWN"} — drawing ${formatUsd(drawPreview.amount)} would be assessed this way right now, per <span class="mono">ICoverageGate.assess</span> called from the vault's own address.</p>`;
+  if (code === "NotOperator" || code === "NotAdmin") {
+    return {
+      headline: "This account does not hold the required role.",
+      body: `${code} — the connected wallet is not the facility's authorised signer for this action.`,
+      remedy: "Connect the operator or admin wallet for this facility.",
+    };
+  }
+  if (code === "InvalidAmount") {
+    return {
+      headline: "The vault holds this call.",
+      body: "The amount is zero, or exceeds outstanding principal for a repayment.",
+      remedy: "Enter a positive amount within the applicable limit.",
+    };
+  }
+  return {
+    headline: "The vault declined this call.",
+    body: `${code}${args.length ? `(${args.map(formatUnknown).join(", ")})` : ""}`,
+    remedy: "",
+  };
+}
+
+function gateMarkup(): string {
+  if (!configured) {
+    return `<span class="gate-word">—</span> No manifest to simulate against.`;
+  }
+  switch (gate.status) {
+    case "idle":
+      return `<span class="gate-word">—</span> Enter an amount to preview the coverage gate.`;
+    case "pending":
+      return `<span class="gate-glyph">○</span><span class="gate-word gate-pending">EVALUATING</span> Simulating draw of ${formatUsd(gate.amount)}…`;
+    case "permitted": {
+      const deltaLine = live?.coverage
+        ? formatBpsDelta(live.coverage.coverageBps, live.coverage.requiredCoverageBps)
+        : "";
+      return `<span class="gate-glyph">●</span><span class="gate-word gate-open">OPEN</span> The coverage covenant permits drawing ${formatUsd(gate.amount)}.${deltaLine ? ` ${deltaLine}.` : ""}`;
+    }
+    case "refused": {
+      const { headline, body, remedy } = decodeCustomError(gate.code, gate.args);
+      return `
+        <div class="gate-line"><span class="gate-glyph">▲</span><span class="gate-word gate-hold">HOLD</span> ${escapeHtml(headline)}</div>
+        <p class="gate-body">${escapeHtml(body)}</p>
+        ${remedy ? `<p class="gate-remedy">${escapeHtml(remedy)}</p>` : ""}
+        <p class="gate-code mono">${escapeHtml(gate.code)}</p>
+      `;
+    }
+    case "errored":
+      return `<span class="gate-glyph">■</span><span class="gate-word gate-error">READ FAILED</span> Could not evaluate this draw: ${escapeHtml(gate.message)}`;
+  }
+}
+
+function renderGate() {
+  const node = document.querySelector<HTMLDivElement>("#draw-gate");
+  if (!node) return;
+  node.className = `gate gate-${gate.status}`;
+  node.innerHTML = gateMarkup();
+}
+
+function actionOutcomeMarkup() {
+  if (!lastActionOutcome) return "";
+  const { action, outcome } = lastActionOutcome;
+  if (outcome.kind === "permitted") {
+    return `<p class="footer-note outcome outcome-permitted">${capitalize(action)} permitted and sent.</p>`;
+  }
+  if (outcome.kind === "refused") {
+    const { headline, body, remedy } = decodeCustomError(outcome.code, outcome.args);
+    return `<div class="outcome outcome-refused">
+      <p><span class="gate-glyph">▲</span><strong>${escapeHtml(headline)}</strong></p>
+      <p class="footer-note">${escapeHtml(body)}</p>
+      ${remedy ? `<p class="footer-note">${escapeHtml(remedy)}</p>` : ""}
+      <p class="footer-note mono">${escapeHtml(outcome.code)}</p>
+    </div>`;
+  }
+  if (outcome.kind === "abi-drift") {
+    return `<div class="outcome outcome-errored"><p><span class="gate-glyph">■</span><strong>ABI drift.</strong></p><p class="footer-note">Unknown selector ${escapeHtml(outcome.signature)} — the dashboard's ABI does not match the deployed contract. This is a build problem, not a covenant decision.</p></div>`;
+  }
+  if (outcome.kind === "reverted") {
+    return `<div class="outcome outcome-refused"><p><span class="gate-glyph">▲</span><strong>The vault declined this call.</strong></p><p class="footer-note">${escapeHtml(outcome.reason)}</p></div>`;
+  }
+  return `<div class="outcome outcome-errored"><p><span class="gate-glyph">■</span><strong>Could not evaluate this ${escapeHtml(action)}.</strong></p><p class="footer-note">${escapeHtml(outcome.message)}</p></div>`;
 }
 
 function eurcLink() {
-  const href = explorerUrl ? `${explorerUrl}/address/${EURC_ADDRESS}` : undefined;
-  const inner = hashSpan(EURC_ADDRESS);
+  const href = explorerUrl ? `${explorerUrl}/address/${exposureAsset.address}` : undefined;
+  const inner = hashSpan(exposureAsset.address);
   return href ? `<a href="${href}" target="_blank" rel="noreferrer">${inner} ↗</a>` : inner;
 }
 
-function metric(label: string, value: string, className = "", isStale = false) {
+function coverageBar() {
+  const coverage = live?.coverage;
+  if (!coverage || coverage.outstandingValue === 0n) return "";
+  const countedPct = Math.min(100, Number((coverage.countedEligible * 10_000n) / coverage.outstandingValue) / 100);
+  const grossPct = Math.min(150, Number((coverage.grossEligible * 10_000n) / coverage.outstandingValue) / 100);
+  const thresholdPct = Math.min(100, coverage.requiredCoverageBps / 100);
+  const overCap = Math.max(0, grossPct - 100);
+  return `
+    <div class="coverage-bar" role="img" aria-label="Counted coverage ${formatBps(coverage.coverageBps)} of a ${formatBps(coverage.requiredCoverageBps)} minimum; gross coverage ${formatGrossBps(coverage)}">
+      <div class="coverage-bar-track">
+        <div class="coverage-bar-counted" style="width:${countedPct}%"></div>
+        ${overCap > 0 ? `<div class="coverage-bar-uncounted" style="left:100%;width:${overCap}%"></div>` : ""}
+        <div class="coverage-bar-threshold" style="left:${thresholdPct}%" title="Minimum coverage ${formatBps(coverage.requiredCoverageBps)}"></div>
+      </div>
+      <div class="coverage-bar-caption">
+        <span>0%</span>
+        <span>${formatBps(coverage.requiredCoverageBps)} min</span>
+        <span>100% cap</span>
+      </div>
+    </div>
+  `;
+}
+
+function metric(label: string, value: string, className = "", isStale = false, numeric = true) {
   const staleTag = isStale ? ` <span class="stale-flag">STALE</span>` : "";
-  return `<article class="metric"><span class="label">${label}</span><span class="value ${className}">${escapeHtml(value)}${staleTag}</span></article>`;
+  const numCls = numeric ? "num" : "";
+  return `<article class="metric"><span class="label">${label}</span><span class="value ${numCls} ${className}">${escapeHtml(value)}${staleTag}</span></article>`;
 }
 
 function datum(label: string, content: string) {
@@ -618,7 +903,7 @@ function hedgeRows() {
       (hedge) => `<tr>
         <td class="mono">${hashSpan(hedge.credential.tradeIdCommitment)}</td>
         <td class="mono">${short(hedge.issuer)}</td>
-        <td>${formatUsd(hedge.credential.remainingNotional)}</td>
+        <td class="num">${formatUsd(hedge.credential.remainingNotional)}</td>
         <td>${hedgeStatuses[hedge.credential.status] ?? "UNKNOWN"}</td>
         <td>${formatTimestamp(hedge.credential.maturity)}</td>
         <td>${formatTimestamp(hedge.credential.validUntil)}</td>
@@ -685,12 +970,26 @@ function formatUnknown(value: unknown): string {
 }
 
 function formatUsd(value: bigint) {
-  const whole = Number(value / 1_000_000n);
-  return `$${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(whole)}`;
+  const sign = value < 0n ? "−" : "";
+  const abs = value < 0n ? -value : value;
+  // formatUnits gives an exact decimal string; Intl.NumberFormat accepts strings and
+  // BigInts as exact decimals at runtime (no float round-trip) per ECMA-402 — see
+  // research §6.8. TS's lib for this project's target predates that overload, hence
+  // the cast; the behaviour is verified, not a type-safety hole in real precision.
+  return `${sign}$${usdFormatter.format(formatUnits(abs, 6) as unknown as number)}`;
 }
 
+// bps is already an on-chain integer (Solidity/BigInt division both truncate toward
+// zero), so dividing by 100 here never rounds up past the true value — this is the
+// "floor, don't round" requirement satisfied by construction, not by an extra Math.floor.
 function formatBps(value: number) {
-  return `${(Number(value) / 100).toFixed(Number(value) % 100 === 0 ? 0 : 2)}%`;
+  return `${(value / 100).toFixed(2)}%`;
+}
+
+function formatBpsDelta(observedBps: number, requiredBps: number) {
+  const delta = observedBps - requiredBps;
+  const sign = delta > 0 ? "+" : delta < 0 ? "−" : "";
+  return `${sign}${Math.abs(delta)} bp ${delta >= 0 ? "above" : "below"} the ${formatBps(requiredBps)} minimum`;
 }
 
 function formatGrossBps(coverage: CoverageResult) {
@@ -734,12 +1033,16 @@ function hashSpan(value: string) {
   return `<span class="hash mono" title="${value}">${short(value)}</span>`;
 }
 
-function disabled() {
-  return busy || !configured || !walletAddress ? "disabled" : "";
+function stateGlyph(stateName: string) {
+  return STATE_GLYPH[stateName] ?? "○";
 }
 
-function disabledRead() {
-  return busy || !configured ? "disabled" : "";
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function disabled() {
+  return busy || !configured || !walletAddress ? "disabled" : "";
 }
 
 function errorText(error: unknown) {
@@ -756,42 +1059,3 @@ function escapeHtml(value: string) {
       ]!,
   );
 }
-
-const covenantStates = ["UNASSESSED", "COMPLIANT", "CURE", "BREACH", "WAIVED"];
-const hedgeStatuses = ["ACTIVE", "CANCELLED", "SETTLED", "DISPUTED"];
-const exposureReasons = [
-  "ELIGIBLE",
-  "MISSING",
-  "ZERO_VALUE",
-  "ISSUER_NOT_APPROVED",
-  "PAIR_MISMATCH",
-  "NOT_YET_OBSERVED",
-  "EXPIRED",
-  "STALE",
-  "REVOKED",
-  "ISSUER_AUTHORIZATION_STALE",
-];
-const hedgeReasons = [
-  "ELIGIBLE",
-  "MISSING",
-  "ISSUER_NOT_APPROVED",
-  "SAME_AS_EXPOSURE_ISSUER",
-  "PAIR_MISMATCH",
-  "NOT_ACTIVE",
-  "NOT_YET_OBSERVED",
-  "EXPIRED",
-  "STALE",
-  "MATURITY_MISMATCH",
-  "REVOKED",
-  "ISSUER_AUTHORIZATION_STALE",
-];
-// CoverageEngine.ResultReason (contracts/src/CoverageEngine.sol). RESERVE_VIOLATION is
-// the fifth member, added alongside ICoverageGate.assess — evaluate() never returns it,
-// only assess() does, when the draw would breach reserveAmount.
-const resultReasons = [
-  "NONE",
-  "MISSING_EXPOSURE",
-  "INVALID_EXPOSURE",
-  "BELOW_THRESHOLD",
-  "RESERVE_VIOLATION",
-];

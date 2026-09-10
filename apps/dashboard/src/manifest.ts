@@ -39,6 +39,16 @@ export type ArcTestnetManifest = {
       maxWaiverDurationSeconds: number;
     };
   };
+  // Not in the EED §4 template verbatim, but Lane A's deploy step writes it (E-EUR-1):
+  // the exposure's denominating asset, referenced only — optional so older/fixture
+  // manifests without it still validate.
+  exposureDenomination?:
+    | {
+        currency: string;
+        referenceAsset: { address: Address; decimals: number; symbol: string };
+        note: string;
+      }
+    | undefined;
 };
 
 export const ARC_TESTNET_CHAIN_ID = 5_042_002;
@@ -156,8 +166,28 @@ export function validateManifest(data: unknown): { ok: true; manifest: ArcTestne
           maxWaiverDurationSeconds: policyRecord["maxWaiverDurationSeconds"] as number,
         },
       },
+      exposureDenomination: parseExposureDenomination(record["exposureDenomination"]),
     },
   };
+}
+
+function parseExposureDenomination(
+  raw: unknown,
+): ArcTestnetManifest["exposureDenomination"] {
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const record = raw as Record<string, unknown>;
+  const currency = record["currency"];
+  const note = record["note"];
+  const refRaw = record["referenceAsset"];
+  if (typeof currency !== "string" || typeof note !== "string") return undefined;
+  if (typeof refRaw !== "object" || refRaw === null) return undefined;
+  const refRecord = refRaw as Record<string, unknown>;
+  const address = refRecord["address"];
+  const decimals = refRecord["decimals"];
+  const symbol = refRecord["symbol"];
+  if (typeof address !== "string" || !isAddress(address)) return undefined;
+  if (typeof decimals !== "number" || typeof symbol !== "string") return undefined;
+  return { currency, referenceAsset: { address: getAddress(address), decimals, symbol }, note };
 }
 
 function parseContractRecord(
