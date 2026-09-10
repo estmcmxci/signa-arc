@@ -129,12 +129,15 @@ export async function nextFacilitySetupStep(
   return { kind: "complete", description: vaultDeployInstruction(plan) };
 }
 
-/** The vault has no owner, so any funded key may deploy it once the facility is frozen. */
+/**
+ * The vault has no owner, so any funded key may deploy it once the facility is frozen.
+ * `--constructor-args` takes every value after it, so it must come last.
+ */
 export function vaultDeployInstruction(plan: QuorumFacilityPlan): string {
   return [
-    "Facility is frozen. Deploy its CovenantVault, then set PRIVY_WAIVER_VAULT to the address:",
+    "Facility is frozen. Deploy its CovenantVault, then record it in deployments/arc-testnet.json:",
     `forge create contracts/src/CovenantVault.sol:CovenantVault --broadcast \\`,
-    `  --constructor-args ${plan.facilityId} ${plan.registry} ${plan.engine} \\`,
-    `  --rpc-url https://rpc.testnet.arc.network --account signa-arc-admin`,
+    `  --rpc-url https://rpc.testnet.arc.network --account signa-arc-admin \\`,
+    `  --constructor-args ${plan.facilityId} ${plan.registry} ${plan.engine}`,
   ].join("\n");
 }

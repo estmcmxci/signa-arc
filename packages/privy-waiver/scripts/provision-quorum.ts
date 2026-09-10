@@ -34,7 +34,8 @@ if (!record) {
   const quorum = await client.createKeyQuorum({
     public_keys: approvers.map((approver) => approver.publicKey),
     authorization_threshold: 2,
-    display_name: "Signa facility admin: risk officer and treasury lead",
+    // Privy caps display_name at 50 characters.
+    display_name: "Signa facility admin (risk + treasury)",
   });
   record = writeQuorumRecord(directory, { keyQuorumId: quorum.id, createdAt: new Date().toISOString() });
   console.log(`created key quorum ${quorum.id}`);
