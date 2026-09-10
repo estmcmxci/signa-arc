@@ -195,6 +195,19 @@ Result: byte-for-byte the same failure as E4 — `{"ok":false,"error":{"code":"U
 
 ✅ **E5, 2026-09-09:** native transfer to zero reverted with `Zero address not allowed`; contract ERC-20 transfer to zero reverted with `ERC20: transfer to the zero address`. Both are `Error(string)` (`0x08c379a0`), not a custom error or `false` return. Insufficient balance and allowance also reverted with strings in E2. Blocklist behavior remains ⚠️ documented, untested. Full commands/errors and the failed native receipt are under §7.
 
+## 5b. The explorer API rate-limits, and failure looks like absence ⚠️
+
+`testnet.arcscan.app/api` allows **10 requests**, and the allowance is **shared by every process on the machine**. Exceed it and you get HTTP 429 with `x-ratelimit-limit: 10` — and critically, the body still parses as JSON with an **empty `SourceCode` field**, which is byte-identical to the response for an unverified contract.
+
+**Verified 2026-09-10 the hard way.** A monitor polling four addresses every 45 seconds reported `4/4 verified`, then `0/4`, then non-JSON, while the contracts' verification state never changed. All four were verified the whole time. An unquoted URL fails the same way.
+
+**Consequences:**
+1. Never poll this endpoint on a schedule. Query it once, deliberately, and space retries by minutes.
+2. Treat an empty `SourceCode` as *unknown*, never as *unverified*. Check the HTTP status before believing the body.
+3. Prefer the v2 API or a browser for a definitive answer.
+
+The wider lesson for any monitor: a watcher that queries a rate-limited third party becomes a liar under its own load. Watch local state unless there is genuinely no alternative.
+
 ## 6. Faucet — not a constraint
 
 `https://faucet.circle.com` — 20 USDC per address per chain every 2 hours; USDC, EURC, and cirBTC; Arc Testnet listed by default.
@@ -289,6 +302,7 @@ Things we believed and then disproved. Kept so we do not re-learn them.
 | 2026-09-09 | `cast send --json` exit code 0 implies a successful transaction | ✅ E5 disproved this on Foundry 1.5.0: native zero-address transaction returned process exit 0 with receipt status `0x0` and `revertReason`. Inspect receipt status. |
 | 2026-09-09 | Push-to-mainnet was a deadline-day trap (`PRD.md` §13) | Mainnet is a **separate Sept 30 deadline**, decoupled from submission entirely. |
 | 2026-09-09 | ETHOnline closed 2026-09-16 | **2026-09-13, 12:00 pm EDT.** |
+| 2026-09-10 | Contracts were unverified on Blockscout, because `getsourcecode` returned empty | All four were verified the whole time. The endpoint rate-limits at 10 shared requests and returns empty `SourceCode` on 429 — indistinguishable from unverified. See §5b. |
 | 2026-09-09 | Arc's RPC was `rpc.testnet.arc.io` (from Arc's own tutorial) | `rpc.testnet.arc.network`, per Circle's skill and viem's shipped definition. |
 
 ## 9. Sources
