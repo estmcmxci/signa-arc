@@ -1,6 +1,6 @@
 # Privy quorum waivers: wire-up
 
-R-F3-7: *"Under Privy, creation requires m-of-n quorum."* This package implements that, live on Arc Testnet. The facility's admin is a Privy server wallet owned by a 2-of-2 key quorum: a risk officer and a treasury lead. The quorum created and froze the facility, and a Privy policy owned by the same quorum limits the admin key to one call, `createWaiver` on the facility's vault.
+R-F3-7: *"Under Privy, creation requires m-of-n quorum."* This package implements that, live on Arc Testnet. The facility's admin is a Privy server wallet owned by a 2-of-2 key quorum: a risk officer and a treasury lead. The quorum created and froze the facility and has approved its first waiver on chain. A Privy policy owned by the same quorum limits the admin key to one call, `createWaiver` on the facility's vault.
 
 No dependency was added. Neither `@privy-io/node` nor `@privy-io/js-sdk-core` is used; the latter pins viem 2.56.0 exactly, against our 2.56.3. `src/authorization.ts` reproduces Privy's signing byte for byte.
 
@@ -46,8 +46,9 @@ The **approver console** (`ui/approver.html`, served by `src/main.ts`) shows, fo
 | What | Result |
 |---|---|
 | Policy | `y5x9g8gglndai2hosm47zvxf`, owned by key quorum `pbf1jtt1knpsl30eyp0z163t`, attached to the admin wallet. Every control came out as expected: [evidence/arc-policy-evidence.md](evidence/arc-policy-evidence.md). |
-| Pre-validation | At block 61465637 the facility is COMPLIANT: 10000 of 10000 bps, after lane B's A-4 `restoreCompliance`. Both `scripts/run-waiver.ts --check` and `POST /api/waivers` refuse with `not proposed, because the contract would refuse it: the facility is compliant (coverage 10000 bps, 10000 required), and createWaiver refuses a compliant facility`. Nothing reached Privy. |
-| A live waiver | **Not broadcast yet.** `createWaiver` reverts on a compliant facility, and the video script films the dashboard as COMPLIANT until the credentials expire at 2026-09-11 21:47:22 UTC. Once the facility is non-compliant, one command runs the whole flow and writes `evidence/arc-waiver-evidence.{json,md}`: `node --import tsx packages/privy-waiver/scripts/run-waiver.ts --duration=3600 --reason="…"`. That happens either when the credentials go stale or earlier through an issuer's hedge update. |
+| Pre-validation | **Refused** at block 61465637, while the facility was COMPLIANT at 10000 of 10000 bps after lane B's A-4 `restoreCompliance`. `scripts/run-waiver.ts --check` and `POST /api/waivers` both answered `not proposed, because the contract would refuse it: the facility is compliant (coverage 10000 bps, 10000 required), and createWaiver refuses a compliant facility`, and nothing reached Privy. **Passed** at block 61473290, once lane B had put the facility in CURE at 6840 of 10000 bps: a hedge update (sequence 5, `0x0bc3d814…`) followed by `syncCovenant` (`0x9cb2636d…`, block 61472429). |
+| A live waiver | **Created, 2026-09-10.** Intent `gpai6xsundibqomhtkgv8i0i`, `createWaiver(3600, 0x8b30d2e6…4adc)`:<br>- proposed at 0 of 2;<br>- the risk officer authorized at 23:19:36.418Z: 1 of 2, still pending;<br>- the treasury lead authorized at 23:19:39.484Z: 2 of 2, executed.<br>Privy signed; we broadcast [`0xf6f7d9ec…f34b`](https://testnet.arcscan.app/tx/0xf6f7d9ec90f0dc41eaf46c5b2acbdb7e7567eb279afa7690e4a957ab6c3cf34b) with viem, mined in block 61473309 with receipt `0x1`. `WaiverCreated` names this facility and commits to `keccak256` of the stated reason; the waiver runs from 23:19:42Z to 2026-09-11 00:19:42 UTC. Read back at block 61473317: `activeWaiver()` true, `covenantState()` WAIVED. Every step traces to a hash or block in [evidence/arc-waiver-evidence.md](evidence/arc-waiver-evidence.md). |
+| Until it ends | The vault stays WAIVED until 2026-09-11 00:19:42 UTC. While a waiver is active, `syncCovenant` and `restoreCompliance` leave the state alone, and the policy denies `revokeWaiver`. So the facility cannot return to COMPLIANT before then. Afterwards, the next sync moves it back to CURE, or to COMPLIANT if fresh credentials make it compliant. |
 
 ## One facility, administered by the quorum
 
@@ -148,7 +149,7 @@ Live controls, each signed by both approvers through the synchronous RPC. Every 
 What it cannot do: **cap `duration`**. Privy's calldata comparator never matches integer arguments narrower than `uint64`, and `duration` is `uint32`, so the policy does not try. The contract enforces `maxWaiverDuration`, and the service refuses a longer waiver before proposing it.
 
 Consequences:
-- **`revokeWaiver` is denied.** Ending a waiver early would first need a policy change, which both approvers sign. Otherwise a waiver ends on its own at `endsAt`. The console no longer offers revocation or facility setup.
+- **`revokeWaiver` is denied.** Ending a waiver early would first need a policy change, which both approvers sign. Otherwise a waiver ends on its own at `endsAt`. While it is active, `syncCovenant` and `restoreCompliance` leave the vault WAIVED, so compliance cannot be restored before `endsAt` either. The console no longer offers revocation or facility setup.
 - **The policy runs at execution.** A policy-violating intent is accepted at proposal and fails only after both approvals, so the service proposes nothing but `createWaiver`, and only after pre-validation.
 
 ## Claims discipline
@@ -174,10 +175,10 @@ Say: "m-of-n approval without putting approvers on chain, and an allow-list on w
 |---|---|
 | Signed payload is byte-identical to Privy's | Golden vectors from `@privy-io/node@0.34.0`; a differential fuzz of 5,000 random bodies against that SDK (run from `/tmp`, not committed); and the exact intent payload Privy's live `/authorize` accepted |
 | Approvals are bound | A signature for one intent or timestamp does not verify for another. An approval older than 300 s is refused before it reaches Privy. |
-| Pre-validation | Offline: a compliant facility, an active waiver, another facility's vault, another admin and an over-long duration are each refused before any Privy request. Live: refused on the COMPLIANT facility, as above. |
-| Broadcast assertions | Offline: a successful receipt whose `WaiverCreated` commits to another reason, names another facility, is missing, or comes from another contract fails `execute`, and the mined transaction is still recorded. |
+| Pre-validation | Offline: a compliant facility, an active waiver, another facility's vault, another admin and an over-long duration are each refused before any Privy request. Live: refused on the COMPLIANT facility at block 61465637, and passed on the CURE facility at block 61473290. |
+| Broadcast assertions | Offline: a successful receipt whose `WaiverCreated` commits to another reason, names another facility, is missing, or comes from another contract fails `execute`, and the mined transaction is still recorded. Live: the first waiver's receipt passed every check. |
 | The policy, live | Every control and governance attempt came out as expected: [evidence/arc-policy-evidence.md](evidence/arc-policy-evidence.md) |
-| The flow, live | `scripts/provision-facility.ts` drove `QuorumAdminService` end to end four times, from proposal through a successful receipt on Arc. The `WaiverCreated` assertions run live with the first waiver. |
+| The flow, live | `QuorumAdminService` has run end to end on Arc five times, from proposal through a successful receipt: the four facility-setup calls through `scripts/provision-facility.ts`, and the first waiver through `scripts/run-waiver.ts`, whose `WaiverCreated` was checked and whose state was read back. |
 | Refusals | A bad signature never reaches Privy. A non-member key is refused. A signed transaction differing in any field, or signed by any other address, is not broadcast. Only one proposal is in flight at a time. |
 
 `test/` holds 36 tests for this package, all passing. Also found: an intent lists its members' keys in PEM, while key quorums list the same keys as bare SPKI. `keyMembers()` normalizes both to bare SPKI.
