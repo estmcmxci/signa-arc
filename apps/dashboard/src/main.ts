@@ -1,23 +1,23 @@
+/// <reference types="vite/client" />
 import {
   createPublicClient,
   createWalletClient,
   custom,
   decodeEventLog,
-  defineChain,
   http,
-  isAddress,
   type Abi,
   type Address,
   type Hex,
 } from "viem";
+import { arcTestnet } from "viem/chains";
 
-import localEvidenceJson from "../../../scenarios/output/local-coffee-evidence.json";
 import covenantVaultJson from "../../../contracts/out/CovenantVault.sol/CovenantVault.json";
 import coverageEngineJson from "../../../contracts/out/CoverageEngine.sol/CoverageEngine.json";
 import credentialRegistryJson from "../../../contracts/out/CredentialRegistry.sol/CredentialRegistry.json";
 import facilityRegistryJson from "../../../contracts/out/FacilityRegistry.sol/FacilityRegistry.json";
 import mockTokenJson from "../../../contracts/out/MockUSDC.sol/MockUSDC.json";
 
+import { loadManifest, type ArcTestnetManifest, type ManifestState } from "./manifest";
 import "./styles.css";
 
 type ArtifactJson = { abi: Abi };
@@ -94,6 +94,21 @@ type HistoryItem = {
   blockNumber: bigint;
   summary: string;
 };
+type DrawPreview =
+  | { status: "idle" }
+  | { status: "pending" }
+  | { status: "ready"; allowed: boolean; reason: number; amount: bigint }
+  | { status: "error"; message: string };
+type ArcEvidenceStep = {
+  action?: unknown;
+  transactionHash?: unknown;
+  expectedStatus?: unknown;
+  actualStatus?: unknown;
+  coverageBps?: unknown;
+  resultReason?: unknown;
+  explorerLink?: unknown;
+};
+type ArcEvidence = { network?: { name?: unknown; chainId?: unknown }; steps: ArcEvidenceStep[] };
 type LiveState = {
   policy: FacilityPolicy;
   exposure: StoredExposure;
@@ -105,57 +120,36 @@ type LiveState = {
   hedges: HedgeView[];
   history: HistoryItem[];
 };
-type LocalEvidence = {
-  network: { name: string; chainId: number };
-  steps: Array<{
-    action: string;
-    transactionHash?: Hex;
-    blockNumber?: string;
-    transactionStatus?: string;
-    covenant?: { state: string; coverageBps: number; principal: string };
-  }>;
-};
 
 const facilityRegistryAbi = (facilityRegistryJson as ArtifactJson).abi;
 const credentialRegistryAbi = (credentialRegistryJson as ArtifactJson).abi;
 const coverageEngineAbi = (coverageEngineJson as ArtifactJson).abi;
 const covenantVaultAbi = (covenantVaultJson as ArtifactJson).abi;
 const mockTokenAbi = (mockTokenJson as ArtifactJson).abi;
-const localEvidence = localEvidenceJson as LocalEvidence;
 
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-const ZERO_BYTES32 = `0x${"0".repeat(64)}`;
-const chainId = Number(import.meta.env.VITE_CHAIN_ID ?? "84532");
-const rpcUrl = import.meta.env.VITE_RPC_URL ?? "https://sepolia.base.org";
-const explorerUrl =
-  import.meta.env.VITE_EXPLORER_URL ??
-  (chainId === 84_532 ? "https://sepolia.basescan.org" : "");
-const chain = defineChain({
-  id: chainId,
-  name: chainId === 84_532 ? "Base Sepolia" : `Configured chain ${chainId}`,
-  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-  rpcUrls: { default: { http: [rpcUrl] } },
-  blockExplorers: explorerUrl
-    ? { default: { name: "Explorer", url: explorerUrl } }
-    : undefined,
-});
+// Referenced, never moved (E-DEC-2, E-EUR-1 … E-EUR-5). The loan book this facility
+// covers is EURC-denominated; this vault never holds, transfers, or approves EURC.
+const EURC_ADDRESS: Address = "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a";
 
-const addresses = {
-  token: configuredAddress(import.meta.env.VITE_TOKEN_ADDRESS),
-  facilityRegistry: configuredAddress(import.meta.env.VITE_FACILITY_REGISTRY_ADDRESS),
-  credentialRegistry: configuredAddress(import.meta.env.VITE_CREDENTIAL_REGISTRY_ADDRESS),
-  coverageEngine: configuredAddress(import.meta.env.VITE_COVERAGE_ENGINE_ADDRESS),
-  covenantVault: configuredAddress(import.meta.env.VITE_COVENANT_VAULT_ADDRESS),
-} as const;
-const facilityId = import.meta.env.VITE_FACILITY_ID as Hex | undefined;
-const configured =
-  facilityId?.length === 66 &&
-  facilityId !== ZERO_BYTES32 &&
-  Object.values(addresses).every(
-    (address) => address && isAddress(address) && address !== ZERO_ADDRESS,
-  );
+const manifestState: ManifestState = loadManifest();
+const manifest: ArcTestnetManifest | undefined =
+  manifestState.status === "ready" ? manifestState.manifest : undefined;
+const configured = manifest !== undefined && manifest.chainId === arcTestnet.id;
 
-const publicClient = createPublicClient({ chain, transport: http(rpcUrl) });
+const explorerUrl = manifest?.explorer ?? "";
+const rpcUrl = manifest?.rpcUrl ?? arcTestnet.rpcUrls.default.http[0];
+const facilityId = manifest?.facility.id;
+const addresses = manifest
+  ? {
+      token: manifest.settlementAsset.address,
+      facilityRegistry: manifest.contracts.facilityRegistry.address,
+      credentialRegistry: manifest.contracts.credentialRegistry.address,
+      coverageEngine: manifest.contracts.coverageEngine.address,
+      covenantVault: manifest.contracts.covenantVault.address,
+    }
+  : undefined;
+
+const publicClient = createPublicClient({ chain: arcTestnet, transport: http(rpcUrl) });
 const rootElement = document.querySelector<HTMLDivElement>("#app");
 if (!rootElement) throw new Error("Missing #app root");
 const root: HTMLDivElement = rootElement;
@@ -163,14 +157,18 @@ const root: HTMLDivElement = rootElement;
 let live: LiveState | undefined;
 let walletAddress: Address | undefined;
 let busy = false;
-let message = configured ? "Reading current onchain state…" : "Sepolia addresses not configured.";
+let message = configured ? "Reading current onchain state…" : "Arc deployment not configured.";
 let errorMessage = "";
+let lastRefreshedAt: number | undefined;
+let stale = false;
+let drawPreview: DrawPreview = { status: "idle" };
+const arcEvidence = loadArcEvidence();
 
 render();
 if (configured) void refreshLive();
 
 async function refreshLive() {
-  if (!configured || !facilityId) return;
+  if (!configured || !facilityId || !addresses) return;
   busy = true;
   message = "Reading current onchain state…";
   errorMessage = "";
@@ -178,27 +176,27 @@ async function refreshLive() {
   try {
     const [policy, exposure, coverage, state, principal, cureDeadline, available, tradeIds] =
       await Promise.all([
-        read(addresses.facilityRegistry!, facilityRegistryAbi, "getFacility", [facilityId]),
-        read(addresses.credentialRegistry!, credentialRegistryAbi, "currentExposure", [
+        read(addresses.facilityRegistry, facilityRegistryAbi, "getFacility", [facilityId]),
+        read(addresses.credentialRegistry, credentialRegistryAbi, "currentExposure", [
           facilityId,
         ]),
-        read(addresses.coverageEngine!, coverageEngineAbi, "evaluate", [facilityId]),
-        read(addresses.covenantVault!, covenantVaultAbi, "covenantState"),
-        read(addresses.covenantVault!, covenantVaultAbi, "principal"),
-        read(addresses.covenantVault!, covenantVaultAbi, "cureDeadline"),
-        read(addresses.covenantVault!, covenantVaultAbi, "availableToDraw"),
-        read(addresses.credentialRegistry!, credentialRegistryAbi, "hedgeTradeIds", [
+        read(addresses.coverageEngine, coverageEngineAbi, "evaluate", [facilityId]),
+        read(addresses.covenantVault, covenantVaultAbi, "covenantState"),
+        read(addresses.covenantVault, covenantVaultAbi, "principal"),
+        read(addresses.covenantVault, covenantVaultAbi, "cureDeadline"),
+        read(addresses.covenantVault, covenantVaultAbi, "availableToDraw"),
+        read(addresses.credentialRegistry, credentialRegistryAbi, "hedgeTradeIds", [
           facilityId,
         ]),
       ]);
     const hedges = await Promise.all(
       (tradeIds as Hex[]).map(async (tradeId) => {
         const [stored, eligibility] = await Promise.all([
-          read(addresses.credentialRegistry!, credentialRegistryAbi, "currentHedge", [
+          read(addresses.credentialRegistry, credentialRegistryAbi, "currentHedge", [
             facilityId,
             tradeId,
           ]),
-          read(addresses.coverageEngine!, coverageEngineAbi, "hedgeEligibility", [
+          read(addresses.coverageEngine, coverageEngineAbi, "hedgeEligibility", [
             facilityId,
             tradeId,
           ]),
@@ -222,14 +220,49 @@ async function refreshLive() {
       hedges,
       history: await loadHistory(),
     };
+    lastRefreshedAt = Date.now();
+    stale = false;
     message = `Onchain state read at ${new Date().toLocaleTimeString()}.`;
   } catch (error) {
     errorMessage = errorText(error);
-    message = "Live read failed; recorded local evidence remains separately labeled below.";
+    stale = live !== undefined;
+    message = stale
+      ? "Live read failed. The panels below show the last successful read, marked stale."
+      : "Live read failed and no prior successful read exists.";
   } finally {
     busy = false;
     render();
   }
+}
+
+async function previewDraw() {
+  if (!configured || !facilityId || !addresses) return;
+  let amount: bigint;
+  try {
+    amount = parseSixDecimals(document.querySelector<HTMLInputElement>("#amount")?.value ?? "0");
+  } catch (error) {
+    drawPreview = { status: "error", message: errorText(error) };
+    render();
+    return;
+  }
+  drawPreview = { status: "pending" };
+  render();
+  try {
+    // assess() measures the reserve against msg.sender's balance of the settlement
+    // asset. Read-only, that is whoever the RPC call is sent "from" — nonsense unless
+    // pinned to the vault, which is who calls it for real inside draw(). See EED §1.
+    const [allowed, reason] = (await publicClient.readContract({
+      address: addresses.coverageEngine,
+      abi: coverageEngineAbi,
+      functionName: "assess",
+      args: [facilityId, amount],
+      account: addresses.covenantVault,
+    } as never)) as [boolean, number];
+    drawPreview = { status: "ready", allowed, reason, amount };
+  } catch (error) {
+    drawPreview = { status: "error", message: errorText(error) };
+  }
+  render();
 }
 
 function render() {
@@ -237,38 +270,35 @@ function render() {
   const coverage = live?.coverage;
   root.innerHTML = `
     <main class="shell">
-      <div class="truth-banner">Base Sepolia / fictional facility / mock provider data</div>
+      <div class="truth-banner">Arc Testnet 5042002 / fictional facility / mock provider data — ${manifestBadge()}</div>
       <header class="masthead">
         <div>
           <div class="eyebrow">FX coverage control desk</div>
           <h1>Capital moves only when coverage holds.</h1>
-          <p class="lede">A fictional COP-repayable Colombian coffee portfolio demonstrates how independently signed exposure and hedge state can govern a Base credit vault. This interface reads the contracts; it does not price, recommend, or execute a derivative.</p>
+          <p class="lede">A fictional EURC-denominated loan book demonstrates how independently signed exposure and hedge state can govern a USDC credit vault on Arc. The exposure feed is shaped like a servicer/bank confirmation and the hedge feed is shaped like a StableFX RFQ receipt — both are labelled mocks; no bank or venue is integrated. This interface reads the contracts; it does not price, recommend, or execute a derivative.</p>
         </div>
         <div class="network-box">
-          <strong>${escapeHtml(chain.name)}</strong>
-          <span>chain ${chainId}</span>
+          <strong>${escapeHtml(arcTestnet.name)}</strong>
+          <span>chain ${arcTestnet.id}</span>
           <span>${configured ? "deployment configured" : "deployment pending"}</span>
           <span>${walletAddress ? short(walletAddress) : "wallet not connected"}</span>
         </div>
       </header>
 
-      ${
-        !configured
-          ? `<div class="notice"><strong>Truthful prototype state:</strong> Base Sepolia addresses have not been configured, so no live product claim is made here. The timeline below is a recorded local Anvil run with fictional inputs. Configure the five <span class="mono">VITE_*_ADDRESS</span> values after deployment to enable contract reads and controls.</div>`
-          : ""
-      }
+      ${manifestNotice()}
+      ${staleNotice()}
       ${errorMessage ? `<div class="notice">${escapeHtml(errorMessage)}</div>` : ""}
 
       <section class="metrics" aria-label="Current coverage metrics">
-        ${metric("Covenant state", stateName, `status-${stateName.toLowerCase()}`)}
-        ${metric("Eligible coverage", coverage ? formatBps(coverage.coverageBps) : "—")}
-        ${metric("Authenticated exposure", coverage ? formatUsd(coverage.outstandingValue) : "—")}
-        ${metric("Available to draw", live ? formatUsd(live.availableToDraw) : "—")}
+        ${metric("Covenant state", stateName, `status-${stateName.toLowerCase()}`, stale)}
+        ${metric("Counted coverage", coverage ? formatBps(coverage.coverageBps) : "—", "", stale)}
+        ${metric("Authenticated exposure", coverage ? formatUsd(coverage.outstandingValue) : "—", "", stale)}
+        ${metric("Available to draw", live ? formatUsd(live.availableToDraw) : "—", "", stale)}
       </section>
 
       <section class="two-column">
         <article class="panel">
-          <div class="panel-head"><div><div class="section-kicker">Facility policy</div><h2>USD / COP control</h2></div><span class="mono">${live?.policy.frozen ? "FROZEN" : "—"}</span></div>
+          <div class="panel-head"><div><div class="section-kicker">Facility policy</div><h2>USD / EUR control</h2></div><span class="mono">${live?.policy.frozen ? "FROZEN" : "—"}</span></div>
           <div class="policy-grid">
             ${datum("Threshold", live ? formatBps(live.policy.minCoverageBps) : "—")}
             ${datum("Freshness", live ? formatDuration(live.policy.credentialMaxAge) : "—")}
@@ -286,12 +316,14 @@ function render() {
           <div class="panel-head"><div><div class="section-kicker">Actions</div><h2>Fresh onchain evaluation</h2></div><button id="connect" class="action">${walletAddress ? short(walletAddress) : "Connect wallet"}</button></div>
           <div class="controls">
             <input id="amount" inputmode="decimal" value="100000" aria-label="Amount in mock USD" />
+            <button id="preview" ${disabledRead()}>Preview draw</button>
             <button id="sync" class="action-primary" ${disabled()}>Sync covenant</button>
             <button id="restore" ${disabled()}>Restore</button>
             <button id="draw" ${disabled()}>Draw mUSD</button>
             <button id="repay" ${disabled()}>Repay mUSD</button>
           </div>
-          <p class="footer-note">Every draw evaluates current credentials in the same transaction. Reverted draws cannot persist a state transition; any account can then call sync to record cure or breach. Repayment remains available in every state.</p>
+          ${previewLine()}
+          <p class="footer-note">Every draw evaluates current credentials in the same transaction via <span class="mono">ICoverageGate.assess</span>; the gate rules, it never authorises from a cached verdict. Reverted draws cannot persist a state transition; any account can then call sync to record cure or breach. Repayment remains available in every state.</p>
           <p class="footer-note mono">${escapeHtml(message)}</p>
         </article>
       </section>
@@ -306,19 +338,23 @@ function render() {
             ${datum("Observed", live ? formatTimestamp(live.exposure.credential.observedAt) : "—")}
             ${datum("Expires", live ? formatTimestamp(live.exposure.credential.validUntil) : "—")}
             ${datum("Source commitment", live ? hashSpan(live.exposure.credential.sourceCommitment) : "—")}
+            ${datum("Denominating asset (referenced only)", eurcLink())}
           </div>
+          <p class="footer-note">The exposure is a loan book in a servicing system, asserted under a signed <span class="mono">ExposureCredential</span> — never an onchain balance. EURC above is linked for context only: this vault never transfers, holds, or approves it. The portfolio is denominated in EUR; the facility is funded, drawn and repaid in USDC.</p>
         </article>
 
         <article class="panel">
-          <div class="panel-head"><div><div class="section-kicker">Computed onchain</div><h2>Coverage result</h2></div><span class="mono">${coverage ? resultReasons[coverage.resultReason] : "—"}</span></div>
+          <div class="panel-head"><div><div class="section-kicker">Computed onchain</div><h2>Coverage result</h2></div><span class="mono">${coverage ? (resultReasons[coverage.resultReason] ?? "UNKNOWN") : "—"}</span></div>
           <div class="policy-grid">
             ${datum("Gross eligible", coverage ? formatUsd(coverage.grossEligible) : "—")}
+            ${datum("Gross coverage (uncapped)", coverage ? formatGrossBps(coverage) : "—")}
             ${datum("Counted eligible", coverage ? formatUsd(coverage.countedEligible) : "—")}
-            ${datum("Coverage", coverage ? formatBps(coverage.coverageBps) : "—")}
+            ${datum("Counted coverage", coverage ? formatBps(coverage.coverageBps) : "—")}
             ${datum("Required", coverage ? formatBps(coverage.requiredCoverageBps) : "—")}
             ${datum("Eligible hedges", coverage ? `${coverage.eligibleHedgeCount} / ${coverage.totalHedgeCount}` : "—")}
             ${datum("Assessed", coverage ? String(coverage.assessed) : "—")}
           </div>
+          <p class="footer-note">Gross and counted coverage are shown separately by design: over-hedging is visible in the gross figure, but only the counted figure — capped at 100% of the exposure — ever governs a draw (EED §6, R-F2-3).</p>
         </article>
       </section>
 
@@ -333,14 +369,13 @@ function render() {
       </section>
 
       <section class="panel">
-        <div class="panel-head"><div><div class="section-kicker">Base receipts</div><h2>Current deployment event history</h2></div>${configured && explorerUrl ? `<a href="${explorerUrl}/address/${addresses.covenantVault}" target="_blank" rel="noreferrer">Open vault ↗</a>` : ""}</div>
+        <div class="panel-head"><div><div class="section-kicker">Arc receipts</div><h2>Current deployment event history</h2></div>${configured && explorerUrl && addresses ? `<a href="${explorerUrl}/address/${addresses.covenantVault}" target="_blank" rel="noreferrer">Open vault ↗</a>` : ""}</div>
         <div class="timeline">${liveHistoryRows()}</div>
       </section>
 
       <section class="panel">
-        <div class="panel-head"><div><div class="section-kicker">Recorded local evidence</div><h2>Deterministic coffee-facility arc</h2></div><span class="mono">Anvil ${localEvidence.network.chainId}</span></div>
-        <div class="timeline">${localEvidenceRows()}</div>
-        <p class="footer-note">These hashes belong only to the recorded local chain and are not Base Sepolia evidence. Reproduce them with <span class="mono">anvil --chain-id 31337 --timestamp 1800000000</span> and <span class="mono">pnpm scenario:coffee</span>.</p>
+        <div class="panel-head"><div><div class="section-kicker">Scenario evidence</div><h2>Arc EURC facility arc (A-1 → A-4)</h2></div><span class="mono">${arcEvidence ? `${arcEvidence.steps.length} steps` : "not yet recorded"}</span></div>
+        ${arcEvidenceRows()}
       </section>
 
       <p class="footer-note">Trust boundary: the contracts prove which authorized party asserted which fields, when, and which deterministic capital rule followed. They do not independently prove legal existence, enforceability, completeness, valuation, or counterparty solvency of an offchain derivative.</p>
@@ -351,6 +386,7 @@ function render() {
 
 function bindActions() {
   document.querySelector("#connect")?.addEventListener("click", () => void connectWallet());
+  document.querySelector("#preview")?.addEventListener("click", () => void previewDraw());
   document.querySelector("#sync")?.addEventListener("click", () => void execute("sync"));
   document.querySelector("#restore")?.addEventListener("click", () => void execute("restore"));
   document.querySelector("#draw")?.addEventListener("click", () => void execute("draw"));
@@ -364,7 +400,7 @@ async function connectWallet() {
     return;
   }
   try {
-    const wallet = createWalletClient({ chain, transport: custom(window.ethereum as never) });
+    const wallet = createWalletClient({ chain: arcTestnet, transport: custom(window.ethereum as never) });
     const [address] = await wallet.requestAddresses();
     if (!address) throw new Error("The wallet returned no account.");
     walletAddress = address;
@@ -377,7 +413,7 @@ async function connectWallet() {
 }
 
 async function execute(action: "sync" | "restore" | "draw" | "repay") {
-  if (!configured || !facilityId || !window.ethereum) {
+  if (!configured || !facilityId || !addresses || !window.ethereum) {
     errorMessage = "Configure the deployment and connect an injected wallet first.";
     render();
     return;
@@ -399,18 +435,18 @@ async function execute(action: "sync" | "restore" | "draw" | "repay") {
   message = `Waiting for ${action} transaction…`;
   render();
   try {
-    const wallet = createWalletClient({ chain, transport: custom(window.ethereum as never) });
+    const wallet = createWalletClient({ chain: arcTestnet, transport: custom(window.ethereum as never) });
     const [account] = await wallet.requestAddresses();
     if (!account) throw new Error("The wallet returned no account.");
     walletAddress = account;
-    await wallet.switchChain({ id: chain.id });
+    await wallet.switchChain({ id: arcTestnet.id });
 
     if (action === "repay") {
-      await writeAndWait(wallet, account, addresses.token!, mockTokenAbi, "approve", [
-        addresses.covenantVault!,
+      await writeAndWait(wallet, account, addresses.token, mockTokenAbi, "approve", [
+        addresses.covenantVault,
         amount,
       ]);
-      await writeAndWait(wallet, account, addresses.covenantVault!, covenantVaultAbi, "repay", [
+      await writeAndWait(wallet, account, addresses.covenantVault, covenantVaultAbi, "repay", [
         amount,
       ]);
     } else {
@@ -424,7 +460,7 @@ async function execute(action: "sync" | "restore" | "draw" | "repay") {
       await writeAndWait(
         wallet,
         account,
-        addresses.covenantVault!,
+        addresses.covenantVault,
         covenantVaultAbi,
         functionName,
         args,
@@ -451,7 +487,7 @@ async function writeAndWait(
 ) {
   const hash = await wallet.writeContract({
     account,
-    chain,
+    chain: arcTestnet,
     address,
     abi,
     functionName,
@@ -462,13 +498,14 @@ async function writeAndWait(
 }
 
 async function loadHistory(): Promise<HistoryItem[]> {
+  if (!addresses) return [];
   const currentBlock = await publicClient.getBlockNumber();
   const fromBlock = currentBlock > 50_000n ? currentBlock - 50_000n : 0n;
   const logs = await publicClient.getLogs({
     address: [
-      addresses.facilityRegistry!,
-      addresses.credentialRegistry!,
-      addresses.covenantVault!,
+      addresses.facilityRegistry,
+      addresses.credentialRegistry,
+      addresses.covenantVault,
     ],
     fromBlock,
     toBlock: "latest",
@@ -503,6 +540,18 @@ async function loadHistory(): Promise<HistoryItem[]> {
     .slice(0, 24);
 }
 
+function loadArcEvidence(): ArcEvidence | undefined {
+  const modules = import.meta.glob<{ default: unknown }>(
+    "../../../scenarios/output/arc-facility-evidence.json",
+    { eager: true },
+  );
+  const raw = Object.values(modules)[0]?.default;
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const steps = (raw as Record<string, unknown>)["steps"];
+  if (!Array.isArray(steps)) return undefined;
+  return raw as ArcEvidence;
+}
+
 async function read(
   address: Address,
   abi: Abi,
@@ -512,8 +561,48 @@ async function read(
   return publicClient.readContract({ address, abi, functionName, args } as never);
 }
 
-function metric(label: string, value: string, className = "") {
-  return `<article class="metric"><span class="label">${label}</span><span class="value ${className}">${escapeHtml(value)}</span></article>`;
+function manifestBadge() {
+  if (manifestState.status !== "ready") return "manifest unavailable";
+  return manifestState.source === "deployed" ? "deployed manifest" : "fixture manifest";
+}
+
+function manifestNotice() {
+  if (manifestState.status === "ready" && manifestState.source === "deployed") return "";
+  if (manifestState.status === "ready" && manifestState.source === "fixture") {
+    return `<div class="notice"><strong>Fixture manifest:</strong> <span class="mono">deployments/arc-testnet.json</span> does not exist yet, so this dashboard is reading a bundled fixture at <span class="mono">apps/dashboard/fixtures/arc-testnet.fixture.json</span> — schema-valid, addresses fake. Live contract reads below will fail against Arc until the real manifest lands; drop it in place and reload. Nothing here is deployed until it is.</div>`;
+  }
+  const error = manifestState.status !== "ready" ? manifestState.error : "";
+  return `<div class="notice"><strong>No usable manifest:</strong> ${escapeHtml(error)}</div>`;
+}
+
+function staleNotice() {
+  if (!stale) return "";
+  const since = lastRefreshedAt ? new Date(lastRefreshedAt).toLocaleTimeString() : "an unknown time";
+  return `<div class="notice"><strong>STALE:</strong> the last live read failed. The state shown below is the last successful read, from ${since} — it is not confirmed current compliance.</div>`;
+}
+
+function previewLine() {
+  if (drawPreview.status === "idle") return "";
+  if (drawPreview.status === "pending") {
+    return `<p class="footer-note mono">Previewing assess()…</p>`;
+  }
+  if (drawPreview.status === "error") {
+    return `<p class="footer-note mono">Preview failed: ${escapeHtml(drawPreview.message)}</p>`;
+  }
+  const label = drawPreview.allowed ? "ALLOWED" : "REFUSED";
+  const cls = drawPreview.allowed ? "status-compliant" : "status-breach";
+  return `<p class="footer-note mono"><span class="${cls}">${label}</span> — ${resultReasons[drawPreview.reason] ?? "UNKNOWN"} — drawing ${formatUsd(drawPreview.amount)} would be assessed this way right now, per <span class="mono">ICoverageGate.assess</span> called from the vault's own address.</p>`;
+}
+
+function eurcLink() {
+  const href = explorerUrl ? `${explorerUrl}/address/${EURC_ADDRESS}` : undefined;
+  const inner = hashSpan(EURC_ADDRESS);
+  return href ? `<a href="${href}" target="_blank" rel="noreferrer">${inner} ↗</a>` : inner;
+}
+
+function metric(label: string, value: string, className = "", isStale = false) {
+  const staleTag = isStale ? ` <span class="stale-flag">STALE</span>` : "";
+  return `<article class="metric"><span class="label">${label}</span><span class="value ${className}">${escapeHtml(value)}${staleTag}</span></article>`;
 }
 
 function datum(label: string, content: string) {
@@ -541,7 +630,7 @@ function hedgeRows() {
 
 function liveHistoryRows() {
   if (!live?.history.length) {
-    return `<div class="empty">${configured ? "No recent protocol events found." : "Configure a deployment to read Base events."}</div>`;
+    return `<div class="empty">${configured ? "No recent protocol events found." : "Configure a deployment to read Arc events."}</div>`;
   }
   return live.history
     .map(
@@ -554,17 +643,25 @@ function liveHistoryRows() {
     .join("");
 }
 
-function localEvidenceRows() {
-  return localEvidence.steps
-    .filter((step) => step.covenant)
-    .map(
-      (step) => `<div class="event">
-        <div class="event-state status-${step.covenant!.state.toLowerCase()}">${escapeHtml(step.covenant!.state)}</div>
-        <div class="event-copy">${escapeHtml(step.action)} · ${formatBps(step.covenant!.coverageBps)} coverage · ${step.transactionStatus}</div>
-        <div class="event-meta">local block ${step.blockNumber}<br/><span title="${step.transactionHash}">${short(step.transactionHash ?? "")}</span></div>
-      </div>`,
-    )
-    .join("");
+function arcEvidenceRows() {
+  if (!arcEvidence?.steps.length) {
+    return `<div class="empty">Awaiting <span class="mono">scenarios/arc-facility.ts</span> (Lane B). This panel reads <span class="mono">scenarios/output/arc-facility-evidence.json</span> automatically once that file exists — nothing fabricated shown in its place.</div>`;
+  }
+  return `<div class="timeline">${arcEvidence.steps
+    .map((step) => {
+      const action = typeof step.action === "string" ? step.action : "step";
+      const hash = typeof step.transactionHash === "string" ? step.transactionHash : undefined;
+      const expected = typeof step.expectedStatus === "string" ? step.expectedStatus : "—";
+      const actual = typeof step.actualStatus === "string" ? step.actualStatus : "—";
+      const reason =
+        typeof step.resultReason === "number" ? resultReasons[step.resultReason] ?? "UNKNOWN" : "—";
+      return `<div class="event">
+        <div class="event-state">${escapeHtml(actual.toUpperCase())}</div>
+        <div class="event-copy">${escapeHtml(action)} · expected ${escapeHtml(expected)} · reason ${escapeHtml(reason)}</div>
+        <div class="event-meta">${hash ? transactionLink(hash as Hex) : "—"}</div>
+      </div>`;
+    })
+    .join("")}</div>`;
 }
 
 function transactionLink(hash: Hex) {
@@ -596,6 +693,12 @@ function formatBps(value: number) {
   return `${(Number(value) / 100).toFixed(Number(value) % 100 === 0 ? 0 : 2)}%`;
 }
 
+function formatGrossBps(coverage: CoverageResult) {
+  if (coverage.outstandingValue === 0n) return "—";
+  const bps = Number((coverage.grossEligible * 10_000n) / coverage.outstandingValue);
+  return formatBps(bps);
+}
+
 function formatDuration(seconds: number) {
   if (seconds % 86_400 === 0) return `${seconds / 86_400}d`;
   if (seconds % 3_600 === 0) return `${seconds / 3_600}h`;
@@ -622,10 +725,6 @@ function parseSixDecimals(value: string) {
   return result;
 }
 
-function configuredAddress(value: string | undefined): Address | undefined {
-  return value && isAddress(value) ? value : undefined;
-}
-
 function short(value: string) {
   if (!value || value.length <= 14) return value || "—";
   return `${value.slice(0, 8)}…${value.slice(-6)}`;
@@ -637,6 +736,10 @@ function hashSpan(value: string) {
 
 function disabled() {
   return busy || !configured || !walletAddress ? "disabled" : "";
+}
+
+function disabledRead() {
+  return busy || !configured ? "disabled" : "";
 }
 
 function errorText(error: unknown) {
@@ -682,4 +785,13 @@ const hedgeReasons = [
   "REVOKED",
   "ISSUER_AUTHORIZATION_STALE",
 ];
-const resultReasons = ["NONE", "MISSING_EXPOSURE", "INVALID_EXPOSURE", "BELOW_THRESHOLD"];
+// CoverageEngine.ResultReason (contracts/src/CoverageEngine.sol). RESERVE_VIOLATION is
+// the fifth member, added alongside ICoverageGate.assess — evaluate() never returns it,
+// only assess() does, when the draw would breach reserveAmount.
+const resultReasons = [
+  "NONE",
+  "MISSING_EXPOSURE",
+  "INVALID_EXPOSURE",
+  "BELOW_THRESHOLD",
+  "RESERVE_VIOLATION",
+];
