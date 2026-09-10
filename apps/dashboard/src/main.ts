@@ -456,13 +456,13 @@ function render() {
           <div id="draw-gate" class="gate gate-${gate.status}">${gateMarkup()}</div>
           <div class="controls">
             <input id="amount" inputmode="decimal" value="${escapeHtml(amountValue)}" aria-label="Amount in ${escapeHtml(tokenLabel())}" class="num" />
-            <button id="sync" class="action-primary" ${disabled()}>Sync covenant</button>
-            <button id="restore" ${disabled()}>Restore</button>
-            <button id="draw" ${disabled()}>Draw ${escapeHtml(tokenLabel())}</button>
-            <button id="repay" ${disabled()}>Repay ${escapeHtml(tokenLabel())}</button>
+            <button id="sync" class="action-primary" ${actionsAriaDisabled()}>Sync covenant</button>
+            <button id="restore" ${actionsAriaDisabled()}>Restore</button>
+            <button id="draw" ${actionsAriaDisabled()}>Draw ${escapeHtml(tokenLabel())}</button>
+            <button id="repay" ${actionsAriaDisabled()}>Repay ${escapeHtml(tokenLabel())}</button>
           </div>
           ${actionOutcomeMarkup()}
-          <p class="footer-note">Every write is simulated first via <span class="mono">simulateContract</span>; a refusal is decoded from the vault's own custom error and shown before anything is signed. The Draw button stays enabled when held — a refusal is the gate working, not a reason to hide the control.</p>
+          <p class="footer-note">${actionsFooterNote()}</p>
           <p class="footer-note mono">${escapeHtml(message)}</p>
         </article>
       </section>
@@ -475,6 +475,7 @@ function render() {
             ${datum("Outstanding", live ? formatUsd(live.exposure.credential.outstandingValue) : "—")}
             ${datum("Sequence", live ? live.exposure.credential.sequence.toString() : "—")}
             ${datum("Observed", live ? formatTimestamp(live.exposure.credential.observedAt) : "—")}
+            ${datum("Freshness", live ? freshnessBadge(live.exposure.credential.observedAt, live.policy.credentialMaxAge) : "—")}
             ${datum("Expires", live ? formatTimestamp(live.exposure.credential.validUntil) : "—")}
             ${datum("Source commitment", live ? hashSpan(live.exposure.credential.sourceCommitment) : "—")}
             ${datum(`Denominating asset (${exposureAsset.symbol}, referenced only)`, eurcLink())}
@@ -503,7 +504,7 @@ function render() {
         <div class="panel-head"><div><div class="section-kicker">Independent source B</div><h2>Active hedge credentials</h2></div><span class="mono">${live?.hedges.length ?? 0} active IDs</span></div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Committed trade ID</th><th>Issuer</th><th class="num">Remaining</th><th>Status</th><th>Maturity</th><th>Expires</th><th>Eligibility</th></tr></thead>
+            <thead><tr><th>Committed trade ID</th><th>Issuer</th><th class="num">Remaining</th><th>Status</th><th>Freshness</th><th>Maturity</th><th>Expires</th><th>Eligibility</th></tr></thead>
             <tbody>${hedgeRows()}</tbody>
           </table>
         </div>
@@ -528,13 +529,26 @@ function render() {
 
 function bindActions() {
   document.querySelector("#connect")?.addEventListener("click", () => void connectWallet());
-  document.querySelector("#sync")?.addEventListener("click", () => void execute("sync"));
-  document.querySelector("#restore")?.addEventListener("click", () => void execute("restore"));
-  document.querySelector("#draw")?.addEventListener("click", () => void execute("draw"));
-  document.querySelector("#repay")?.addEventListener("click", () => void execute("repay"));
+  bindGatedAction("#sync", () => execute("sync"));
+  bindGatedAction("#restore", () => execute("restore"));
+  bindGatedAction("#draw", () => execute("draw"));
+  bindGatedAction("#repay", () => execute("repay"));
   document.querySelector<HTMLInputElement>("#amount")?.addEventListener("input", (event) => {
     amountValue = (event.target as HTMLInputElement).value;
     scheduleGateRefresh();
+  });
+}
+
+// aria-disabled keeps the button focusable and discoverable (unlike native `disabled`),
+// so a click while gated still needs a guard here — and, per Nielsen, must not be a
+// communication dead end: it answers with the reason rather than doing nothing.
+function bindGatedAction(selector: string, action: () => void) {
+  document.querySelector(selector)?.addEventListener("click", () => {
+    if (actionsGated()) {
+      announceGated();
+      return;
+    }
+    action();
   });
 }
 
@@ -859,16 +873,18 @@ function datum(label: string, content: string) {
 }
 
 function hedgeRows() {
-  if (!live?.hedges.length) {
-    return `<tr><td colspan="7" class="empty">No active onchain hedge IDs to display.</td></tr>`;
+  const currentLive = live;
+  if (!currentLive?.hedges.length) {
+    return `<tr><td colspan="8" class="empty">No active onchain hedge IDs to display.</td></tr>`;
   }
-  return live.hedges
+  return currentLive.hedges
     .map(
       (hedge) => `<tr>
         <td class="mono">${hashSpan(hedge.credential.tradeIdCommitment)}</td>
         <td class="mono">${short(hedge.issuer)}</td>
         <td class="num">${formatUsd(hedge.credential.remainingNotional)}</td>
         <td>${hedgeStatuses[hedge.credential.status] ?? "UNKNOWN"}</td>
+        <td>${freshnessBadge(hedge.credential.observedAt, currentLive.policy.credentialMaxAge, true)}</td>
         <td>${formatTimestamp(hedge.credential.maturity)}</td>
         <td>${formatTimestamp(hedge.credential.validUntil)}</td>
         <td>${hedgeReasons[hedge.eligibilityReason] ?? "UNKNOWN"}</td>
@@ -955,6 +971,60 @@ function formatTimestamp(value: bigint) {
   });
 }
 
+function formatElapsed(totalSeconds: number) {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(seconds / 3_600);
+  const minutes = Math.floor((seconds % 3_600) / 60);
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  const secs = seconds % 60;
+  if (minutes > 0) return `${minutes}m ${secs}s`;
+  return `${secs}s`;
+}
+
+type FreshnessLevel = "fresh" | "ageing" | "stale";
+const FRESHNESS_GLYPH: Record<FreshnessLevel, string> = { fresh: "●", ageing: "◐", stale: "⊘" };
+
+// R-F1-4: a credential becomes unusable once now - observedAt > credentialMaxAge, and
+// A-5 is an acceptance criterion about exactly that. An operator should see it ageing
+// toward that cliff, not discover it at the cliff — so this warns at the halfway point,
+// well before the contract itself would start returning STALE.
+function freshnessInfo(observedAt: bigint, maxAgeSeconds: number) {
+  const ageSeconds = Math.max(0, Math.floor(Date.now() / 1_000) - Number(observedAt));
+  const remaining = maxAgeSeconds - ageSeconds;
+  if (remaining <= 0) {
+    return {
+      level: "stale" as FreshnessLevel,
+      label: "STALE",
+      detail: `attested ${formatElapsed(ageSeconds)} ago — stale ${formatElapsed(-remaining)} ago`,
+    };
+  }
+  if (remaining <= maxAgeSeconds / 2) {
+    return {
+      level: "ageing" as FreshnessLevel,
+      label: "AGEING",
+      detail: `attested ${formatElapsed(ageSeconds)} ago — stale in ${formatElapsed(remaining)}`,
+    };
+  }
+  return {
+    level: "fresh" as FreshnessLevel,
+    label: "FRESH",
+    detail: `attested ${formatElapsed(ageSeconds)} ago — valid ${formatDuration(maxAgeSeconds)}`,
+  };
+}
+
+// Word + shape + colour, never colour alone (E-UI-2, WCAG 1.4.1) — same discipline as
+// the covenant-state glyphs. `compact` drops the detail line into a title= for the
+// hedge table, where seven columns already compete for width.
+function freshnessBadge(observedAt: bigint, maxAgeSeconds: number, compact = false) {
+  const info = freshnessInfo(observedAt, maxAgeSeconds);
+  const glyph = FRESHNESS_GLYPH[info.level];
+  const word = `<span class="freshness freshness-${info.level}"><span class="gate-glyph">${glyph}</span>${info.label}</span>`;
+  if (compact) {
+    return `<span title="${escapeHtml(info.detail)}">${word}</span>`;
+  }
+  return `${word}<span class="freshness-detail mono">${escapeHtml(info.detail)}</span>`;
+}
+
 function parseSixDecimals(value: string) {
   if (!/^\d+(?:\.\d{1,6})?$/.test(value)) {
     throw new Error("Enter a positive amount with at most six decimals.");
@@ -982,8 +1052,39 @@ function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function disabled() {
-  return busy || !configured || !walletAddress ? "disabled" : "";
+// A covenant refusal never disables these buttons on its own — only the absence of a
+// connected wallet, an unconfigured deployment, or an in-flight transaction does. Native
+// `disabled` makes a button unfocusable and often invisible to screen readers; aria-disabled
+// keeps it discoverable, paired with a reason that is always visible, not a tooltip.
+function actionsGated() {
+  return busy || !configured || !walletAddress;
+}
+
+function actionsAriaDisabled() {
+  return `aria-disabled="${actionsGated()}"`;
+}
+
+// The text here must always match what the four buttons above it actually look like —
+// a viewer reading this sentence and looking at the screen should see them agree. Only
+// the last branch claims the buttons "stay enabled", and only when they demonstrably are.
+function actionsFooterNote() {
+  const base =
+    'Every write is simulated first via <span class="mono">simulateContract</span>; a refusal is decoded from the vault\'s own custom error and shown before anything is signed.';
+  if (!configured) return `${base} These controls are inactive until a deployment is configured.`;
+  if (!walletAddress) {
+    return `${base} Connect a wallet to enable them — a covenant refusal alone never disables Draw; only the absence of a connected wallet does, which is why they're inactive right now.`;
+  }
+  if (busy) return `${base} Briefly inactive while a transaction is in flight.`;
+  return `${base} The Draw button stays enabled when held — a refusal is the gate working, not a reason to hide the control.`;
+}
+
+function announceGated() {
+  message = !configured
+    ? "Configure the deployment first."
+    : !walletAddress
+      ? "Connect a wallet first."
+      : "Busy — wait for the current action to finish.";
+  render();
 }
 
 function errorText(error: unknown) {
