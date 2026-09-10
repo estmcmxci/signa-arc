@@ -24,18 +24,18 @@ const registry = "0x0000000000000000000000000000000000001234";
 
 const activeFixture = JSON.parse(
   await readFile(
-    new URL("../fixtures/mock-forward-active.json", import.meta.url),
+    new URL("../fixtures/arc-forward-active.json", import.meta.url),
     "utf8",
   ),
 ) as unknown;
 
 test("maps the fictional active fixture without floating-point loss", () => {
   const credential = mapProviderFixture(activeFixture, facilityId);
-  assert.equal(credential.remainingNotional, 4_500_000_000_000n);
+  assert.equal(credential.remainingNotional, 1_060_000n);
   assert.equal(credential.baseCurrency, "0x555344");
-  assert.equal(credential.quoteCurrency, "0x434f50");
+  assert.equal(credential.quoteCurrency, "0x455552");
   assert.equal(credential.status, hedgeStatuses.ACTIVE);
-  assert.equal(credential.observedAt, 1_800_000_000n);
+  assert.equal(credential.observedAt, 1_789_027_200n);
 });
 
 test("signs an export whose issuer is recoverable from the canonical domain", async () => {
@@ -76,7 +76,7 @@ test("rejects precision beyond the token's six decimals", () => {
 test("maps cancellation to the non-active lifecycle state", async () => {
   const cancelled = JSON.parse(
     await readFile(
-      new URL("../fixtures/mock-forward-cancelled.json", import.meta.url),
+      new URL("../fixtures/arc-forward-cancelled.json", import.meta.url),
       "utf8",
     ),
   ) as unknown;

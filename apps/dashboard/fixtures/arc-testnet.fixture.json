@@ -49,5 +49,14 @@
       "cureWindowSeconds": 432000,
       "maxWaiverDurationSeconds": 259200
     }
+  },
+  "exposureDenomination": {
+    "currency": "EUR",
+    "referenceAsset": {
+      "address": "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a",
+      "decimals": 6,
+      "symbol": "EURC"
+    },
+    "note": "Denominating asset of the exposure, referenced only (E-DEC-2). No EURC is transferred, held or approved. The exposure is a EUR-denominated loan book asserted by ExposureCredential; the facility is funded, drawn and repaid in USDC."
   }
 }
