@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { privateKeyToAccount } from "viem/accounts";
+import { arcTestnet } from "viem/chains";
 
 import {
+  CREDENTIAL_CHAIN_ID,
+  LOCAL_REPLAY_CHAIN_ID,
   credentialDomain,
   currencyToBytes3,
   exposureCredentialTypes,
@@ -39,25 +42,40 @@ test("encodes only uppercase three-letter currency codes", () => {
 test("signs and recovers the exposure issuer from the canonical domain", async () => {
   const account = privateKeyToAccount(LOCAL_TEST_PRIVATE_KEY);
   const signature = await account.signTypedData({
-    domain: credentialDomain(31_337, registry),
+    domain: credentialDomain(CREDENTIAL_CHAIN_ID, registry),
     types: exposureCredentialTypes,
     primaryType: "ExposureCredential",
     message: exposure,
   });
   assert.equal(
-    await recoverExposureIssuer(31_337, registry, exposure, signature),
+    await recoverExposureIssuer(CREDENTIAL_CHAIN_ID, registry, exposure, signature),
     account.address,
   );
 });
 
+test("binds the credential domain to Arc Testnet (R-F1-1)", () => {
+  assert.equal(CREDENTIAL_CHAIN_ID, 5_042_002);
+  assert.equal(CREDENTIAL_CHAIN_ID, arcTestnet.id);
+  assert.equal(credentialDomain(CREDENTIAL_CHAIN_ID, registry).chainId, 5_042_002);
+  assert.equal(credentialDomain(LOCAL_REPLAY_CHAIN_ID, registry).chainId, 31_337);
+});
+
+test("refuses a domain for any other chain", () => {
+  // Base Sepolia was the previous target; nothing here may sign for it.
+  for (const chainId of [84_532, 8_453, 1, 0, -1, 5_042_002.5]) {
+    assert.throws(() => credentialDomain(chainId, registry), /5042002/);
+  }
+  assert.throws(() => hashExposureCredential(84_532, registry, exposure), /5042002/);
+});
+
 test("changes the digest across chain and registry domains", () => {
-  const local = hashExposureCredential(31_337, registry, exposure);
-  const baseSepolia = hashExposureCredential(84_532, registry, exposure);
+  const arc = hashExposureCredential(CREDENTIAL_CHAIN_ID, registry, exposure);
+  const local = hashExposureCredential(LOCAL_REPLAY_CHAIN_ID, registry, exposure);
   const otherRegistry = hashExposureCredential(
-    31_337,
+    CREDENTIAL_CHAIN_ID,
     "0x0000000000000000000000000000000000005678",
     exposure,
   );
-  assert.notEqual(local, baseSepolia);
-  assert.notEqual(local, otherRegistry);
+  assert.notEqual(arc, local);
+  assert.notEqual(arc, otherRegistry);
 });

@@ -5,6 +5,7 @@ import {
   type Address,
   type Hex,
 } from "viem";
+import { arcTestnet } from "viem/chains";
 
 // R-F2-7 — the single decimals boundary. Every amount reaching a credential is
 // in the canonical 6-decimal ERC-20 view; nothing else gets past decimals.ts.
@@ -87,9 +88,23 @@ export const hedgeCredentialTypes = {
   ],
 } as const;
 
+/**
+ * R-F1-1 — credentials are bound to Arc Testnet, taken from viem's chain
+ * definition rather than hand-rolled. The registry builds its domain from
+ * `block.chainid`, so a credential signed for any other chain recovers the
+ * wrong issuer there; refusing to build that domain makes the mistake loud.
+ */
+export const CREDENTIAL_CHAIN_ID = arcTestnet.id;
+
+/** Local Anvil, for deterministic replay of the same contracts. Never public evidence. */
+export const LOCAL_REPLAY_CHAIN_ID = 31_337;
+
 export function credentialDomain(chainId: number, verifyingContract: Address) {
-  if (!Number.isSafeInteger(chainId) || chainId <= 0) {
-    throw new Error("chainId must be a positive safe integer");
+  if (chainId !== CREDENTIAL_CHAIN_ID && chainId !== LOCAL_REPLAY_CHAIN_ID) {
+    throw new Error(
+      `Credentials are bound to Arc Testnet (${CREDENTIAL_CHAIN_ID}); refusing a domain ` +
+        `for chain ${chainId}. Local replay (${LOCAL_REPLAY_CHAIN_ID}) is the only other chain accepted.`,
+    );
   }
   return {
     name: CREDENTIAL_DOMAIN_NAME,

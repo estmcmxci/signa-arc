@@ -80,23 +80,27 @@ sequenceDiagram
     E->>F: policy: min ratio, reserve, cure window
     F-->>E: policy parameters
 
-    alt credential stale or issuer not allowlisted
-        E-->>V: INSUFFICIENT_EVIDENCE
-        V-->>B: revert — fail closed
+    alt credential stale, revoked, or issuer not approved
+        E-->>V: (false, MISSING_EXPOSURE | INVALID_EXPOSURE)
+        V-->>B: revert DrawNotAllowed — fail closed
     else ratio below policy
-        E-->>V: BREACH
-        V->>V: pause draws, open cure window
-        V-->>L: CoverageBreached event
-        V-->>B: revert
-    else covered, amount within available line
-        E-->>V: PERMITTED
+        E-->>V: (false, BELOW_THRESHOLD)
+        V->>V: state CURE, cure deadline set
+        V-->>L: CovenantSynchronized event
+        V-->>B: revert DrawNotAllowed(CURE)
+    else covered, but the draw would breach the reserve
+        E-->>V: (false, RESERVE_VIOLATION)
+        V-->>B: revert ReserveViolation(balance, requested, reserve)
+    else covered and within the available line
+        E-->>V: (true, NONE)
         V->>B: transfer USDC
-        V-->>L: DrawReleased event
-    else covered, amount exceeds reserve floor
-        E-->>V: RESERVE_ONLY
-        V-->>B: revert with remaining line
+        V-->>L: Drawn event
     end
 ```
+
+The gate returns `(bool allowed, ResultReason reason)` — see `EED.md` §1. The five reasons are `NONE`, `MISSING_EXPOSURE`, `INVALID_EXPOSURE`, `BELOW_THRESHOLD`, `RESERVE_VIOLATION`. The five covenant states are `UNASSESSED`, `COMPLIANT`, `CURE`, `BREACH`, `WAIVED`.
+
+**Corrected 2026-09-10.** This diagram previously showed verdicts — `PERMITTED`, `RESERVE_ONLY`, `INSUFFICIENT_EVIDENCE` — that never existed in the code, and labelled a below-ratio result `BREACH` where the implementation uses `CURE` (R-F3-4: a cure period is time to remedy, and breach is only reached when the deadline passes). Verified against the deployed contracts and the A-1 … A-4 acceptance run.
 
 **Fail-closed is the design.** Missing evidence is not "assume covered"; it is refuse. That single choice is what a credit officer is buying.
 

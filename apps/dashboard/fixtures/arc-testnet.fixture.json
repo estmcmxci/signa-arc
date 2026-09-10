@@ -1,0 +1,62 @@
+{
+  "_fixture": "Lane C placeholder, not a deployment. Schema per EED.md §4. Every address below is a padded, obviously-fake placeholder (0x...fac1000N). Delete this comment field's meaning: it is read by nothing. Real file lands at deployments/arc-testnet.json from Lane A and is preferred automatically when present.",
+  "chainId": 5042002,
+  "rpcUrl": "https://rpc.testnet.arc.network",
+  "explorer": "https://testnet.arcscan.app",
+  "sourceCommit": "ffffffffffffffffffffffffffffffffffffffff",
+  "deployedAt": "1970-01-01T00:00:00Z",
+  "contracts": {
+    "facilityRegistry": {
+      "address": "0x00000000000000000000000000000000fac10001",
+      "deployTx": "0x00000000000000000000000000000000000000000000000000000000de910001",
+      "block": 1000001
+    },
+    "credentialRegistry": {
+      "address": "0x00000000000000000000000000000000fac10002",
+      "deployTx": "0x00000000000000000000000000000000000000000000000000000000de910002",
+      "block": 1000002
+    },
+    "coverageEngine": {
+      "address": "0x00000000000000000000000000000000fac10003",
+      "deployTx": "0x00000000000000000000000000000000000000000000000000000000de910003",
+      "block": 1000003
+    },
+    "covenantVault": {
+      "address": "0x00000000000000000000000000000000fac10004",
+      "deployTx": "0x00000000000000000000000000000000000000000000000000000000de910004",
+      "block": 1000004
+    }
+  },
+  "settlementAsset": {
+    "address": "0x3600000000000000000000000000000000000000",
+    "decimals": 6,
+    "symbol": "USDC"
+  },
+  "roles": {
+    "facilityAdmin": "0x00000000000000000000000000000000a0de0011",
+    "operator": "0x00000000000000000000000000000000a0de0012",
+    "exposureIssuer": "0x00000000000000000000000000000000a0de0013",
+    "hedgeIssuer": "0x00000000000000000000000000000000a0de0014"
+  },
+  "facility": {
+    "id": "0x00000000000000000000000000000000000000000000000000fac10000000001",
+    "policy": {
+      "minCoverageBps": 10000,
+      "defaultHaircutBps": 500,
+      "credentialMaxAgeSeconds": 86400,
+      "maturityToleranceSeconds": 604800,
+      "reserveAmount": "50000000",
+      "cureWindowSeconds": 432000,
+      "maxWaiverDurationSeconds": 259200
+    }
+  },
+  "exposureDenomination": {
+    "currency": "EUR",
+    "referenceAsset": {
+      "address": "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a",
+      "decimals": 6,
+      "symbol": "EURC"
+    },
+    "note": "Denominating asset of the exposure, referenced only (E-DEC-2). No EURC is transferred, held or approved. The exposure is a EUR-denominated loan book asserted by ExposureCredential; the facility is funded, drawn and repaid in USDC."
+  }
+}
