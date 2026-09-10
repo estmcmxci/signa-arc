@@ -32,6 +32,8 @@ export type QuorumRecord = {
   keyQuorumId: string;
   walletId?: string;
   walletAddress?: Address;
+  /** The Privy policy attached to the wallet, once scripts/provision-policy.ts has created it. */
+  policyId?: string;
   createdAt: string;
 };
 

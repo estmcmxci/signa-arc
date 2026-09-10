@@ -48,7 +48,7 @@
   },
   "facilityAdminQuorum": {
     "provider": "privy",
-    "note": "The facility admin is a Privy server wallet owned by a 2-of-2 key quorum. Every admin call, including this facility's creation and freeze, needs both approvers. Privy signs; the transaction is broadcast to Arc separately.",
+    "note": "The facility admin is a Privy server wallet owned by a 2-of-2 key quorum. Every admin call, including this facility's creation and freeze, needs both approvers. Privy signs; the transaction is broadcast to Arc separately. Since 2026-09-10 a Privy policy owned by the quorum (policyId) lets the wallet sign only createWaiver on covenantVault, on this chain, moving no value.",
     "keyQuorumId": "pbf1jtt1knpsl30eyp0z163t",
     "walletId": "zc9i4be5osru1qyzfci337mi",
     "threshold": 2,
@@ -61,7 +61,8 @@
         "role": "Treasury lead",
         "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAED4DCLEErSAdbIY64mQIcK4ZZHKfpvGP3T+UfA3YXFQsmSPpiQVDmwyoVkU5QsxnSgKjDleBwex40ODQtoZqPvA=="
       }
-    ]
+    ],
+    "policyId": "y5x9g8gglndai2hosm47zvxf"
   },
   "facility": {
     "id": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",

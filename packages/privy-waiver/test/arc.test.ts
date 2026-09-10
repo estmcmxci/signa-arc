@@ -78,6 +78,9 @@ function fakeArc(overrides: Partial<ArcGateway> = {}): ArcGateway & { calls: str
     vaultStatus: async () => {
       throw new Error("no vault");
     },
+    evaluateCoverage: async () => {
+      throw new Error("no engine");
+    },
   };
   return Object.assign(base, overrides, { calls });
 }

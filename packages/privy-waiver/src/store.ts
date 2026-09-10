@@ -25,11 +25,35 @@ export type SerializedPinned = {
   maxPriorityFeePerGas: string;
 };
 
+/** The chain as it stood when a waiver was proposed: why the approvers were asked. */
+export type WaiverContext = {
+  checkedAt: number;
+  covenantState: string;
+  coverageBps: number;
+  requiredCoverageBps: number;
+  resultReason: string;
+  exposureReason: string;
+  maxWaiverDurationSeconds: number;
+};
+
+/** The WaiverCreated a waiver's receipt carried, and whether it records what was approved. */
+export type WaiverCreatedRecord = {
+  facilityId: Hex;
+  reasonCommitment: Hex;
+  startsAt: string;
+  endsAt: string;
+  logIndex: number;
+  facilityMatches: boolean;
+  reasonCommitmentMatches: boolean;
+};
+
 export type BroadcastRecord = {
   hash: Hex;
+  /** Recovered from the signed transaction before it was broadcast. */
+  signer?: Address;
   blockNumber: string;
   status: string;
-  waiverEndsAt?: string;
+  waiverCreated?: WaiverCreatedRecord;
 };
 
 export type StoredAction = {
@@ -37,6 +61,7 @@ export type StoredAction = {
   kind: ActionKind;
   description: string;
   reason?: string;
+  context?: WaiverContext;
   pinned: SerializedPinned;
   proposedAt: number;
   broadcast?: BroadcastRecord;
