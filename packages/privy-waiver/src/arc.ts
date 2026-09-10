@@ -41,6 +41,7 @@ export const covenantVaultAbi = parseAbi([
   "function facilityId() view returns (bytes32)",
   "event WaiverCreated(bytes32 indexed facilityId, bytes32 indexed reasonCommitment, uint64 startsAt, uint64 endsAt)",
   "event WaiverRevoked(bytes32 indexed facilityId, bytes32 indexed reasonCommitment)",
+  "event CovenantSynchronized(bytes32 indexed facilityId, uint8 indexed previousState, uint8 indexed newState, uint16 coverageBps, uint16 requiredCoverageBps, uint128 outstandingValue, uint256 grossEligible, uint256 countedEligible, uint8 reason, uint64 cureDeadline)",
 ]);
 
 export const facilityRegistryAbi = parseAbi([
@@ -54,6 +55,30 @@ export const facilityRegistryAbi = parseAbi([
   "function setHedgeIssuer(bytes32 facilityId, address issuer, bool authorized)",
   "function freezeFacility(bytes32 facilityId)",
 ]);
+
+export const coverageEngineAbi = parseAbi([
+  "struct CoverageResult { bool assessed; bool compliant; uint128 outstandingValue; uint256 grossEligible; uint256 countedEligible; uint16 coverageBps; uint16 requiredCoverageBps; uint8 eligibleHedgeCount; uint8 totalHedgeCount; uint8 exposureReason; uint8 resultReason; }",
+  "function evaluate(bytes32 facilityId) view returns (CoverageResult)",
+]);
+
+/** CoverageEngine's ExposureReason and ResultReason enums, by index. */
+export const EXPOSURE_REASONS = [
+  "ELIGIBLE",
+  "MISSING",
+  "ZERO_VALUE",
+  "ISSUER_NOT_APPROVED",
+  "PAIR_MISMATCH",
+  "NOT_YET_OBSERVED",
+  "EXPIRED",
+  "STALE",
+  "REVOKED",
+  "ISSUER_AUTHORIZATION_STALE",
+] as const;
+export const RESULT_REASONS = ["NONE", "MISSING_EXPOSURE", "INVALID_EXPOSURE", "BELOW_THRESHOLD", "RESERVE_VIOLATION"] as const;
+
+export function enumName(names: readonly string[], index: number): string {
+  return names[index] ?? `UNKNOWN(${index})`;
+}
 
 const adminErrorsAbi = parseAbi([
   "error NotOperator(address caller)",
@@ -118,6 +143,14 @@ export type ArcManifest = {
       maxActiveHedges: number;
     };
   };
+  facilityAdminQuorum?: {
+    provider: string;
+    keyQuorumId: string;
+    walletId: string;
+    threshold: number;
+    policyId?: string;
+    approvers: { role: string; publicKey: string }[];
+  };
 };
 
 /** A call the admin wallet will make, before anything is pinned. */
@@ -141,6 +174,18 @@ export type VaultStatus = {
   waiverEndsAt: bigint;
 };
 
+/** `CoverageEngine.evaluate`: what the vault's next sync will find, before anything is sent. */
+export type CoverageEvaluation = {
+  assessed: boolean;
+  compliant: boolean;
+  coverageBps: number;
+  requiredCoverageBps: number;
+  eligibleHedgeCount: number;
+  totalHedgeCount: number;
+  exposureReason: string;
+  resultReason: string;
+};
+
 /** The chain operations the flow needs. `createArcGateway` implements it; tests fake it. */
 export type ArcGateway = {
   chainId(): Promise<number>;
@@ -155,6 +200,7 @@ export type ArcGateway = {
   isExposureIssuer(registry: Address, facilityId: Hex, issuer: Address): Promise<boolean>;
   isHedgeIssuer(registry: Address, facilityId: Hex, issuer: Address): Promise<boolean>;
   vaultStatus(vault: Address): Promise<VaultStatus>;
+  evaluateCoverage(engine: Address, facilityId: Hex): Promise<CoverageEvaluation>;
 };
 
 const DEFAULT_MANIFEST = new URL("../../../deployments/arc-testnet.json", import.meta.url);
@@ -232,6 +278,24 @@ export function createArcGateway(manifest: ArcManifest): ArcGateway {
         covenantState: COVENANT_STATES[state] ?? `UNKNOWN(${state})`,
         activeWaiver,
         waiverEndsAt,
+      };
+    },
+    async evaluateCoverage(engine, facilityId) {
+      const result = await client.readContract({
+        address: engine,
+        abi: coverageEngineAbi,
+        functionName: "evaluate",
+        args: [facilityId],
+      });
+      return {
+        assessed: result.assessed,
+        compliant: result.compliant,
+        coverageBps: result.coverageBps,
+        requiredCoverageBps: result.requiredCoverageBps,
+        eligibleHedgeCount: result.eligibleHedgeCount,
+        totalHedgeCount: result.totalHedgeCount,
+        exposureReason: enumName(EXPOSURE_REASONS, result.exposureReason),
+        resultReason: enumName(RESULT_REASONS, result.resultReason),
       };
     },
   };

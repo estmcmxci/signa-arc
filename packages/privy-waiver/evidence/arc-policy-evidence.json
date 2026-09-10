@@ -1,0 +1,130 @@
+{
+  "title": "Signa Covenant: the Privy policy on the facility admin wallet",
+  "generatedAt": "2026-09-10T22:13:56.817Z",
+  "outcome": "verified",
+  "network": {
+    "chainId": 5042002,
+    "explorer": "https://testnet.arcscan.app"
+  },
+  "broadcast": "none: every probe is signed at most, never sent, and unmineable",
+  "admin": {
+    "address": "0x55C4DD3770A44695735717CB7b7005AC7dE9edA1",
+    "explorer": "https://testnet.arcscan.app/address/0x55C4DD3770A44695735717CB7b7005AC7dE9edA1",
+    "privyWalletId": "zc9i4be5osru1qyzfci337mi",
+    "keyQuorumId": "pbf1jtt1knpsl30eyp0z163t",
+    "walletPolicyIds": [
+      "y5x9g8gglndai2hosm47zvxf"
+    ]
+  },
+  "policy": {
+    "id": "y5x9g8gglndai2hosm47zvxf",
+    "name": "Signa admin: createWaiver on the vault only",
+    "ownerId": "pbf1jtt1knpsl30eyp0z163t",
+    "attachedThisRun": true,
+    "rules": [
+      {
+        "name": "createWaiver on the facility vault",
+        "method": "eth_signTransaction",
+        "action": "ALLOW",
+        "conditions": [
+          "ethereum_transaction.chain_id eq 5042002",
+          "ethereum_transaction.to eq 0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+          "ethereum_transaction.value eq 0x0",
+          "ethereum_calldata.function_name eq createWaiver"
+        ]
+      }
+    ],
+    "vault": {
+      "address": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+      "explorer": "https://testnet.arcscan.app/address/0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51"
+    },
+    "doesNotCap": "duration: Privy's calldata comparator never matches integers narrower than uint64, and duration is uint32"
+  },
+  "controls": [
+    {
+      "name": "createWaiver on the facility vault",
+      "varies": "nothing: the one allowed call",
+      "call": "createWaiver(3600, 0xdbf5916755ac680101ed91421d71dc301390379006370356666cfe3a7fcf4166)",
+      "to": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+      "chainId": 5042002,
+      "expected": "allowed",
+      "checkedAt": "2026-09-10T22:13:55.823Z",
+      "actual": "allowed",
+      "signer": "0x55C4DD3770A44695735717CB7b7005AC7dE9edA1",
+      "signedTransactionHash": "0x179217c2ae2458bf99770f6bd8e68ce815e987ee8e01c68d43926c98923b1b9e"
+    },
+    {
+      "name": "revokeWaiver on the facility vault",
+      "varies": "another function",
+      "call": "revokeWaiver()",
+      "to": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+      "chainId": 5042002,
+      "expected": "denied",
+      "checkedAt": "2026-09-10T22:13:56.015Z",
+      "actual": "denied",
+      "privyStatus": 400,
+      "privyResponse": "{\"error\":\"RPC request denied due to policy violation\",\"code\":\"policy_violation\"}"
+    },
+    {
+      "name": "createWaiver on the FacilityRegistry",
+      "varies": "another contract",
+      "call": "createWaiver(3600, 0xdbf5916755ac680101ed91421d71dc301390379006370356666cfe3a7fcf4166)",
+      "to": "0xB54fe913C4a7dE73Bc285338dCbb384AEec5e448",
+      "chainId": 5042002,
+      "expected": "denied",
+      "checkedAt": "2026-09-10T22:13:56.110Z",
+      "actual": "denied",
+      "privyStatus": 400,
+      "privyResponse": "{\"error\":\"RPC request denied due to policy violation\",\"code\":\"policy_violation\"}"
+    },
+    {
+      "name": "createWaiver on the vault, chain 1",
+      "varies": "another chain",
+      "call": "createWaiver(3600, 0xdbf5916755ac680101ed91421d71dc301390379006370356666cfe3a7fcf4166)",
+      "to": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+      "chainId": 1,
+      "expected": "denied",
+      "checkedAt": "2026-09-10T22:13:56.277Z",
+      "actual": "denied",
+      "privyStatus": 400,
+      "privyResponse": "{\"error\":\"RPC request denied due to policy violation\",\"code\":\"policy_violation\"}"
+    },
+    {
+      "name": "createWaiver above maxWaiverDuration",
+      "varies": "duration: the policy cannot cap uint32, so the contract and pre-validation do",
+      "call": "createWaiver(2592000, 0xdbf5916755ac680101ed91421d71dc301390379006370356666cfe3a7fcf4166)",
+      "to": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+      "chainId": 5042002,
+      "expected": "allowed",
+      "checkedAt": "2026-09-10T22:13:56.372Z",
+      "actual": "allowed",
+      "signer": "0x55C4DD3770A44695735717CB7b7005AC7dE9edA1",
+      "signedTransactionHash": "0xe89bd2995d52389fc26a73cf2bee79a45e4684446818960323a9b957a769f2d5"
+    }
+  ],
+  "governance": [
+    {
+      "name": "Change the wallet's policies with one approver's signature",
+      "detail": "PATCH the wallet with its current policy_ids, signed by the risk officer alone: a no-op if accepted",
+      "refused": true,
+      "privyStatus": 401,
+      "privyResponse": "{\"error\":\"Number of signatures in `privy-authorization-signature` header does not match the wallet's authorization threshold.\",\"code\":\"invalid_data\"}"
+    },
+    {
+      "name": "Change the policy with the app secret alone",
+      "detail": "PATCH the policy with its current name and no signature: a no-op if accepted",
+      "refused": true,
+      "privyStatus": 401,
+      "privyResponse": "{\"error\":\"Missing `privy-authorization-signature` header or no signatures provided. Learn more about authorization signatures here: https://docs.privy.io/api-reference/authorization-signatures\",\"code\":\"invalid_data\"}"
+    }
+  ],
+  "checks": {
+    "walletOwnerIsTheKeyQuorum": true,
+    "policyIsOwnedByTheKeyQuorum": true,
+    "policyIsExactlyTheExpectedOne": true,
+    "walletIsGovernedByThisPolicyAlone": true,
+    "everyTransactionControlAsExpected": true,
+    "changingThePolicyTakesBothApprovers": true
+  },
+  "mismatches": []
+}

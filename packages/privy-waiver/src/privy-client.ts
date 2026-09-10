@@ -7,8 +7,7 @@ import { normalizePublicKey, type IntentRequestDetails } from "./authorization.t
  * `@privy-io/node@0.34.0` has no method for `POST /v1/intents/{id}/authorize` anyway. Paths and
  * bodies follow that SDK's source and Privy's OpenAPI spec as generated into the Rust SDK.
  *
- * `scripts/smoke.ts` exercises every call here against the live API except `rejectIntent` and
- * `getWallet`.
+ * The scripts in `scripts/` exercise every call here against the live API except `rejectIntent`.
  */
 
 export type PrivyConfig = { appId: string; appSecret: string; apiUrl: string };
@@ -77,7 +76,30 @@ export type KeyQuorum = {
   user_ids?: string[];
   key_quorum_ids?: string[];
 };
-export type PrivyWallet = { id: string; address: Address; owner_id?: string | null };
+export type PrivyWallet = { id: string; address: Address; owner_id?: string | null; policy_ids?: string[] };
+
+export type PolicyCondition = {
+  field_source: string;
+  field: string;
+  operator: string;
+  value: string | string[];
+  abi?: unknown;
+};
+export type PolicyRule = {
+  id?: string;
+  name: string;
+  method: string;
+  action: "ALLOW" | "DENY";
+  conditions: PolicyCondition[];
+};
+export type PolicyInput = {
+  version: "1.0";
+  name: string;
+  chain_type: "ethereum";
+  owner_id?: string;
+  rules: PolicyRule[];
+};
+export type Policy = Omit<PolicyInput, "owner_id"> & { id: string; created_at?: number; owner_id?: string | null };
 
 export class PrivyApiError extends Error {
   constructor(
@@ -164,7 +186,41 @@ export class PrivyClient {
     return this.send("GET", `/v1/wallets/${encodeURIComponent(walletId)}`);
   }
 
-  /** Synchronous RPC with every signature in the header at once. Only the smoke test uses it. */
+  /** The wallet's own URL, and therefore the URL a wallet update's signatures cover. */
+  walletUrl(walletId: string): string {
+    return `${this.config.apiUrl}/v1/wallets/${encodeURIComponent(walletId)}`;
+  }
+
+  /** Creating a policy takes no signature, even one owned by a key quorum. Changing it does. */
+  createPolicy(input: PolicyInput): Promise<Policy> {
+    return this.send("POST", "/v1/policies", input);
+  }
+
+  getPolicy(policyId: string): Promise<Policy> {
+    return this.send("GET", `/v1/policies/${encodeURIComponent(policyId)}`);
+  }
+
+  /** Changes a policy. Its owner must sign; an unowned policy would take the app secret alone. */
+  updatePolicy(policyId: string, body: { name: string }, signatures: string[]): Promise<Policy> {
+    return this.send(
+      "PATCH",
+      `/v1/policies/${encodeURIComponent(policyId)}`,
+      body,
+      signatures.length > 0 ? { "privy-authorization-signature": signatures.join(",") } : {},
+    );
+  }
+
+  /**
+   * Changes which policies govern the wallet. Its owner signs: for a quorum-owned wallet, every
+   * approver, over `walletUpdateAuthorizationInput`, comma-joined in one header.
+   */
+  updateWallet(walletId: string, body: { policy_ids: string[] }, signatures: string[]): Promise<PrivyWallet> {
+    return this.send("PATCH", `/v1/wallets/${encodeURIComponent(walletId)}`, body, {
+      "privy-authorization-signature": signatures.join(","),
+    });
+  }
+
+  /** Synchronous RPC with every signature in the header at once: the smoke test and the policy controls. */
   walletRpc(walletId: string, body: SignTransactionRequest, signatures: string[]): Promise<unknown> {
     return this.send("POST", `/v1/wallets/${encodeURIComponent(walletId)}/rpc`, body, {
       "privy-authorization-signature": signatures.join(","),
@@ -172,7 +228,7 @@ export class PrivyClient {
   }
 
   private async send<T>(
-    method: "GET" | "POST",
+    method: "GET" | "POST" | "PATCH",
     path: string,
     body?: unknown,
     extraHeaders: Record<string, string> = {},

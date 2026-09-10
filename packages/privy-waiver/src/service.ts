@@ -1,4 +1,4 @@
-import { parseEventLogs, type Address, type Hex } from "viem";
+import { isAddressEqual, parseEventLogs, type Address, type Hex } from "viem";
 
 import {
   INTENT_SIGNATURE_WINDOW_MS,
@@ -13,12 +13,13 @@ import {
   covenantVaultAbi,
   describeAdminCall,
   encodeCreateWaiver,
-  encodeRevokeWaiver,
   pinAdminTransaction,
   reasonCommitment,
   toPrivyTransaction,
   verifySignedTransaction,
   type ArcGateway,
+  type ArcReceipt,
+  type CoverageEvaluation,
   type PinnedTransaction,
 } from "./arc.ts";
 import { nextFacilitySetupStep, type QuorumFacilityPlan } from "./facility-setup.ts";
@@ -30,6 +31,8 @@ import {
   type ActionStore,
   type BroadcastRecord,
   type StoredAction,
+  type WaiverContext,
+  type WaiverCreatedRecord,
 } from "./store.ts";
 
 /**
@@ -42,11 +45,19 @@ import {
  * the sender. No contract changes.
  */
 
+/** The facility whose waivers the service proposes. Every address comes from the manifest. */
+export type FacilityConfig = {
+  id: Hex;
+  vault: Address;
+  registry: Address;
+  coverageEngine: Address;
+};
+
 export type ServiceConfig = {
   walletId: string;
   walletAddress: Address;
   explorer: string;
-  vault?: Address;
+  facility?: FacilityConfig;
 };
 
 /** One approver's signature, as the UI sends it. Browsers produce P1363; SDKs produce DER. */
@@ -58,11 +69,26 @@ export type Approval = {
   timestamp: number;
 };
 
+/** Whether the contract would accept a waiver now, as read from Arc, and if not, why not. */
+export type WaiverReadiness = {
+  facilityId: Hex;
+  vault: Address;
+  covenantState: string;
+  activeWaiver: boolean;
+  waiverEndsAt: string;
+  coverage: CoverageEvaluation;
+  maxWaiverDurationSeconds: number;
+  /** Every reason the contract would refuse a waiver of any duration. Empty when it would accept one. */
+  refusals: string[];
+};
+
 export type ActionView = {
   intentId: string;
   kind: ActionKind;
   description: string;
   reason?: string;
+  /** For a waiver: the chain as it stood when the waiver was proposed. */
+  context?: WaiverContext;
   status: string;
   createdAt: number;
   expiresAt: number;
@@ -96,7 +122,6 @@ export class ServiceError extends Error {
 
 const OPEN_STATUSES = new Set(["pending", "granted", "processing", "executed"]);
 const QUANTITY_FIELDS = new Set(["chain_id", "nonce", "gas_limit", "max_fee_per_gas", "max_priority_fee_per_gas", "value", "type"]);
-const MAX_UINT32 = 2 ** 32 - 1;
 
 export class QuorumAdminService {
   constructor(
@@ -108,27 +133,88 @@ export class QuorumAdminService {
     private readonly now: () => number = Date.now,
   ) {}
 
+  /**
+   * Proposes a waiver only if the contract would accept it now. Privy checks the wallet's policy
+   * when it executes an intent, not when it takes one, and the contract checks a waiver only when
+   * it is mined. Without this, a waiver doomed by either would collect both approvals first. The
+   * duration cap is checked here too, because the policy cannot check it (see policy.ts).
+   */
   async proposeWaiver(input: { durationSeconds: number; reason: string }): Promise<ActionView> {
-    const vault = this.requireVault();
+    const facility = this.requireFacility();
     const reason = input.reason.trim();
     const { durationSeconds } = input;
-    if (!Number.isInteger(durationSeconds) || durationSeconds <= 0 || durationSeconds > MAX_UINT32) {
+    if (!Number.isInteger(durationSeconds) || durationSeconds <= 0) {
       throw new ServiceError("durationSeconds must be a positive whole number of seconds");
     }
     if (!reason) throw new ServiceError("a waiver needs a stated reason; its hash is committed on chain");
+    const readiness = await this.waiverReadiness();
+    if (durationSeconds > readiness.maxWaiverDurationSeconds) {
+      throw new ServiceError(
+        `the facility's longest waiver is ${formatDuration(readiness.maxWaiverDurationSeconds)} (maxWaiverDuration); ${formatDuration(durationSeconds)} would revert`,
+      );
+    }
+    if (readiness.refusals.length > 0) {
+      throw new ServiceError(`not proposed, because the contract would refuse it: ${readiness.refusals.join("; ")}`, 409);
+    }
     const commitment = reasonCommitment(reason);
+    const { coverage } = readiness;
     return this.propose(
       "waiver.create",
-      vault,
+      facility.vault,
       encodeCreateWaiver(durationSeconds, commitment),
-      `Waive the coverage covenant on ${vault} for ${formatDuration(durationSeconds)}, reason commitment ${commitment}`,
-      reason,
+      `Waive the coverage covenant on ${facility.vault} for ${formatDuration(durationSeconds)}, reason commitment ${commitment}`,
+      {
+        reason,
+        context: {
+          checkedAt: this.now(),
+          covenantState: readiness.covenantState,
+          coverageBps: coverage.coverageBps,
+          requiredCoverageBps: coverage.requiredCoverageBps,
+          resultReason: coverage.resultReason,
+          exposureReason: coverage.exposureReason,
+          maxWaiverDurationSeconds: readiness.maxWaiverDurationSeconds,
+        },
+      },
     );
   }
 
-  async proposeWaiverRevocation(): Promise<ActionView> {
-    const vault = this.requireVault();
-    return this.propose("waiver.revoke", vault, encodeRevokeWaiver(), `Revoke the active waiver on ${vault}`);
+  /**
+   * Reads what `createWaiver` will check: the vault belongs to this facility, the facility's admin
+   * is this wallet, no waiver is active, and a fresh coverage evaluation is not compliant. The
+   * contract syncs before it checks, so the stored covenant state alone would mislead.
+   */
+  async waiverReadiness(): Promise<WaiverReadiness> {
+    const facility = this.requireFacility();
+    const [status, policy, coverage] = await Promise.all([
+      this.arc.vaultStatus(facility.vault),
+      this.arc.getFacility(facility.registry, facility.id),
+      this.arc.evaluateCoverage(facility.coverageEngine, facility.id),
+    ]);
+    const refusals: string[] = [];
+    if (status.facilityId.toLowerCase() !== facility.id.toLowerCase()) {
+      refusals.push(`vault ${facility.vault} belongs to facility ${status.facilityId}, not ${facility.id}`);
+    }
+    if (!isAddressEqual(policy.admin, this.config.walletAddress)) {
+      refusals.push(`the facility's admin is ${policy.admin}, not this quorum's wallet ${this.config.walletAddress}`);
+    }
+    if (status.activeWaiver) {
+      refusals.push(`a waiver is already active, until ${new Date(Number(status.waiverEndsAt) * 1_000).toISOString()}`);
+    }
+    if (coverage.compliant) {
+      refusals.push(
+        `the facility is compliant (coverage ${coverage.coverageBps} bps, ${coverage.requiredCoverageBps} required), and createWaiver refuses a compliant facility`,
+      );
+    }
+    return {
+      facilityId: facility.id,
+      vault: facility.vault,
+      covenantState: status.covenantState,
+      activeWaiver: status.activeWaiver,
+      waiverEndsAt: status.waiverEndsAt.toString(),
+      coverage,
+      maxWaiverDurationSeconds: policy.maxWaiverDuration,
+      refusals,
+    };
   }
 
   /** Proposes whatever facility setup is still missing on chain, or reports that none is. */
@@ -204,7 +290,8 @@ export class QuorumAdminService {
 
   /**
    * Once Privy has signed, checks the signed transaction is exactly the one approved and that the
-   * quorum wallet signed it, then broadcasts to Arc and asserts the receipt succeeded.
+   * quorum wallet signed it, then broadcasts to Arc and asserts the receipt succeeded. For a
+   * waiver it also asserts the receipt's WaiverCreated records what the approvers were shown.
    */
   async execute(intentId: string): Promise<ActionView> {
     const action = this.requireAction(intentId);
@@ -217,16 +304,61 @@ export class QuorumAdminService {
     if (!signed) throw new ServiceError("the executed intent carries no signed transaction", 502);
     const pinned = deserializePinned(action.pinned);
     this.assertIntentMatches(intent, pinned);
-    const { hash } = await verifySignedTransaction(signed, pinned);
+    const { signer, hash } = await verifySignedTransaction(signed, pinned);
     const receipt = await broadcastAndConfirm(this.arc, signed);
-    const [waiver] = parseEventLogs({ abi: covenantVaultAbi, logs: receipt.logs, eventName: "WaiverCreated" });
+    const waiver = action.kind === "waiver.create" ? this.waiverCreatedIn(receipt, action) : undefined;
+    // Recorded before any assertion can throw: the transaction is mined either way.
     const updated = this.store.recordBroadcast(intentId, {
       hash,
+      signer,
       blockNumber: receipt.blockNumber.toString(),
       status: receipt.status,
-      ...(waiver ? { waiverEndsAt: waiver.args.endsAt.toString() } : {}),
+      ...(waiver?.record ? { waiverCreated: waiver.record } : {}),
     });
+    if (waiver && waiver.problems.length > 0) {
+      throw new ServiceError(
+        `transaction ${hash} succeeded in block ${receipt.blockNumber}, but ${waiver.problems.join("; ")}`,
+        502,
+      );
+    }
     return this.view(updated, intent);
+  }
+
+  /**
+   * A successful receipt is not enough: it must carry exactly one WaiverCreated from the approved
+   * vault, naming this facility and committing to the stated reason.
+   */
+  private waiverCreatedIn(
+    receipt: ArcReceipt,
+    action: StoredAction,
+  ): { record?: WaiverCreatedRecord; problems: string[] } {
+    const facility = this.requireFacility();
+    const vault = action.pinned.to;
+    const events = parseEventLogs({ abi: covenantVaultAbi, logs: receipt.logs, eventName: "WaiverCreated" }).filter(
+      (log) => isAddressEqual(log.address, vault),
+    );
+    const [event] = events;
+    if (!event || events.length !== 1) {
+      return { problems: [`the receipt carries ${events.length} WaiverCreated events from ${vault}, not exactly one`] };
+    }
+    const expectedCommitment = reasonCommitment(action.reason ?? "");
+    const record: WaiverCreatedRecord = {
+      facilityId: event.args.facilityId,
+      reasonCommitment: event.args.reasonCommitment,
+      startsAt: event.args.startsAt.toString(),
+      endsAt: event.args.endsAt.toString(),
+      logIndex: event.logIndex,
+      facilityMatches: event.args.facilityId.toLowerCase() === facility.id.toLowerCase(),
+      reasonCommitmentMatches: event.args.reasonCommitment.toLowerCase() === expectedCommitment.toLowerCase(),
+    };
+    const problems: string[] = [];
+    if (!record.facilityMatches) problems.push(`WaiverCreated names facility ${record.facilityId}, not ${facility.id}`);
+    if (!record.reasonCommitmentMatches) {
+      problems.push(
+        `WaiverCreated commits to ${record.reasonCommitment}, not to keccak256 of the stated reason, ${expectedCommitment}`,
+      );
+    }
+    return { record, problems };
   }
 
   private async propose(
@@ -234,7 +366,7 @@ export class QuorumAdminService {
     to: Address,
     data: Hex,
     description: string,
-    reason?: string,
+    extra: { reason?: string; context?: WaiverContext } = {},
   ): Promise<ActionView> {
     await this.assertNoOpenAction();
     const pinned = await pinAdminTransaction(this.arc, { from: this.config.walletAddress, to, data });
@@ -249,7 +381,7 @@ export class QuorumAdminService {
       description,
       pinned: serializePinned(pinned),
       proposedAt: this.now(),
-      ...(reason === undefined ? {} : { reason }),
+      ...extra,
     };
     this.store.save(action);
     return this.view(action, intent);
@@ -298,6 +430,7 @@ export class QuorumAdminService {
       kind: action.kind,
       description: action.description,
       ...(action.reason === undefined ? {} : { reason: action.reason }),
+      ...(action.context === undefined ? {} : { context: action.context }),
       status: intent.status,
       createdAt: intent.created_at,
       expiresAt: intent.expires_at,
@@ -325,11 +458,11 @@ export class QuorumAdminService {
     return action;
   }
 
-  private requireVault(): Address {
-    if (!this.config.vault) {
-      throw new ServiceError("PRIVY_WAIVER_VAULT is not set: the quorum's vault has not been deployed yet", 409);
+  private requireFacility(): FacilityConfig {
+    if (!this.config.facility) {
+      throw new ServiceError("no facility is configured: the manifest's facility admin is not this wallet", 409);
     }
-    return this.config.vault;
+    return this.config.facility;
   }
 }
 
@@ -354,7 +487,7 @@ function sameField(field: string, actual: unknown, expected: string | number): b
   return typeof actual === "string" && actual.toLowerCase() === String(expected).toLowerCase();
 }
 
-function formatDuration(seconds: number): string {
+export function formatDuration(seconds: number): string {
   if (seconds % 86_400 === 0) return `${seconds / 86_400} day(s)`;
   if (seconds % 3_600 === 0) return `${seconds / 3_600} hour(s)`;
   return `${seconds} seconds`;

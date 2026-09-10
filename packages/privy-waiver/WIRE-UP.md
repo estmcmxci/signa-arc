@@ -1,27 +1,73 @@
 # Privy quorum waivers: wire-up
 
-R-F3-7: *"Under Privy, creation requires m-of-n quorum."* This package implements that flow, and it is live on Arc Testnet. The facility's admin is a Privy server wallet owned by a 2-of-2 key quorum of a risk officer and a treasury lead. That quorum approved every admin call that created the facility.
+R-F3-7: *"Under Privy, creation requires m-of-n quorum."* This package implements that, live on Arc Testnet. The facility's admin is a Privy server wallet owned by a 2-of-2 key quorum: a risk officer and a treasury lead. The quorum created and froze the facility, and a Privy policy owned by the same quorum limits the admin key to one call, `createWaiver` on the facility's vault.
 
 No dependency was added. Neither `@privy-io/node` nor `@privy-io/js-sdk-core` is used; the latter pins viem 2.56.0 exactly, against our 2.56.3. `src/authorization.ts` reproduces Privy's signing byte for byte.
 
+## What works now
+
+**The waiver flow** is `QuorumAdminService` (`src/service.ts`). The approver console and `scripts/run-waiver.ts` both drive it.
+
+1. **Propose, after pre-validation.** Before anything goes to Privy, the service reads the chain and refuses any waiver the contract would refuse. Checks:
+   - the vault's `facilityId` is the manifest's facility;
+   - the facility's admin is this wallet;
+   - no waiver is active;
+   - a fresh `CoverageEngine.evaluate` is not compliant;
+   - the duration is at most `maxWaiverDuration`, read from the registry.
+
+   This matters because Privy evaluates the wallet's policy when it executes an intent, not when it accepts one, and the contract checks a waiver only when it is mined. Without pre-validation, a doomed waiver would collect both approvals first.
+
+   If the waiver passes, the service:
+   - hashes the stated reason with `keccak256` into `reasonCommitment`; the text stays offchain;
+   - encodes `createWaiver(uint32,bytes32)` and simulates it;
+   - reads the nonce from Arc and pins nonce, gas and fees;
+   - proposes an `eth_signTransaction` intent.
+2. **Approve twice**, as risk officer and treasury lead. Each approver:
+   - fetches a fresh payload built from `GET /v1/intents/{id}`;
+   - signs `{version, method, url, body, headers, intent_id, timestamp}` over Privy's normalized body.
+
+   The service verifies the signature under a quorum member key before it posts to `/authorize`.
+3. **Broadcast.** The service takes `action_result.response_body.data.signed_transaction` and checks it field by field against what was approved, and that it recovers to the admin wallet. It then sends it with viem's `eth_sendRawTransaction` and asserts:
+   - the receipt status is `0x1`;
+   - the receipt holds exactly one `WaiverCreated` from the vault;
+   - its `facilityId` is this facility;
+   - its `reasonCommitment` is `keccak256` of the stated reason.
+
+The **policy** (`src/policy.ts`, `scripts/provision-policy.ts`) lets the wallet sign `createWaiver` on the vault, on Arc, moving no value, and nothing else. It was verified live with negative controls; see [The policy](#the-policy).
+
+The **approver console** (`ui/approver.html`, served by `src/main.ts`) shows, for use on camera:
+- each approver's key;
+- why a waiver is or is not possible now, read from the chain;
+- the policy;
+- each waiver's progress from proposal to a checked `WaiverCreated`, with the transaction linked on Arcscan.
+
+## Live status, 2026-09-10
+
+| What | Result |
+|---|---|
+| Policy | `y5x9g8gglndai2hosm47zvxf`, owned by key quorum `pbf1jtt1knpsl30eyp0z163t`, attached to the admin wallet. Every control came out as expected: [evidence/arc-policy-evidence.md](evidence/arc-policy-evidence.md). |
+| Pre-validation | At block 61465637 the facility is COMPLIANT: 10000 of 10000 bps, after lane B's A-4 `restoreCompliance`. Both `scripts/run-waiver.ts --check` and `POST /api/waivers` refuse with `not proposed, because the contract would refuse it: the facility is compliant (coverage 10000 bps, 10000 required), and createWaiver refuses a compliant facility`. Nothing reached Privy. |
+| A live waiver | **Not broadcast yet.** `createWaiver` reverts on a compliant facility, and the video script films the dashboard as COMPLIANT until the credentials expire at 2026-09-11 21:47:22 UTC. Once the facility is non-compliant, one command runs the whole flow and writes `evidence/arc-waiver-evidence.{json,md}`: `node --import tsx packages/privy-waiver/scripts/run-waiver.ts --duration=3600 --reason="…"`. That happens either when the credentials go stale or earlier through an issuer's hedge update. |
+
 ## One facility, administered by the quorum
 
-A facility's admin is set once and can never change. `FacilityRegistry` writes the policy, `admin` included, only in `createFacility`, and `CovenantVault` binds its `facilityId` immutably.
+A facility's admin is set once and can never change. `FacilityRegistry` writes the policy, `admin` included, only in `createFacility`, and `CovenantVault` binds its `facilityId` immutably. So the quorum administers a new facility, which replaces the original in `deployments/arc-testnet.json`. The registries and `CoverageEngine` are reused unchanged.
 
-So the facility the quorum administers is a new one, and it replaces the original in `deployments/arc-testnet.json`. The original EOA-administered facility, `0x39cbb5ce…4d1c`, and its vault are no longer part of the story. The registries and `CoverageEngine` are reused unchanged.
-
-`createFacility` only accepts the admin itself as sender, so the quorum's own wallet sent every setup call, each approved by both approvers: `createFacility`, both issuer approvals, and `freezeFacility`. The facility's policy was created under quorum as well as its waivers.
-
-## Provisioned on 2026-09-10
+`createFacility` only accepts the admin itself as sender, so the quorum's own wallet sent every setup call, each approved by both approvers. The facility's policy was created under quorum, not just its waivers.
 
 | What | Value |
 |---|---|
 | Key quorum | `pbf1jtt1knpsl30eyp0z163t`, 2 of 2: risk officer, treasury lead |
 | Admin wallet | Privy wallet `zc9i4be5osru1qyzfci337mi`, address `0x55C4DD3770A44695735717CB7b7005AC7dE9edA1` |
+| Privy policy | `y5x9g8gglndai2hosm47zvxf`: createWaiver on the vault only, owned by the quorum |
 | Facility | `0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2`, PRD §7 policy, frozen |
-| Vault | `0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51`, settlement asset USDC `0x3600…0000`. Verified on Blockscout (exact match, constructor arguments decoded); `getsourcecode` returns its source. |
+| Vault | `0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51`, settlement asset USDC `0x3600…0000`. Verified on Blockscout. |
 
-Before any facility existed, `scripts/provision-quorum.ts` proved the admin from Privy's own responses. The wallet's owner is the quorum. The quorum lists exactly the two approver keys, with threshold 2 and no other members. Either key alone is refused with `401 Number of signatures … does not match the wallet's authorization threshold`. Both keys together sign a probe transaction that recovers to the wallet.
+`scripts/provision-quorum.ts` proved the admin before any facility existed, from Privy's own responses:
+- the wallet's owner is the quorum;
+- the quorum lists exactly the two approver keys, with threshold 2;
+- either key alone is refused;
+- both keys together sign a probe that recovers to the wallet.
 
 Every receipt was asserted `0x1`:
 
@@ -36,18 +82,20 @@ Every receipt was asserted `0x1`:
 
 ### The approver keys
 
-The keys live in `~/.signa-privy-waiver/approvers/` (`PRIVY_APPROVER_KEY_DIR` overrides it): `risk-officer.json`, `treasury-lead.json` and `quorum.json`. The directory is mode 700 and the files are mode 600. They are outside every repository, so they cannot be committed, and `src/approvers.ts` refuses to overwrite a key once written.
+The keys live in `~/.signa-privy-waiver/approvers/` (`PRIVY_APPROVER_KEY_DIR` overrides it): `risk-officer.json`, `treasury-lead.json` and `quorum.json`, which also records the policy id. The directory is mode 700 and the files are mode 600. They are outside every repository, and `src/approvers.ts` refuses to overwrite a key once written.
 
-**Back this directory up.** These two keys are the only way the admin wallet can sign, and the facility's admin can never change. Lose them and the facility can never take another admin action.
+**Back this directory up.** These two keys are the only way the admin wallet can sign or its policy can change, and the facility's admin can never change.
 
-## Running the approval demo
+## Running the console
 
-1. `set -a; . ./.env; set +a`, then `PRIVY_WALLET_ID=zc9i4be5osru1qyzfci337mi node --import tsx packages/privy-waiver/src/main.ts`. The server takes the vault from the manifest, because the manifest's admin is this wallet.
-2. Open http://127.0.0.1:8787 in two browser profiles. In each, enter the approver's name and use **Import** with the `privateKey` from `risk-officer.json` or `treasury-lead.json`. The key becomes non-extractable in that browser.
-3. A waiver can only be created while the facility is non-compliant. It has no credentials yet, so `syncCovenant()` on the vault puts it in CURE. That call is permissionless, but lane B's acceptance sequence submits credentials to this facility, so coordinate the order with them.
-4. **Propose waiver**, approve as the risk officer, approve as the treasury lead, then **Verify and broadcast to Arc**. The page decodes `WaiverCreated` and shows WAIVED.
+1. From the repository root: `set -a; . ./.env; set +a`, then `PRIVY_WALLET_ID=zc9i4be5osru1qyzfci337mi node --import tsx packages/privy-waiver/src/main.ts`. Open http://127.0.0.1:8787. Every address comes from the manifest.
+2. Under **Approvers in this browser**, import each approver's `privateKey` from `risk-officer.json` and `treasury-lead.json`. The field is masked. Each card confirms the key is the quorum member the manifest names for that role. The key becomes non-extractable in this browser.
+3. **Why a waiver** shows the covenant state and coverage from the chain, and whether the contract would accept a waiver now. **What the admin key may sign** shows the attached policy.
+4. **Propose**. Then **Approve as Risk officer** and **Approve as Treasury lead**. Then **Verify and broadcast to Arc**. The waiver's card ticks off each step. It links the transaction on Arcscan and shows `WaiverCreated`, checked against this facility and the stated reason.
 
-`scripts/provision-quorum.ts` can be rerun at any time; it only re-verifies. `scripts/provision-facility.ts` reports the facility complete. The new vault holds no USDC: a draw needs a deposit first.
+For the demo, both keys sit in one browser. In use, each approver's browser would hold only their own key.
+
+`scripts/run-waiver.ts` runs the same flow from the persisted keys and writes the evidence. `scripts/provision-policy.ts` can be rerun at any time: it only re-verifies and rewrites the policy evidence.
 
 ## How `POST /v1/intents/{id}/authorize` works
 
@@ -69,44 +117,81 @@ The signature covers the standard Privy authorization payload over the intent's 
 
 This is canonicalized as RFC 8785 JSON, signed with ECDSA P-256 over SHA-256, DER-encoded and base64'd. The request body is `{ "signature": "<base64>", "timestamp": <the same value> }`.
 
-- **Both fields together.** `intent_id` and `timestamp` are required as a pair; adding either one alone is rejected exactly like a wrong signature.
-- **`timestamp`** must equal the one in the request body and be within 300 s of Privy's clock. Because it is inside what the approver signs, the approver UI fetches a fresh payload at the moment of approval (`GET /api/actions/{id}/signing-payload`) rather than signing whatever the page showed earlier.
+- **Both fields together.** `intent_id` and `timestamp` are required as a pair; either one alone is rejected exactly like a wrong signature.
+- **`timestamp`** must equal the one in the request body and be within 300 s of Privy's clock. Because it is inside what the approver signs, the console fetches a fresh payload at the moment of approval rather than signing whatever the page showed earlier.
 - **`body`** must be Privy's copy from `GET /v1/intents/{id}`, never the body that was proposed.
 - **The error message is not a diagnostic.** An empty or garbage signature gets the same `400 No valid authorization key found for signature` as a correct signature over the wrong bytes.
-- **It is a real API surface, not a quirk.** `@privy-io/js-sdk-core` declares both fields on `GenerateAuthorizationSignatureInput`, with `intent_id` described as binding the signature to one intent to prevent cross-intent replay. Only the prose documentation leaves them out.
+- **It is a real API surface.** `@privy-io/js-sdk-core` declares both fields on `GenerateAuthorizationSignatureInput`, with `intent_id` there to prevent cross-intent replay.
 
 ## Privy signs; we broadcast
 
-Privy cannot broadcast on Arc: `eth_sendTransaction` for `eip155:5042002` returns `401 App is not authorized to transact on chain`. So the flow uses `eth_signTransaction` and broadcasts to Arc with viem.
+Privy cannot broadcast on Arc: `eth_sendTransaction` for `eip155:5042002` returns `401 App is not authorized to transact on chain`. So the flow uses `eth_signTransaction` and broadcasts to Arc with viem. That keeps nonce, fees and the final check in our hands. The final check is: the signed RLP matches what the approvers saw, the quorum wallet signed it, and the receipt and event say what was approved.
 
-That is the design rather than a workaround. We pin nonce and fees, check the signed RLP field by field against what the approvers saw, confirm the quorum wallet signed it, and assert the receipt ourselves (`src/arc.ts`).
+## The policy
 
-## What a Privy policy can and cannot add
+`y5x9g8gglndai2hosm47zvxf` has one rule: ALLOW `eth_signTransaction` when `chain_id` is 5042002, `to` is the vault, `value` is `0x0` and the calldata's function is `createWaiver`. Privy denies whatever no rule allows.
 
-This package does not use Privy policies. The same research tested them:
+The key quorum owns the policy. Creating it needed no signature. Attaching it was a `PATCH` of the wallet signed by both approvers. Changing, deleting or detaching it takes both approvers too.
 
-- **Can:** restrict the admin wallet to `createWaiver`, on our vault only, on Arc only. Negative controls were denied.
-- **Cannot:** cap `duration`. Privy's calldata comparator never matches integer arguments narrower than `uint64`, and `duration` is `uint32`.
+Live controls, each signed by both approvers through the synchronous RPC. Every probe has nonce 1,000,000,000 and a fee cap of 1 wei, so none could ever be mined, and none was sent:
 
-The duration bound therefore stays where it already is: `maxWaiverDuration`, enforced by the contract.
+| Control | Varies | Expected | Actual |
+|---|---|---|---|
+| createWaiver on the vault | nothing | allowed | allowed; recovers to the admin wallet |
+| revokeWaiver on the vault | another function | denied | denied: `400 policy_violation` |
+| createWaiver on the FacilityRegistry | another contract | denied | denied: `400 policy_violation` |
+| createWaiver on the vault, chain 1 | another chain | denied | denied: `400 policy_violation` |
+| createWaiver above `maxWaiverDuration` | duration | allowed | allowed: the known gap below |
+| Change the wallet's policies, one approver | governance | refused | refused: `401`, signatures do not meet the threshold |
+| Change the policy, app secret alone | governance | refused | refused: `401`, missing authorization signature |
+
+What it cannot do: **cap `duration`**. Privy's calldata comparator never matches integer arguments narrower than `uint64`, and `duration` is `uint32`, so the policy does not try. The contract enforces `maxWaiverDuration`, and the service refuses a longer waiver before proposing it.
+
+Consequences:
+- **`revokeWaiver` is denied.** Ending a waiver early would first need a policy change, which both approvers sign. Otherwise a waiver ends on its own at `endsAt`. The console no longer offers revocation or facility setup.
+- **The policy runs at execution.** A policy-violating intent is accepted at proposal and fails only after both approvals, so the service proposes nothing but `createWaiver`, and only after pre-validation.
+
+## Claims discipline
+
+**The alternative evaluated** was a 2-of-3 Gnosis Safe as the facility admin.
+
+**Do not claim Privy is more trust-minimised than a Safe.** A Safe does m-of-n better and more verifiably:
+- its owners and threshold are on chain for anyone to read;
+- every approval is a signature the chain itself checks;
+- no operator stands between the approvers and the chain.
+
+Under Privy, the chain sees one address signing. The 2-of-2 rule is enforced inside Privy's infrastructure. We can check Privy's answers, as `provision-quorum.ts` and `provision-policy.ts` do, but not its enforcement. Whoever holds the app secret can propose, though not approve.
+
+**The honest argument for Privy** has two parts:
+- **The approvers never touch a chain.** No gas, no browser extension, no seed phrase: an approver signs a payload in a web page.
+- **The same primitive restricts the admin key.** It limits which function, on which contract, the admin key may ever call: here, `createWaiver` on one vault. A Safe needs an audited Guard module to match that.
+
+Say: "m-of-n approval without putting approvers on chain, and an allow-list on what the admin key can ever sign." Do not say "trustless", "more secure than a multisig" or "on-chain quorum".
 
 ## Verified
 
 | What | How |
 |---|---|
-| Signed payload is byte-identical to Privy's | Golden vectors from `@privy-io/node@0.34.0`, a differential fuzz of 5,000 random bodies against that SDK (run from `/tmp`, not committed), and the exact intent payload Privy's live `/authorize` accepted |
+| Signed payload is byte-identical to Privy's | Golden vectors from `@privy-io/node@0.34.0`; a differential fuzz of 5,000 random bodies against that SDK (run from `/tmp`, not committed); and the exact intent payload Privy's live `/authorize` accepted |
 | Approvals are bound | A signature for one intent or timestamp does not verify for another. An approval older than 300 s is refused before it reaches Privy. |
-| Whole flow, offline | `test/service.test.ts` runs propose, two browser-style approvals, Privy signing, verification and broadcast against a fake Privy that enforces the authorize recipe and window, and a fake Arc |
-| Whole flow, live | `scripts/smoke.ts` passes all three steps against the live API. `scripts/provision-facility.ts` drove `QuorumAdminService` end to end four times, from proposal through a successful receipt on Arc. |
+| Pre-validation | Offline: a compliant facility, an active waiver, another facility's vault, another admin and an over-long duration are each refused before any Privy request. Live: refused on the COMPLIANT facility, as above. |
+| Broadcast assertions | Offline: a successful receipt whose `WaiverCreated` commits to another reason, names another facility, is missing, or comes from another contract fails `execute`, and the mined transaction is still recorded. |
+| The policy, live | Every control and governance attempt came out as expected: [evidence/arc-policy-evidence.md](evidence/arc-policy-evidence.md) |
+| The flow, live | `scripts/provision-facility.ts` drove `QuorumAdminService` end to end four times, from proposal through a successful receipt on Arc. The `WaiverCreated` assertions run live with the first waiver. |
 | Refusals | A bad signature never reaches Privy. A non-member key is refused. A signed transaction differing in any field, or signed by any other address, is not broadcast. Only one proposal is in flight at a time. |
 
-Also found: an intent lists its members' keys in PEM, while key quorums list the same keys as bare SPKI. `keyMembers()` normalizes both to bare SPKI.
-
-Not yet run live: the approver UI in a browser against this facility. It uses the same service and recipe, and its approval route is covered by `test/service.test.ts`.
+`test/` holds 36 tests for this package, all passing. Also found: an intent lists its members' keys in PEM, while key quorums list the same keys as bare SPKI. `keyMembers()` normalizes both to bare SPKI.
 
 ## Limits to state plainly
 
-- The approver keys are plaintext files readable only by their owner, not passkeys or hardware keys. That is adequate for a testnet demo, and it should be said.
-- An approval must reach Privy within 300 s of its payload being fetched. The UI fetches the payload when the approver clicks, so this only bites if a request stalls.
-- The server holds the Privy app secret, binds to localhost and has no login. It is a demo server.
-- One proposal at a time: each pins the admin wallet's next nonce.
+- **The approver keys are not passkeys.**
+  - In the console they are WebCrypto P-256 keys, stored non-extractable in the browser's IndexedDB.
+  - Privy has no server endpoint that accepts a WebAuthn assertion. A key-quorum member must produce a raw P-256 signature over Privy's payload, and a passkey signs only WebAuthn's authenticator data and client data.
+  - For the scripts, the keys are plaintext files readable only by their owner.
+
+  That is adequate for a testnet demo, and it should be said.
+- **The console is a demo server.** It holds the Privy app secret, binds to 127.0.0.1 and has no login. The page says so in a banner.
+- **Privy signs; we broadcast.** Nonce and fees are pinned at proposal, with the fee cap doubled. If a proposal waits long enough for fees to rise past that cap, or for its nonce to be used, it must be rejected and proposed again.
+- **The policy cannot cap `duration`,** and it denies `revokeWaiver` (see above).
+- **One proposal at a time.** Each pins the admin wallet's next nonce.
+- **An approval must reach Privy within 300 s of its payload being fetched.** The console fetches the payload when the approver clicks, so this only bites if a request stalls.
