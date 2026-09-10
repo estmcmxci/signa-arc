@@ -270,7 +270,7 @@ async function recordFunding() {
   assert(deposits.length > 0, "the vault has never been funded");
   for (const deposit of deposits) {
     const { amount } = deposit.args as { amount: bigint };
-    await record("A-1", `deposit ${amount} (deployment funding)`, deposit.transactionHash, "0x1");
+    await record("A-1", `deposit ${amount} (facility funding)`, deposit.transactionHash, "0x1");
   }
 }
 
