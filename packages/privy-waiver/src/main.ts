@@ -1,4 +1,4 @@
-import { getAddress } from "viem";
+import { getAddress, isAddressEqual } from "viem";
 
 import { createArcGateway, loadManifest } from "./arc.ts";
 import { quorumFacilityPlan } from "./facility-setup.ts";
@@ -42,8 +42,13 @@ async function quorumServer(id: string) {
   const wallet = await privy.getWallet(id);
   const walletAddress = getAddress(wallet.address);
   const arc = createArcGateway(manifest);
+  // Addresses come from the manifest (E-MAN-4): its vault is ours when its admin is this wallet.
   const vaultSetting = env.PRIVY_WAIVER_VAULT?.trim();
-  const vault = vaultSetting ? getAddress(vaultSetting) : undefined;
+  const vault = vaultSetting
+    ? getAddress(vaultSetting)
+    : isAddressEqual(manifest.roles.facilityAdmin, walletAddress)
+      ? manifest.contracts.covenantVault.address
+      : undefined;
   const plan = quorumFacilityPlan(manifest, walletAddress, env.PRIVY_QUORUM_FACILITY_LABEL?.trim() || undefined);
   const service = new QuorumAdminService(
     privy,

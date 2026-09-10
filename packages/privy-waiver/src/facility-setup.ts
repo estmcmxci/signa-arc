@@ -5,11 +5,11 @@ import { facilityRegistryAbi, type ArcGateway, type ArcManifest, type FacilityPo
 /**
  * The facility a Privy quorum administers.
  *
- * The deployed facility's admin cannot be handed to a Privy wallet: FacilityRegistry writes the
- * policy once, in createFacility, and has no admin setter. So the quorum's wallet creates its own
- * facility in the same registry, under the same PRD §7 policy, and a second CovenantVault is bound
- * to it. Every step is an admin call the quorum approves, so the policy itself is created under
- * quorum, not just the waivers.
+ * A facility's admin cannot be handed over: FacilityRegistry writes the policy once, in
+ * createFacility, and has no admin setter. So the quorum's own wallet creates the facility, in the
+ * same registry and under the same PRD §7 policy, and a new CovenantVault is bound to it. It
+ * replaces the EOA-administered facility in the manifest. Every step is an admin call the quorum
+ * approves, so the policy itself is created under quorum, not just the waivers.
  */
 
 export const DEFAULT_QUORUM_FACILITY_LABEL = "signa-covenant-arc-eur-usd-privy-quorum";
