@@ -72,7 +72,7 @@ pnpm install --frozen-lockfile
 pnpm check
 ```
 
-`pnpm check` builds the Solidity artifacts, typechecks all TypeScript, runs 26 TypeScript tests across typed data, the decimals boundary, the provider adapter, preflight and manifest, runs 25 Solidity tests, and builds the dashboard.
+`pnpm check` builds the Solidity artifacts, typechecks all TypeScript, runs 35 TypeScript tests across typed data, the decimals boundary, the provider adapter, preflight and manifest, runs 25 Solidity tests, and builds the dashboard.
 
 On 2026-08-23, the current authorization-epoch-hardened source passed that sequence from a fresh source-only snapshot after excluding dependency folders, compiler output, broadcasts, local environment files, and dashboard builds. This is not yet a public clean-checkout receipt because the directory has no standalone immutable commit. [GitHub Actions](./.github/workflows/check.yml) will provide that receipt after publication.
 

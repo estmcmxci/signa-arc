@@ -41,14 +41,14 @@ Arc is Circle's L1 where USDC is the native gas token. It ships StableFX — an 
 
 | Item | Req | State |
 |---|---|---|
-| Decimals boundary | R-F2-7 | ✅ `packages/credentials/src/decimals.ts`, 11 tests. Suite is 26 green. |
-| Arc EUR/USD fixtures | S-B | ⚠️ **Two known defects.** (1) No restoration fixture: shipped `active → refreshed → cancelled` gives 10000 → 6840 → **0**, but A-4 requires restoring to COMPLIANT — 10000 → 6840 → **10000**, with cancellation as a separate extension. Needs a fourth fixture at `1.060000` with sequence 4; the original cannot be replayed because R-F1-4 requires the latest sequence. (2) Timestamps are baked to 2026-09-10/11 against a 24h `credentialMaxAge`, so they evaluate `UNASSESSED` by the September 12 target. Public runs must generate labelled mock observations relative to a recorded chain timestamp before signing. Both belong to plan stage 1. |
+| Decimals boundary | R-F2-7 | ✅ `packages/credentials/src/decimals.ts`. Suite is **35** TypeScript + 25 Solidity green. Lane B closed a hole where hedge amounts reached credentials without passing through it. |
+| Arc EUR/USD fixtures | S-B | ✅ **Both defects fixed.** `arc-forward-restored.json` at sequence 4 makes A-4 possible; the demo now runs **10000 → 6840 → 10000 → 0 bps**. Public runs generate observations from a recorded chain timestamp, so credentials are current at run time. |
 | viem with `arcTestnet` | — | ✅ 2.56.3. Never hand-roll the chain definition. |
 | Architecture diagram | S-A | ✅ `ARC-ARCHITECTURE.html`. |
 | Chain unknowns | — | ✅ E1/E2/E3/E5 answered on-chain. See `ARC-FIELD-NOTES.md` §7. |
 | **`ICoverageGate`** | **R-F3-10** | ⬜ **Does not exist.** `CovenantVault.draw()` calls `CoverageEngine` directly. The seam is already there — `evaluate()` returns the verdict; `assess` adds the state check and the `reserveAmount` test `draw()` performs inline. ~2 hours. |
 | **Arc EURC scenario** | **S-2, S-4** | 🔨 **Next.** Nothing exists. Must import `arcTestnet` from `viem/chains` and assert receipt status per A-9. |
-| Deployment | S-1 | ⬜ Zero. `deployments/` is empty. |
+| **Deployment** | **S-1** | ✅ **Live on Arc Testnet 5042002**, verified by independent RPC — real bytecode at every address. Manifest at `deployments/arc-testnet.json` on `lane/contracts`.<br>`FacilityRegistry` `0xB54fe913C4a7dE73Bc285338dCbb384AEec5e448`<br>`CredentialRegistry` `0xD921734C9314442a74Cd3FEBAB8028b2Bb9A7624`<br>`CoverageEngine` `0x3341B76fEFF4CE691781fEAa4C76EA95479b9b6b`<br>`CovenantVault` `0x1970feb699BCd4dd268a3A8c2590929fc8fd67c2` |
 | `Deploy.s.sol` | S-1 | ⬜ Still guards on Base `84532` and uses `MockUSDC`. Swap for `5042002` and `0x3600…0000`. The script *pattern* is verified working on Arc (E1) — only the targets are wrong. |
 | Frontend | S-5 | ⬜ `apps/dashboard` reads a Base Sepolia manifest. **This is a qualification requirement**, not polish — a backend-only submission does not qualify for Arc. |
 | Wave 1 Base removals | — | ⬜ `scenarios/base-sepolia.ts`, both `base-sepolia-preflight` files and their test, both `deployment-manifest` files and their test, `index-base-ecosystem.mjs`, and the four `package.json` scripts calling them. **Every one is already preserved in the private `signa-batches` repo** — verified by diff. Removing them drops the TS suite by 7 tests. |
