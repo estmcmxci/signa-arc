@@ -1,6 +1,6 @@
 import type { Address, Hex } from "viem";
 
-import type { IntentRequestDetails } from "./authorization.ts";
+import { normalizePublicKey, type IntentRequestDetails } from "./authorization.ts";
 
 /**
  * A minimal Privy REST client for the quorum flow, hand-rolled on `fetch` so no dependency is added.
@@ -65,7 +65,18 @@ export type SignTransactionRequest = {
   params: { transaction: Record<string, unknown> };
 };
 
-export type KeyQuorum = { id: string; authorization_threshold?: number; display_name?: string };
+/**
+ * As `GET /v1/key_quorums/{id}` returns it. Creation takes `public_keys`, but the response lists
+ * members under `authorization_keys`: there is no `public_keys` field to read back.
+ */
+export type KeyQuorum = {
+  id: string;
+  display_name?: string | null;
+  authorization_threshold?: number;
+  authorization_keys?: { public_key: string; display_name: string | null }[];
+  user_ids?: string[];
+  key_quorum_ids?: string[];
+};
 export type PrivyWallet = { id: string; address: Address; owner_id?: string | null };
 
 export class PrivyApiError extends Error {
@@ -144,6 +155,10 @@ export class PrivyClient {
     return this.send("POST", "/v1/wallets", input);
   }
 
+  getKeyQuorum(keyQuorumId: string): Promise<KeyQuorum> {
+    return this.send("GET", `/v1/key_quorums/${encodeURIComponent(keyQuorumId)}`);
+  }
+
   getWallet(walletId: string): Promise<PrivyWallet> {
     return this.send("GET", `/v1/wallets/${encodeURIComponent(walletId)}`);
   }
@@ -187,11 +202,22 @@ export function signedTransactionOf(intent: RpcIntent): Hex | undefined {
   return typeof signed === "string" && signed.startsWith("0x") ? (signed as Hex) : undefined;
 }
 
-/** Quorum members that are P-256 keys, with whether each has signed. */
+/**
+ * Quorum members that are P-256 keys, with whether each has signed. Intents list member keys in
+ * PEM; they come back here as bare base64 SPKI, the spelling approvers and key quorums use.
+ */
 export function keyMembers(intent: RpcIntent): { publicKey: string; signedAt: number | null }[] {
   return intent.authorization_details.flatMap((detail) =>
     detail.members
       .filter((member) => member.type === "key" && typeof member.public_key === "string")
-      .map((member) => ({ publicKey: member.public_key as string, signedAt: member.signed_at ?? null })),
+      .map((member) => ({ publicKey: spki(member.public_key as string), signedAt: member.signed_at ?? null })),
   );
+}
+
+function spki(key: string): string {
+  try {
+    return normalizePublicKey(key);
+  } catch {
+    return key;
+  }
 }

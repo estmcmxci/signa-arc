@@ -6,6 +6,7 @@ import {
   canonicalize,
   formatAuthorizationPayload,
   intentAuthorizationInput,
+  normalizePublicKey,
   p1363ToDer,
   publicKeyOf,
   signAuthorizationPayload,
@@ -154,4 +155,18 @@ test("canonical JSON follows RFC 8785 for keys, strings, numbers and nesting", (
   assert.equal(canonicalize({ big: 1e21, float: 0.1 + 0.2, negativeZero: -0 }), '{"big":1e+21,"float":0.30000000000000004,"negativeZero":0}');
   assert.equal(canonicalize({ kept: null, skipped: undefined, list: [undefined] }), '{"kept":null,"list":[null]}');
   assert.throws(() => canonicalize({ bad: Number.NaN }), /cannot encode/);
+});
+
+test("Privy's PEM member keys and bare SPKI keys name the same key", () => {
+  // Verbatim from Privy on 2026-09-10: GET /v1/key_quorums/{id} lists the key as bare SPKI under
+  // authorization_keys; the intent's authorization_details lists the same key in PEM.
+  const fromKeyQuorum =
+    "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAENVte1KOLmSNJ+AVTXAWofx87zJSYNe7fHY4UnDIhKf1dG7ESIB0pc/2HLV0JNxs1IWw0Z+J/IiSliK2+B3RwuQ==";
+  const fromIntent =
+    "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAENVte1KOLmSNJ+AVTXAWofx87zJSY\nNe7fHY4UnDIhKf1dG7ESIB0pc/2HLV0JNxs1IWw0Z+J/IiSliK2+B3RwuQ==\n-----END PUBLIC KEY-----";
+  assert.equal(normalizePublicKey(fromIntent), fromKeyQuorum);
+  assert.equal(normalizePublicKey(fromKeyQuorum), fromKeyQuorum);
+
+  const pem = `-----BEGIN PUBLIC KEY-----\n${(SDK_PUBLIC_KEY.match(/.{1,64}/g) ?? []).join("\n")}\n-----END PUBLIC KEY-----`;
+  assert.ok(verifyAuthorizationSignature(pem, formatAuthorizationPayload(vectorInput), SDK_SIGNATURE));
 });

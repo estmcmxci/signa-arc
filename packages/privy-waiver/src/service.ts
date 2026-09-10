@@ -3,6 +3,7 @@ import { parseEventLogs, type Address, type Hex } from "viem";
 import {
   formatAuthorizationPayload,
   intentAuthorizationInput,
+  normalizePublicKey,
   p1363ToDer,
   verifyAuthorizationSignature,
 } from "./authorization.ts";
@@ -316,7 +317,11 @@ export class QuorumAdminService {
 }
 
 function sameKey(a: string, b: string): boolean {
-  return Buffer.from(a, "base64").equals(Buffer.from(b, "base64"));
+  try {
+    return normalizePublicKey(a) === normalizePublicKey(b);
+  } catch {
+    return false;
+  }
 }
 
 function sameField(field: string, actual: unknown, expected: string | number): boolean {

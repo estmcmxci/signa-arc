@@ -8,13 +8,16 @@ import {
   generateAuthorizationKeyPair,
   importAuthorizationPublicKey,
   intentAuthorizationInput,
+  normalizePublicKey,
   signAuthorizationPayload,
+  verifyAuthorizationSignature,
   type AuthorizationKeyPair,
 } from "../src/authorization.ts";
 import { toPrivyTransaction, verifySignedTransaction, type PinnedTransaction } from "../src/arc.ts";
 import {
   PrivyApiError,
   PrivyClient,
+  keyMembers,
   loadPrivyConfig,
   signedTransactionOf,
   type RpcIntent,
@@ -78,6 +81,14 @@ async function smoke(): Promise<void> {
   const wallet = await client.createWallet({ chain_type: "ethereum", owner_id: quorum.id, display_name: "Signa smoke test" });
   const address = getAddress(wallet.address);
   console.log(`    quorum ${quorum.id} owns wallet ${wallet.id} at ${address}`);
+  const listed = ((await client.getKeyQuorum(quorum.id)).authorization_keys ?? []).map((entry) =>
+    normalizePublicKey(entry.public_key),
+  );
+  const ours = [keyA.publicKey, keyB.publicKey].map(normalizePublicKey);
+  if (listed.length !== ours.length || !ours.every((key) => listed.includes(key))) {
+    throw new Error(`the quorum lists ${JSON.stringify(listed)} under authorization_keys, not our two keys`);
+  }
+  console.log("    the quorum lists exactly our two keys under authorization_keys");
 
   // Nothing is broadcast: the wallet is unfunded and these transactions only prove signing.
   const transaction = (nonce: number): PinnedTransaction => ({
@@ -124,7 +135,18 @@ async function smoke(): Promise<void> {
   ];
   const authorize = async (key: AuthorizationKeyPair, variant: (typeof variants)[number]): Promise<RpcIntent> => {
     const payload = formatAuthorizationPayload(intentAuthorizationInput(intent.request_details, client.appId, variant.headers()));
-    return client.authorizeIntent(intent.intent_id, { signature: signAuthorizationPayload(key.privateKey, payload), timestamp: Date.now() });
+    const signature = signAuthorizationPayload(key.privateKey, payload);
+    // Separates "our signature or key is wrong" from "Privy verifies different bytes".
+    const verifiesLocally = keyMembers(intent).some((member) =>
+      verifyAuthorizationSignature(member.publicKey, payload, signature),
+    );
+    console.log(`    [${variant.name}] signature verifies locally under a member key the intent lists: ${verifiesLocally ? "yes" : "NO"}`);
+    try {
+      return await client.authorizeIntent(intent.intent_id, { signature, timestamp: Date.now() });
+    } catch (error) {
+      if (error instanceof PrivyApiError) console.log(`    [${variant.name}] signed payload: ${new TextDecoder().decode(payload)}`);
+      throw error;
+    }
   };
 
   let accepted: (typeof variants)[number] | undefined;

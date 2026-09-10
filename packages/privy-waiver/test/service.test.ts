@@ -26,6 +26,10 @@ const VAULT: Address = "0x1970feb699BCd4dd268a3A8c2590929fc8fd67c2";
 const FACILITY_ID: Hex = "0x39cbb5ce0d83241c8fe2be217023dd05dc80cecce06fb7df109a6c50452c4d1c";
 
 type RecordedRequest = { method: string; path: string; headers: Headers; body: unknown };
+
+/** Privy returns an intent's member keys in PEM, 64 characters a line, not the SPKI it was given. */
+const toPem = (spki: string) =>
+  `-----BEGIN PUBLIC KEY-----\n${(spki.match(/.{1,64}/g) ?? []).join("\n")}\n-----END PUBLIC KEY-----`;
 type FakeIntent = RpcIntent & { authorization_details: { threshold: number; members: { type: "key"; public_key: string; signed_at: number | null }[] }[] };
 
 /**
@@ -63,7 +67,7 @@ function fakePrivy(options: {
         created_at: Date.now(),
         expires_at: Date.now() + 72 * 3_600_000,
         authorization_details: [
-          { threshold: 2, members: options.members.map((key) => ({ type: "key", public_key: key, signed_at: null })) },
+          { threshold: 2, members: options.members.map((key) => ({ type: "key", public_key: toPem(key), signed_at: null })) },
         ],
         // Privy adds fields of its own to what it records, which is why approvers sign its copy.
         request_details: { method: "POST", url: `https://api.privy.io/v1/wallets/${propose[1]}/rpc`, body: { ...recorded, chain_type: "ethereum" } },
@@ -196,6 +200,11 @@ test("a waiver goes propose, two approvals, Privy signs, verified broadcast", as
   assert.equal(proposed.call.functionName, "createWaiver");
   assert.deepEqual(proposed.call.args, ["86400", JSON.stringify(reasonCommitment("mock signer outage"))]);
   assert.equal(proposed.approvals.threshold, 2);
+  assert.deepEqual(
+    proposed.approvals.members.map((member) => member.publicKey),
+    [risk.publicKey, treasury.publicKey],
+    "PEM member keys come back as the approvers' own SPKI",
+  );
 
   const proposal = privy.requests[0];
   assert.equal(proposal?.path, `/v1/intents/wallets/${WALLET_ID}/rpc`);

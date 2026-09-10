@@ -110,11 +110,23 @@ export function importAuthorizationPrivateKey(encoded: string): KeyObject {
   return key;
 }
 
-/** Imports a base64 SPKI P-256 public key: the format Privy lists for key quorum members. */
-export function importAuthorizationPublicKey(spki: string): KeyObject {
-  const key = createPublicKey({ key: Buffer.from(spki, "base64"), format: "der", type: "spki" });
+/**
+ * Imports a P-256 public key given as bare base64 SPKI or as PEM. Privy uses both for one key:
+ * `GET /v1/key_quorums/{id}` lists `authorization_keys[].public_key` as bare SPKI, while an
+ * intent's `authorization_details[].members[].public_key` carries the same key in PEM armour.
+ */
+export function importAuthorizationPublicKey(encoded: string): KeyObject {
+  const trimmed = encoded.trim();
+  const key = trimmed.startsWith("-----BEGIN")
+    ? createPublicKey({ key: trimmed, format: "pem" })
+    : createPublicKey({ key: Buffer.from(trimmed, "base64"), format: "der", type: "spki" });
   assertP256(key);
   return key;
+}
+
+/** One spelling per key, bare base64 SPKI, so keys from different Privy responses compare equal. */
+export function normalizePublicKey(encoded: string): string {
+  return importAuthorizationPublicKey(encoded).export({ format: "der", type: "spki" }).toString("base64");
 }
 
 /** A fresh key pair in Privy's formats: base64 SPKI public key, base64 PKCS8 private key. */
