@@ -172,17 +172,25 @@ The step sequence is A-1 → A-4 exactly: permitted draw → reduced hedge and `
 - **E-UI-4** Never compute a competing coverage verdict. The record plane has no authority over capital (R-F4-2).
 - **E-UI-5** Stale or unavailable data is visibly identified as such, never rendered as current compliance.
 
-## 7. Blocking decisions
+## 7. Settled decisions
 
-These are baked into signed credentials at stage 1. Signing before they are settled means re-signing.
+Decided by the founder 2026-09-10. All three are baked into signed credentials at stage 1.
 
-| # | Decision | What it changes |
-|---|---|---|
-| 1 | What currency is `outstandingValue` denominated in? | The unit semantics of the coverage ratio. The code implies the **settlement** currency: `remainingNotional` maps from `remaining_buy_amount` (the USD buy leg) and is compared directly against `outstandingValue`. That reading is unit-coherent — a USD-delivering forward against a USD obligation. The alternative framing, "hedged EURC notional ÷ EURC exposure", is a different ratio. |
-| 2 | Does the vault ever touch the EURC contract? | As designed the vault holds and moves USDC only; EUR is the portfolio denomination and no EURC moves. Satisfies "meaningful use of Arc and USDC," but an Arc judge may expect the EURC contract to appear somewhere. |
-| 3 | Do the issuer keys need gas? | §3 assumes not — they sign offchain and a keeper submits. If wrong, two more addresses need funding. |
+**E-DEC-1 — `outstandingValue` is denominated in the settlement currency (USD).** The coverage ratio compares a USD obligation against USD-delivering eligible hedge notional. `remainingNotional` maps from `remaining_buy_amount`, the buy leg, exactly as the adapter does today. Never divide a EUR amount by a USD amount, and never introduce an implicit exchange rate anywhere in the ratio. No code change; the fixtures already satisfy this.
 
-`ARC-DELIVERY-PLAN.md` §"Authority and accepted decisions" records positions on all three. Confirm them before signing anything public.
+**E-DEC-2 — the demo moves real testnet EURC, and EURC is never presented as the exposure.**
+
+This is a deliberate reversal of the original design position, taken so the EURC contract appears in the submission. The constraint matters more than the mechanism:
+
+- **E-EUR-1** EURC appears as a **conversion leg** — a labelled mock EUR→USD settlement movement demonstrating the StableFX-shaped seam this product sits above. It is evidence that the conversion layer exists and is not what we built.
+- **E-EUR-2** EURC balances are **never** presented, labelled, or implied to be the exposure. The exposure is a loan book in a servicing system, asserted by the exposure issuer under `ExposureCredential`. If an onchain token balance were the exposure, no credential would be needed and the product's reason for existing collapses. This is the one way to get E-DEC-2 wrong.
+- **E-EUR-3** The coverage ratio never reads an EURC balance. Coverage is computed from credentials only (R-F2-1 … R-F2-4). EURC movement is illustrative and has no authority over capital, the same rule the record plane obeys (R-F4-2).
+- **E-EUR-4** `CovenantVault` continues to hold and move **only** USDC. The settlement asset in the manifest stays `0x3600…0000`.
+- **E-EUR-5** Every EURC movement is labelled a mock on screen and in the README, like the Ebury-shaped fixture and the StableFX-shaped payload.
+
+**E-DEC-3 — the issuer keys hold no gas.** They sign EIP-712 offchain; a keeper submits, per PRD §5. Two funded addresses suffice in practice, since the keeper may reuse the operator key. This is also the more honest architecture: a real bank verifier would never hold gas on this chain.
+
+> `ARC-DELIVERY-PLAN.md` line 17 predates E-DEC-2 and states the demo "does not require EURC token transfers." Superseded by this section.
 
 ## 8. Standing constraints
 

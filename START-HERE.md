@@ -102,8 +102,10 @@ Items 1–4 are the critical path. 5–7 are the submission gate.
 
 Backup mirror of the pre-purge history: `~/signa-backup-2026-09-09.git`.
 
-## Open decisions a human should make
+## Settled decisions
 
-1. **Does the vault ever touch the EURC contract, or is EUR only a denomination?** As designed the vault holds and moves USDC only; the exposure is EUR-denominated but no EURC moves. Satisfies "meaningful use of Arc and USDC," but an Arc judge may expect the EURC contract to appear. Decide before recording.
-2. **Which currency is `outstandingValue` denominated in?** The code implies settlement currency. `ETHONLINE-WORKSTREAMS.md` §1 says otherwise. The code's reading is unit-coherent; the workstreams line is the one to correct. Confirm before signing fixtures.
-3. **Do the two issuer keys need gas at all?** They sign EIP-712 offchain and a keeper submits. If so, only deployer, admin, operator and keeper need funding.
+Decided 2026-09-10. Full text and the requirements they generate are in [EED.md](./EED.md) §7.
+
+1. **`outstandingValue` is denominated in the settlement currency (USD).** USD obligation against USD-delivering hedge notional. No implicit exchange rate anywhere in the ratio. No code change — the adapter already does this. (E-DEC-1)
+2. **The demo moves real testnet EURC**, as a labelled mock conversion leg. **EURC is never the exposure, never read by the ratio, never held by the vault.** Presenting an EURC balance as the exposure would contradict the reason the product exists — if exposure were onchain, no credential would be needed. (E-DEC-2, E-EUR-1 … E-EUR-5)
+3. **Issuer keys hold no gas.** They sign offchain; a keeper submits, per PRD §5. Two funded addresses suffice, since the keeper may reuse the operator key. (E-DEC-3)
