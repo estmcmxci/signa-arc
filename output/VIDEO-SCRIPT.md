@@ -15,7 +15,7 @@
 ## Before you record
 
 - [ ] **Make the repository public.** `github.com/estmcmxci/signa-arc` must be public, because the end card and the evidence links point there.
-- [ ] **Film live dashboard shots before 2026-09-11 18:02:43 UTC.** That's when the exposure credential from the run expires. After it, the dashboard's live panels correctly show stale evidence and a refused draw, which would contradict the COMPLIANT narration. The explorer receipts in the demo don't expire. After the cut-off, show only the dashboard's evidence panel.
+- [ ] **Film live dashboard shots before 2026-09-11 21:47:22 UTC.** That's when the exposure credential from the run expires. After it, the dashboard's live panels correctly show stale evidence and a refused draw, which would contradict the COMPLIANT narration. The explorer receipts in the demo don't expire. After the cut-off, show only the dashboard's evidence panel.
 - [ ] **Start the dashboard.** Run `pnpm --filter @fx-coverage/dashboard dev` and check its banner reads `Arc Testnet 5042002 · fictional facility · mock provider data`.
 - [ ] **Keep the dashboard's intro paragraph out of scene 5.** It calls the hedge feed "shaped like a StableFX RFQ receipt", which conflicts with the narration and with the fixture's own disclaimer.
 - [ ] **Never say:** "verified hedge", "partner", "customer", "integration" (of any bank or of Circle), "trustless", "guaranteed", or the name of any bank or broker.
@@ -24,15 +24,15 @@
 | Tab | Scene | What | URL |
 |---|---|---|---|
 | 1 | 2, 4 | Architecture diagram | `ARC-ARCHITECTURE.html` from the repo, opened in the browser |
-| 2 | 2 | Vault source, verified | https://testnet.arcscan.app/address/0x1970feb699BCd4dd268a3A8c2590929fc8fd67c2?tab=contract |
+| 2 | 2 | Vault source, verified | https://testnet.arcscan.app/address/0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51?tab=contract |
 | 3 | 3a | Operator dashboard | the URL Vite prints (default http://localhost:5173) |
-| 4 | 3b, 3d, 4 | **Draw 1: permitted** | https://testnet.arcscan.app/tx/0x0f71bb58a39a9426d9ebe52d02462800662e6a72e3d9348ab52f53f5f66eba40 |
-| 5 | 3c, 5 | Hedge update, sequence 2 | https://testnet.arcscan.app/tx/0xca119756b901cc3cbed093f854ec6a5cf609d4921ceba649b8a4d54e840d2839 |
-| 6 | 3c | `syncCovenant` → CURE | https://testnet.arcscan.app/tx/0x01b1a65f6c8888b784180a199556422f8d0fd4704c7a781be7aa268e1701e0a8 |
-| 7 | 3d | **Draw 2: REFUSED** | https://testnet.arcscan.app/tx/0x9a2359c9e12e2c7f921029f07d91f57c36c84e7064852fde936937b56671c360 |
-| 8 | 3e | Hedge update, sequence 4 | https://testnet.arcscan.app/tx/0xe05c354c752d4cfc26ec8a08d61484a6e7ed3a28af2c38deeb930e855ac2fc46 |
-| 9 | 3e | `restoreCompliance` → COMPLIANT | https://testnet.arcscan.app/tx/0x4c932e285d72032dcb5cf41a6904dbcfe3cb537cc363642cf9450b3d198f824c |
-| 10 | 3e | **Draw 3: permitted** | https://testnet.arcscan.app/tx/0x68598df3e76b0ac2bc8272b11edc5a63e6542dc387243f42b926f3e3ed60d7a1 |
+| 4 | 3b, 3d, 4 | **Draw 1: permitted** | https://testnet.arcscan.app/tx/0x89b939cd1315a295ab1d0b44b4b8a1d33abe7bd0ffc502af864a415c1f715ef6 |
+| 5 | 3c, 5 | Hedge update, sequence 2 | https://testnet.arcscan.app/tx/0x33570a7d13bd1301cc31a379db4319596de7066c51f49a600371286b6c8ab504 |
+| 6 | 3c | `syncCovenant` → CURE | https://testnet.arcscan.app/tx/0x5e2fc3ec45af81901d941a6d62413f045698a43efadb7ac942e5ec56646bdb16 |
+| 7 | 3d | **Draw 2: REFUSED** | https://testnet.arcscan.app/tx/0x5cad2c042e76a9f043eeb5988a733975d9dbf05fcb74cb58b44796581a09399a |
+| 8 | 3e | Hedge update, sequence 4 | https://testnet.arcscan.app/tx/0x4d986e6de66d4bbabb9ab5afbf91ac1470d4de49b9680f82e09c561eed40ab3c |
+| 9 | 3e | `restoreCompliance` → COMPLIANT | https://testnet.arcscan.app/tx/0xd4d2578bd944cd207d441c4a70e86d594eae89aa5cfb894119ca53a03896b26c |
+| 10 | 3e | **Draw 3: permitted** | https://testnet.arcscan.app/tx/0x1ef19c5a24e0fdd63ecdc0e6eee3d251041a03ddd4d4082753377ef382fb516a |
 | 11 | 3e, 6 | Evidence table | https://github.com/estmcmxci/signa-arc/blob/main/scenarios/output/arc-facility-evidence.md |
 | 12 | 4 | EURC contract (referenced, never moved) | https://testnet.arcscan.app/address/0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a |
 | 13 | 5 | The signed mock, sequence 2 | https://github.com/estmcmxci/signa-arc/blob/main/scenarios/output/arc-facility-evidence.json (the `credentials` entry with `"sequence": 2`) |
@@ -172,8 +172,8 @@ This is acceptance criterion A-8, so it must not be skipped. It has two parts: t
 
 **On screen:** a split screen, with the truth banner overlaid throughout: `Fictional facility · mock provider data · testnet USDC`.
 
-- **Left, tab 13:** the sequence-2 fixture exactly as signed. Highlight `"mock": true`, `"disclaimer": "Mock provider data — no Ebury connection or endorsement."`, `"provider_name": "Fictional Treasury Desk"`, `"remaining_buy_amount": "0.720000"` and `"sequence": 2`, then its `digest` `0x5d57cd39…9d02`.
-- **Right, tab 5, Logs:** `HedgeCredentialAccepted` with the **same digest** `0x5d57cd39…9d02` and `remainingNotional 720000`.
+- **Left, tab 13:** the sequence-2 fixture exactly as signed. Highlight `"mock": true`, `"disclaimer": "Mock provider data — no Ebury connection or endorsement."`, `"provider_name": "Fictional Treasury Desk"`, `"remaining_buy_amount": "0.720000"` and `"sequence": 2`, then its `digest` `0xd93f96d3…ad34`.
+- **Right, tab 5, Logs:** `HedgeCredentialAccepted` with the **same digest** `0xd93f96d3…ad34` and `remainingNotional 720000`.
 
 The two digests matching shows the labelled mock going in and the chain accepting it. That is the seam, working.
 
@@ -190,7 +190,7 @@ The two digests matching shows the labelled mock going in and the chain acceptin
 > **Signa Covenant**
 > Arc: Best DeFi/Onchain Finance Application
 > github.com/estmcmxci/signa-arc · evidence: `scenarios/output/arc-facility-evidence.md`
-> Draw permitted `0x0f71bb58…` `0x1` · Draw refused `0x9a2359c9…` `0x0` · Draw permitted `0x68598df3…` `0x1`
+> Draw permitted `0x89b939cd…` `0x1` · Draw refused `0x5cad2c04…` `0x0` · Draw permitted `0x1ef19c5a…` `0x1`
 
 **Say:**
 
@@ -200,7 +200,7 @@ The two digests matching shows the labelled mock going in and the chain acceptin
 
 ## Sources
 
-Every figure spoken, and every value the script points at, traces to one of the rows below. *Evidence* means `scenarios/output/arc-facility-evidence.json`, where `steps[n]` indexes the evidence table. *Policy* means `FacilityRegistry.getFacility(0x39cbb5ce…2c4d1c)`, read from the deployed registry at `0xB54fe913C4a7dE73Bc285338dCbb384AEec5e448` on 2026-09-10.
+Every figure spoken, and every value the script points at, traces to one of the rows below. *Evidence* means `scenarios/output/arc-facility-evidence.json`, where `steps[n]` indexes the evidence table. *Policy* means `FacilityRegistry.getFacility(0x899dc705…c0d5e2)`, read from the deployed registry at `0xB54fe913C4a7dE73Bc285338dCbb384AEec5e448` on 2026-09-10.
 
 | Said or shown | Value | Source |
 |---|---|---|
@@ -211,23 +211,23 @@ Every figure spoken, and every value the script points at, traces to one of the 
 | "a dollar and six cents" | `remainingNotional` 1060000, sequences 1 and 4 | evidence `steps[2]`, `steps[7]` |
 | "a hundred point seven percent … counted at a hundred" | `grossEligible` 1007000, `countedEligible` 1000000 | evidence `steps[3]` `CovenantSynchronized` |
 | "ten thousand basis points", "status one" | `coverageBps` 10000, status `0x1` | evidence `steps[3]`, `steps[8]`, `steps[9]` |
-| "one USDC leaves the vault" | vault balance 5000000 → 4000000 | evidence `steps[3].vault` |
+| "one USDC leaves the vault" | vault balance 2500000 → 1500000 | evidence `steps[3].vault` |
 | "sequence two … seventy-two cents" | `remainingNotional` 720000, sequence 2 | evidence `steps[4]` |
 | "sixty-eight point four percent" | `grossEligible` 684000 against 1000000 | evidence `steps[5]` `CovenantSynchronized` |
 | "six thousand eight hundred forty", "CURE" | `coverageBps` 6840, `newState` 2 | evidence `steps[5]` |
-| "anyone can call sync" | `syncCovenant()` has no access modifier | deployed `CovenantVault` (source `7d66394`, verified on Arcscan) |
-| "a five-day cure clock" | `curePeriod` 432000 s, `cureDeadline` 1789495378 | Policy, and evidence `steps[5]` |
+| "anyone can call sync" | `syncCovenant()` has no access modifier | deployed `CovenantVault` (source `5fefd23`, verified on Arcscan) |
+| "a five-day cure clock" | `curePeriod` 432000 s, `cureDeadline` 1789508862 | Policy, and evidence `steps[5]` |
 | "receipt status zero" | `0x0` | evidence `steps[6].actualStatus` |
-| "DrawNotAllowed — state two, CURE" | revert data `0xbe986785…0002` | evidence `steps[6].refusal`, from replays at blocks 61436239 and 61436240. Arcscan's own `revert_reason` shows the same on screen |
-| "vault balance didn't move. Principal didn't move." | 4000000 → 4000000; 1000000 → 1000000 | evidence `steps[6].vault` |
+| "DrawNotAllowed — state two, CURE" | revert data `0xbe986785…0002` | evidence `steps[6].refusal`, from replays at blocks 61462543 and 61462544. Arcscan's own `revert_reason` shows the same on screen |
+| "vault balance didn't move. Principal didn't move." | 1500000 → 1500000; 1000000 → 1000000 | evidence `steps[6].vault` |
 | "under a fifth of its gas limit" | 172586 of 1000000 | evidence `steps[6].gasUsed` and `refusal.gasLimit` |
 | "the old credential can't be replayed" | `CredentialRegistry` reverts `StaleSequence` unless the sequence rises | deployed `CredentialRegistry` |
 | "restoreCompliance runs a fresh evaluation … compliant at ten thousand" | `newState` 1, `coverageBps` 10000 | evidence `steps[8]`. `restoreCompliance` re-evaluates and reverts unless compliant (deployed `CovenantVault`) |
 | "logged twice, once native and once as the ERC-20" | `Transfer` values 1000000000000000000 and 1000000 | evidence `steps[3].events` |
 | "the book is in euros; EURC referenced, never moved" | currency EUR, EURC `0x89B5…D72a` | evidence `deployment.exposureDenomination` |
 | "two independent issuers … offchain" | `0x4317…6662` and `0xAD51…2e0a`; every submission sent by the operator | evidence `identities`, and `steps[n].sender` |
-| "same digest" (scene 5) | `0x5d57cd396069e79db9b5fdd79f2d75501d1bab896dda992e52a0e53807ea9d02` | evidence `credentials[2].digest`, which equals the digest in `steps[4]` `HedgeCredentialAccepted` |
-| "finality is sub-second" | a claim about Arc, not a measurement; no figure is spoken | Circle's Arc developer guidance (`.claude/skills/use-arc/SKILL.md`). The evidence is consistent with it: the observations at blocks 61436209 and 61436247 are 19 s apart, so 38 blocks in 19 s |
+| "same digest" (scene 5) | `0xd93f96d311680830fc1dd8ab9069f3558b3f796c1c14ec00a6a7f6255dd5ad34` | evidence `credentials[2].digest`, which equals the digest in `steps[4]` `HedgeCredentialAccepted` |
+| "finality is sub-second" | a claim about Arc, not a measurement; no figure is spoken | Circle's Arc developer guidance (`.claude/skills/use-arc/SKILL.md`). The evidence is consistent with it: the observations at blocks 61462505 and 61462553 are 25 s apart, so 48 blocks in 25 s |
 | "StableFX is spot only, no forwards, no NDFs" | a positioning claim; no figure | `PRD.md` §3, checked against Circle's StableFX documentation on 2026-09-09 |
 
 **Don't say these.** None of them is in the evidence:
