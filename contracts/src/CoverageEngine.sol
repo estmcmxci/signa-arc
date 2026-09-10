@@ -3,10 +3,15 @@ pragma solidity ^0.8.24;
 
 import { FacilityRegistry } from "./FacilityRegistry.sol";
 import { CredentialRegistry } from "./CredentialRegistry.sol";
+import { ICoverageGate, ICoverageHost } from "./ICoverageGate.sol";
+
+interface ISettlementBalance {
+    function balanceOf(address account) external view returns (uint256);
+}
 
 /// @title CoverageEngine
 /// @notice Computes deterministic eligible FX coverage from current signed assertions.
-contract CoverageEngine {
+contract CoverageEngine is ICoverageGate {
     enum ExposureReason {
         ELIGIBLE,
         MISSING,
@@ -35,11 +40,13 @@ contract CoverageEngine {
         ISSUER_AUTHORIZATION_STALE
     }
 
+    /// @dev RESERVE_VIOLATION comes only from `assess`; `evaluate` never returns it.
     enum ResultReason {
         NONE,
         MISSING_EXPOSURE,
         INVALID_EXPOSURE,
-        BELOW_THRESHOLD
+        BELOW_THRESHOLD,
+        RESERVE_VIOLATION
     }
 
     struct CoverageResult {
@@ -101,6 +108,26 @@ contract CoverageEngine {
         result.coverageBps = uint16(result.countedEligible * 10_000 / result.outstandingValue);
         result.compliant = result.coverageBps >= policy.minCoverageBps;
         result.resultReason = result.compliant ? ResultReason.NONE : ResultReason.BELOW_THRESHOLD;
+    }
+
+    /// @inheritdoc ICoverageGate
+    function assess(bytes32 facilityId, uint256 amount)
+        external
+        view
+        returns (bool allowed, ResultReason reason)
+    {
+        CoverageResult memory result = evaluate(facilityId);
+        reason = result.resultReason;
+        if (!result.compliant && !ICoverageHost(msg.sender).activeWaiver()) {
+            return (false, reason);
+        }
+
+        FacilityRegistry.FacilityPolicy memory policy = facilityRegistry.getFacility(facilityId);
+        uint256 balance = ISettlementBalance(policy.settlementAsset).balanceOf(msg.sender);
+        if (amount > balance || balance - amount < policy.reserveAmount) {
+            return (false, ResultReason.RESERVE_VIOLATION);
+        }
+        allowed = true;
     }
 
     function exposureEligibility(bytes32 facilityId) external view returns (ExposureReason) {
