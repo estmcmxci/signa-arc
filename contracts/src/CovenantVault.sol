@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import { FacilityRegistry } from "./FacilityRegistry.sol";
 import { CoverageEngine } from "./CoverageEngine.sol";
+import { ICoverageHost } from "./ICoverageGate.sol";
 
 interface IERC20Settlement {
     function balanceOf(address account) external view returns (uint256);
@@ -12,8 +13,9 @@ interface IERC20Settlement {
 
 /// @title CovenantVault
 /// @notice Test settlement vault whose new draws depend on fresh FX coverage evaluation.
-/// @dev No breach path transfers reserves, liquidates a borrower, or executes a hedge.
-contract CovenantVault {
+/// @dev Reference host for `ICoverageGate`: every draw is ruled by `assess`.
+///      No breach path transfers reserves, liquidates a borrower, or executes a hedge.
+contract CovenantVault is ICoverageHost {
     enum CovenantState {
         UNASSESSED,
         COMPLIANT,
@@ -111,14 +113,18 @@ contract CovenantVault {
     function draw(uint256 amount) external onlyOperator nonReentrant {
         if (amount == 0) revert InvalidAmount();
         _syncCovenant();
-        if (covenantState != CovenantState.COMPLIANT && !_activeWaiver()) {
-            revert DrawNotAllowed(covenantState);
-        }
+        (bool allowed, CoverageEngine.ResultReason reason) =
+            coverageEngine.assess(facilityId, amount);
 
         FacilityRegistry.FacilityPolicy memory policy = _policy();
-        uint256 balance = settlementAsset.balanceOf(address(this));
-        if (amount > balance || balance - amount < policy.reserveAmount) {
-            revert ReserveViolation(balance, amount, policy.reserveAmount);
+        if (!allowed) {
+            // The gate has ruled; the balance is read only to report the violation.
+            if (reason == CoverageEngine.ResultReason.RESERVE_VIOLATION) {
+                revert ReserveViolation(
+                    settlementAsset.balanceOf(address(this)), amount, policy.reserveAmount
+                );
+            }
+            revert DrawNotAllowed(covenantState);
         }
 
         principal += amount;
