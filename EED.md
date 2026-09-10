@@ -1,14 +1,16 @@
-# EED — Engineering Execution Document
+# EED — Engineering Requirements Document
 
-**Signa Covenant on Arc Testnet.** This document is the **engineering contract**: interfaces, schemas, file ownership, and the seams where parallel work hands off. It exists so several people or agents can build at once without discovering, at integration time, that they specified the same boundary two different ways.
+**Signa Covenant on Arc Testnet.** Requirements the *implementation* must satisfy: interfaces, data schemas, ownership, and chain constraints. It exists so several people or agents can build at once without discovering, at integration time, that they specified the same boundary two different ways.
 
-It does **not** re-sequence the work. [ARC-DELIVERY-PLAN.md](./ARC-DELIVERY-PLAN.md) owns sequencing and exit conditions.
+**Scope boundary — read before adding anything here.** [PRD.md](./PRD.md) owns what the *system* must do: coverage rules, capital controls, states, acceptance criteria, addressed as `R-*`, `S-*`, `A-*`. This document owns what the *implementation* must satisfy, addressed as `E-*`. A product requirement does not belong here, and an interface signature does not belong there. Where the two appear to conflict, `PRD.md` wins and this document is wrong.
+
+It does **not** sequence the work. [ARC-DELIVERY-PLAN.md](./ARC-DELIVERY-PLAN.md) owns sequencing and exit conditions.
 
 | Document | Owns | Read when |
 |---|---|---|
 | [START-HERE.md](./START-HERE.md) | Where we are | You just arrived |
 | [ARC-DELIVERY-PLAN.md](./ARC-DELIVERY-PLAN.md) | How we get there, and by when | You need to know what to do next |
-| **EED.md** | **What the pieces are, exactly** | **You are about to write code that another agent will call** |
+| **EED.md** | **What the implementation must satisfy** | **You are about to write code that another agent will call** |
 | [PRD.md](./PRD.md) | What must be true | A requirement looks arbitrary or a rule is disputed |
 | [ARC-FIELD-NOTES.md](./ARC-FIELD-NOTES.md) | What Arc actually does | You are about to assume anything about the chain |
 
@@ -51,16 +53,17 @@ interface ICoverageGate {
 }
 ```
 
-**Design constraints, non-negotiable:**
+**Requirements.**
 
-- `view`. The gate rules; it does not mutate. State transitions belong to the host's `syncCovenant`.
-- The verdict is derived inside the same transaction that moves funds. `CovenantVault.draw()` calls `assess` and acts on the return value — it does not read a stored flag.
-- `reason` is populated on success as well as failure. The dashboard shows the reason, never only a colour.
-- The reserve test lives **in the gate**, not the host, so a second host cannot forget it.
+- **E-GATE-1** `assess` is `view`. The gate rules; it does not mutate. State transitions belong to the host's `syncCovenant`.
+- **E-GATE-2** The verdict is derived inside the same transaction that moves funds. `CovenantVault.draw()` calls `assess` and acts on the return value; it never reads a stored flag. Satisfies R-F3-1.
+- **E-GATE-3** `reason` is populated on success as well as failure. Satisfies R-F2-6.
+- **E-GATE-4** The reserve test lives **in the gate**, not the host, so a second host cannot forget it. Satisfies R-F3-3.
+- **E-GATE-5** The gate answers coverage sufficiency for this draw and nothing else. It must not accrete unrelated covenant logic — thesis kill condition 9.
 
 **Extraction note.** The seam already exists: `CoverageEngine.evaluate()` returns the verdict today, and `CovenantVault.draw()` performs the state check and the `reserveAmount` test inline at `contracts/src/CovenantVault.sol:119-121`. `assess` is those three things behind one call. Roughly two hours. Do it *while* porting, not after.
 
-**Do not build a `MockHostVault`.** A mock calling a mock does not advance v0 to v1 (`PRD.md` §11). The second host is a design-partner conversation, not a hackathon deliverable.
+- **E-GATE-6** No `MockHostVault`. A mock calling a mock does not advance v0 to v1 (`PRD.md` §11). The second host is a design-partner conversation, not a hackathon deliverable.
 
 ## 2. File ownership
 
@@ -82,7 +85,7 @@ So two agents do not write the same seam differently. **Owner** means: changes h
 
 ## 3. Identities
 
-Four roles. **Never one key in two roles** — `CredentialRegistry` reverts with `IssuerRoleConflict` (R-ROLE-1).
+**E-ID-1** Four roles, and never one key in two of them. `CredentialRegistry` reverts with `IssuerRoleConflict` (R-ROLE-1).
 
 | Role | Signs | Sends transactions | Needs gas |
 |---|---|---|---|
@@ -92,11 +95,11 @@ Four roles. **Never one key in two roles** — `CredentialRegistry` reverts with
 | Hedge issuer | `HedgeCredential` (EIP-712, offchain) | No | **No** |
 | Keeper | — | Credential submission, `syncCovenant` | **Yes** |
 
-The keeper may be the operator key. The two issuers must not be.
+**E-ID-2** The keeper may reuse the operator key. The two issuers may not share an address with each other or with any transacting role.
 
 **R-ROLE-2 is a deployment requirement, not code:** the exposure issuer must be a party that answers to the lender, never one aligned with the borrower.
 
-Keys live in Foundry's encrypted keystore (`cast wallet import`). Never a private key in a file, a command-line flag, or an evidence log.
+**E-ID-3** Keys live in Foundry's encrypted keystore (`cast wallet import`). Never a private key in a file, a command-line flag, or an evidence log.
 
 ## 4. Deployment manifest
 
@@ -123,7 +126,10 @@ Keys live in Foundry's encrypted keystore (`cast wallet import`). Never a privat
 }
 ```
 
-**Rules.** `chainId` must be `5042002`; reject anything else, as the Base manifest generator does today for `84532`. `sourceCommit` must be a real commit that exists — the deployed source has to be committed before the manifest is written. Every `deployTx` must have a receipt with `status 0x1`.
+**E-MAN-1** `chainId` must be `5042002`. Reject anything else, as the Base manifest generator does today for `84532`.
+**E-MAN-2** `sourceCommit` must be a commit that exists. The deployed source is committed before the manifest is written.
+**E-MAN-3** Every `deployTx` must have a receipt with `status 0x1` before the manifest is considered valid.
+**E-MAN-4** Nothing outside this file hardcodes a deployed address. Scenario, frontend and README all read it.
 
 ## 5. Fixtures
 
@@ -142,22 +148,29 @@ Against a `1.000000` exposure with a 500 bps haircut. Counted coverage caps at t
 
 **Timestamps go stale.** Checked-in fixtures carry `2026-09-10/11` against a 24-hour `credentialMaxAge`, so they evaluate `UNASSESSED` on any later day. Keep them fixed for deterministic local tests. For **public runs, generate observations relative to a recorded chain timestamp before signing**, and derive `observedAt`, `validUntil` and `maturity` coherently. Save the generated fixtures, source commitments, sequences and signed payloads with the evidence; never modify a signed field afterward.
 
-Every amount reaching a credential passes through `packages/credentials/src/decimals.ts`. No exceptions.
+**E-FIX-1** A restoring credential carries a strictly higher sequence than the update it supersedes; the original is never replayed (R-F1-4).
+**E-FIX-2** Public runs generate observations relative to a recorded chain timestamp before signing, deriving `observedAt`, `validUntil` and `maturity` coherently. Checked-in fixtures stay fixed for deterministic local tests.
+**E-FIX-3** Generated fixtures, source commitments, sequences and signed payloads are saved with the evidence. A signed field is never modified afterward.
+**E-FIX-4** Every amount reaching a credential passes through `packages/credentials/src/decimals.ts`. No exceptions.
 
 ## 6. Scenario and frontend contracts
 
-**`scenarios/arc-facility.ts`** — new file, does not exist. Must:
+**`scenarios/arc-facility.ts`** — new file, does not exist.
 
-- `import { arcTestnet } from 'viem/chains'`. Never hand-roll the chain.
-- Read every address from `deployments/arc-testnet.json`. Hardcode nothing.
-- Assert receipt status **in the direction each step expects** (A-9). Expected-success asserts `status == 0x1`. The A-3 refusal asserts an explicitly **failed** receipt plus `DrawNotAllowed(CURE)` evidence via revert data or a state-pinned simulation. A transport error or unrelated revert is not acceptance evidence.
-- Emit an evidence file recording, per step: the transaction hash, expected and actual receipt status, the coverage result, the reason code, and the explorer link.
+- **E-SCN-1** `import { arcTestnet } from 'viem/chains'`. Never hand-roll the chain definition.
+- **E-SCN-2** Read every address from `deployments/arc-testnet.json`. Hardcode nothing.
+- **E-SCN-3** Assert receipt status **in the direction each step expects** (A-9). Expected-success asserts `status == 0x1`. The A-3 refusal asserts an explicitly **failed** receipt plus `DrawNotAllowed(CURE)` evidence via revert data or a state-pinned simulation. A transport error or unrelated revert is not acceptance evidence.
+- **E-SCN-4** Emit an evidence file recording, per step: transaction hash, expected and actual receipt status, coverage result, reason code, explorer link.
 
 The step sequence is A-1 → A-4 exactly: permitted draw → reduced hedge and `syncCovenant` to CURE → the **identical** draw refused → fresh hedge, explicit restoration, draw succeeds. Restoration requires a fresh onchain evaluation; time alone restores nothing (R-F3-9).
 
-**`apps/dashboard`** reads the same manifest. It must display gross and counted coverage **separately** so over-hedging stays visible while counted coverage is capped (A-7), show reason codes rather than only a colour (R-F2-6), and keep mock-provider labels visible on screen. It must never compute a competing coverage verdict — the record plane has no authority over capital (R-F4-2).
+**`apps/dashboard`** reads the same manifest.
 
-Stale or unavailable data must be visibly identified as such, never rendered as current compliance.
+- **E-UI-1** Display gross and counted coverage **separately**, so over-hedging stays visible while counted coverage is capped (A-7).
+- **E-UI-2** Show reason codes, never only a colour (R-F2-6).
+- **E-UI-3** Keep mock-provider and mock-payload labels visible on screen.
+- **E-UI-4** Never compute a competing coverage verdict. The record plane has no authority over capital (R-F4-2).
+- **E-UI-5** Stale or unavailable data is visibly identified as such, never rendered as current compliance.
 
 ## 7. Blocking decisions
 
