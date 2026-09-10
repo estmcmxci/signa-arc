@@ -5,6 +5,7 @@ import { FacilityRegistry } from "../src/FacilityRegistry.sol";
 import { CredentialRegistry } from "../src/CredentialRegistry.sol";
 import { CoverageEngine } from "../src/CoverageEngine.sol";
 import { CovenantVault } from "../src/CovenantVault.sol";
+import { ICoverageGate } from "../src/ICoverageGate.sol";
 import { MockUSDC } from "../src/mocks/MockUSDC.sol";
 
 interface Vm {
@@ -16,6 +17,7 @@ interface Vm {
     function warp(uint256 timestamp) external;
     function chainId(uint256 newChainId) external;
     function expectRevert() external;
+    function expectRevert(bytes calldata revertData) external;
 }
 
 /// @notice Dependency-free Foundry tests for PROTOTYPE-SPEC.md rows T-01 through T-18.
@@ -513,6 +515,113 @@ contract ContractCoreTest {
         vault.repay(100_000 * UNIT);
         assertEq(uint256(vault.covenantState()), uint256(CovenantVault.CovenantState.BREACH));
         assertEq(vault.principal(), 500_000 * UNIT);
+    }
+
+    // Exact revert data is A-3 / A-9 acceptance evidence, so these pin it rather than
+    // accepting any revert.
+    function test_DrawRefusedInCureRevertsDrawNotAllowedCure() public {
+        _seedCompliant();
+        vault.syncCovenant();
+        _submitExposure(6_000_000 * UNIT, 2, START, START + 1 days, START + 30 days);
+
+        vm.prank(operator);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CovenantVault.DrawNotAllowed.selector, CovenantVault.CovenantState.CURE
+            )
+        );
+        vault.draw(1);
+
+        // The coverage refusal takes precedence over the reserve test.
+        vm.prank(operator);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CovenantVault.DrawNotAllowed.selector, CovenantVault.CovenantState.CURE
+            )
+        );
+        vault.draw(9_000_001 * UNIT);
+    }
+
+    function test_DrawReserveViolationReportsBalanceRequestAndReserve() public {
+        _seedCompliant();
+        vm.prank(operator);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CovenantVault.ReserveViolation.selector,
+                10_000_000 * UNIT,
+                9_000_001 * UNIT,
+                1_000_000 * UNIT
+            )
+        );
+        vault.draw(9_000_001 * UNIT);
+
+        vm.prank(operator);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CovenantVault.ReserveViolation.selector,
+                10_000_000 * UNIT,
+                10_000_001 * UNIT,
+                1_000_000 * UNIT
+            )
+        );
+        vault.draw(10_000_001 * UNIT);
+    }
+
+    function test_ActiveWaiverDoesNotReleaseReserve() public {
+        vault.syncCovenant();
+        vault.createWaiver(1 hours, keccak256("mock signer outage"));
+        vm.prank(operator);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CovenantVault.ReserveViolation.selector,
+                10_000_000 * UNIT,
+                9_000_001 * UNIT,
+                1_000_000 * UNIT
+            )
+        );
+        vault.draw(9_000_001 * UNIT);
+    }
+
+    function test_GateRulesCoverageAndReserveForCallingHost() public {
+        _seedCompliant();
+        _assertAssess(9_000_000 * UNIT, true, CoverageEngine.ResultReason.NONE);
+        _assertAssess(9_000_001 * UNIT, false, CoverageEngine.ResultReason.RESERVE_VIOLATION);
+        _assertAssess(10_000_001 * UNIT, false, CoverageEngine.ResultReason.RESERVE_VIOLATION);
+    }
+
+    function test_GateReEvaluatesRatherThanReadingHostState() public {
+        _seedCompliant();
+        vault.syncCovenant();
+        _submitExposure(6_000_000 * UNIT, 2, START, START + 1 days, START + 30 days);
+
+        assertEq(uint256(vault.covenantState()), uint256(CovenantVault.CovenantState.COMPLIANT));
+        _assertAssess(1, false, CoverageEngine.ResultReason.BELOW_THRESHOLD);
+        _assertAssess(9_000_001 * UNIT, false, CoverageEngine.ResultReason.BELOW_THRESHOLD);
+    }
+
+    function test_GatePermitsUnderActiveWaiverWhileReportingNonCompliance() public {
+        _assertAssess(1, false, CoverageEngine.ResultReason.MISSING_EXPOSURE);
+
+        vault.syncCovenant();
+        vault.createWaiver(1 hours, keccak256("mock signer outage"));
+        _assertAssess(1, true, CoverageEngine.ResultReason.MISSING_EXPOSURE);
+        _assertAssess(9_000_001 * UNIT, false, CoverageEngine.ResultReason.RESERVE_VIOLATION);
+
+        vm.warp(vault.waiverEndsAt() + 1);
+        _assertAssess(1, false, CoverageEngine.ResultReason.MISSING_EXPOSURE);
+    }
+
+    /// @dev Calls as the vault, because `assess` rules for the calling host.
+    function _assertAssess(
+        uint256 amount,
+        bool expectedAllowed,
+        CoverageEngine.ResultReason expectedReason
+    ) internal {
+        vm.prank(address(vault));
+        (bool allowed, CoverageEngine.ResultReason reason) =
+            ICoverageGate(address(engine)).assess(FACILITY_ID, amount);
+        assertTrue(allowed == expectedAllowed);
+        assertEq(uint256(reason), uint256(expectedReason));
     }
 
     function _seedCompliant() internal {

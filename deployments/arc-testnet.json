@@ -1,0 +1,64 @@
+{
+  "chainId": 5042002,
+  "rpcUrl": "https://rpc.testnet.arc.network",
+  "explorer": "https://testnet.arcscan.app",
+  "sourceCommit": "7d66394654fa2147da495027af6d64cac38d2cf8",
+  "deployedAt": "2026-09-10T16:04:20.000Z",
+  "contracts": {
+    "facilityRegistry": {
+      "address": "0xB54fe913C4a7dE73Bc285338dCbb384AEec5e448",
+      "deployTx": "0x6616528d287af73044bf69fe22126cce92df818b9ac01fe4f0ec01851cc51b62",
+      "block": 61422394
+    },
+    "credentialRegistry": {
+      "address": "0xD921734C9314442a74Cd3FEBAB8028b2Bb9A7624",
+      "deployTx": "0x065e74b65246258c403f97d5e36ae61b03f5748a39fec49b5fda2cb96149a5e0",
+      "block": 61422413
+    },
+    "coverageEngine": {
+      "address": "0x3341B76fEFF4CE691781fEAa4C76EA95479b9b6b",
+      "deployTx": "0x47ff28200b800f3576a8bac4acf5c35b8ee2febe11d6d188caa8a3e8a4e85606",
+      "block": 61422417
+    },
+    "covenantVault": {
+      "address": "0x1970feb699BCd4dd268a3A8c2590929fc8fd67c2",
+      "deployTx": "0xa6ee1d47676d80e9dc032cdb6816c6e5f90cc22f2c67cbd32c19b333280977d0",
+      "block": 61422421
+    }
+  },
+  "settlementAsset": {
+    "address": "0x3600000000000000000000000000000000000000",
+    "decimals": 6,
+    "symbol": "USDC"
+  },
+  "exposureDenomination": {
+    "currency": "EUR",
+    "referenceAsset": {
+      "address": "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a",
+      "decimals": 6,
+      "symbol": "EURC"
+    },
+    "note": "Denominating asset of the exposure, referenced only (E-DEC-2). No EURC is transferred, held or approved. The exposure is a EUR-denominated loan book asserted by ExposureCredential; the facility is funded, drawn and repaid in USDC."
+  },
+  "roles": {
+    "facilityAdmin": "0x5cD42354a8adc5fD87717528662Dc0990617D428",
+    "operator": "0x7e09657321F1818825a9A15cedd9D95308130ED4",
+    "exposureIssuer": "0x4317497399f27d52007d7f2012EAd27f148B6662",
+    "hedgeIssuer": "0xAD515A2BE433e78B6b570064797626012e272e0a"
+  },
+  "facility": {
+    "id": "0x39cbb5ce0d83241c8fe2be217023dd05dc80cecce06fb7df109a6c50452c4d1c",
+    "policy": {
+      "minCoverageBps": 10000,
+      "defaultHaircutBps": 500,
+      "credentialMaxAgeSeconds": 86400,
+      "maturityToleranceSeconds": 604800,
+      "reserveAmount": "500000",
+      "cureWindowSeconds": 432000,
+      "maxWaiverDurationSeconds": 259200,
+      "settlementCurrency": "USD",
+      "exposureCurrency": "EUR",
+      "maxActiveHedges": 8
+    }
+  }
+}
