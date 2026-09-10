@@ -151,7 +151,8 @@ The demo is the acceptance test. Each line must be reproducible on Arc Testnet w
 - **A-6** The same trade ID submitted twice is counted once.
 - **A-7** Coverage of 140% is displayed as 140% and counted as 100%.
 - **A-8** The boundary statement is spoken in the video and the mock seam is shown working.
-- **A-9** Every transaction in the demo asserts `receipt.status == 0x1`. Process exit code is not evidence: E5 observed `cast send` exit `0` on a receipt with status `0x0`, so a scenario that checks exit codes will report success on a reverted transaction. Applies to the scenario runner, the deploy script, and any CI step that broadcasts.
+- **A-9** Receipt status is asserted on every transaction, in the direction the step expects. Every **expected-success** transaction asserts `receipt.status == 0x1`. The **intentional A-3 refusal** asserts an explicitly *failed* receipt and evidence of the expected rejection reason — `DrawNotAllowed(CURE)` through revert data or a state-pinned simulation. A transport error or an unrelated revert is not acceptance evidence.
+  Process exit code never establishes success in either direction: E5 observed `cast send` exit `0` on a receipt with status `0x0`. Applies to the scenario runner, the deploy script, and any CI step that broadcasts.
 
 ## 10. Sponsor track acceptance
 

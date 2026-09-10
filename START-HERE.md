@@ -5,6 +5,7 @@ Read this first. It is the only file that knows *where we are*. Everything else 
 | Document | Owns |
 |---|---|
 | **START-HERE.md** | Where we are. Build state, the queue, the rules. |
+| `ARC-DELIVERY-PLAN.md` | How we get there. Five staged deliveries with exit conditions, and the strategy decisions behind them. |
 | `PRD.md` | What must be true. Requirements with IDs, acceptance criteria, risks. The contract. |
 | `ARC-FIELD-NOTES.md` | What Arc actually does. Verified constants, gotchas, corrections. The build brain. |
 | `.claude/skills/use-arc/SKILL.md` | Circle's own guidance, vendored verbatim. |
@@ -15,7 +16,9 @@ Read this first. It is the only file that knows *where we are*. Everything else 
 
 ## The objective
 
-**Signa makes authenticated FX coverage an enforceable condition of USDC drawdowns.**
+**Signa Covenant — capital access, backed by verified commitments.**
+
+Signa is the company; **Covenant** is the product: an FX coverage gate that makes authenticated coverage an enforceable condition of USDC drawdowns.
 
 A credit originator owes investors USDC while its loans repay in another currency. The loan balances live in a servicing system, the hedge lives at a bank, and the capital lives in a vault that cannot see whether that hedge is current, sufficient, or even matched to this facility. Operations reconciles on a calendar; capital moves on demand. **The covenant governs a conversation. It needs to govern the money.**
 
@@ -38,7 +41,7 @@ Arc is Circle's L1 where USDC is the native gas token. It ships StableFX — an 
 | Item | Req | State |
 |---|---|---|
 | Decimals boundary | R-F2-7 | ✅ `packages/credentials/src/decimals.ts`, 11 tests. Suite is 26 green. |
-| Arc EUR/USD fixtures | S-B | ✅ `arc-forward-{active,refreshed,cancelled}.json`, fractional. Coverage runs 10000 → 6840 → 0 bps. |
+| Arc EUR/USD fixtures | S-B | ⚠️ **Two known defects.** (1) No restoration fixture: shipped `active → refreshed → cancelled` gives 10000 → 6840 → **0**, but A-4 requires restoring to COMPLIANT — 10000 → 6840 → **10000**, with cancellation as a separate extension. Needs a fourth fixture at `1.060000` with sequence 4; the original cannot be replayed because R-F1-4 requires the latest sequence. (2) Timestamps are baked to 2026-09-10/11 against a 24h `credentialMaxAge`, so they evaluate `UNASSESSED` by the September 12 target. Public runs must generate labelled mock observations relative to a recorded chain timestamp before signing. Both belong to plan stage 1. |
 | viem with `arcTestnet` | — | ✅ 2.56.3. Never hand-roll the chain definition. |
 | Architecture diagram | S-A | ✅ `ARC-ARCHITECTURE.html`. |
 | Chain unknowns | — | ✅ E1/E2/E3/E5 answered on-chain. See `ARC-FIELD-NOTES.md` §7. |
@@ -66,13 +69,17 @@ Arc is Circle's L1 where USDC is the native gas token. It ships StableFX — an 
 
 Items 1–4 are the critical path. 5–7 are the submission gate.
 
+**[ARC-DELIVERY-PLAN.md](./ARC-DELIVERY-PLAN.md) sequences this into five stages with exit conditions.** It is the execution document; this queue is the summary. Where they differ, the plan is more specific and wins on sequencing — but `PRD.md` still owns what must be true.
+
+**Schedule pressure, recorded once.** The plan dates stages 1–3 across September 9–10, with Arc deployment due on the 10th. As of the 10th none of it has started, so roughly a day of slip exists before execution begins. The dates are deliberately unchanged. The squeeze lands on stages 4 and 5 — the dashboard and the submission package — and stage 4 is a qualification requirement, not polish.
+
 ---
 
 ## Standing rules
 
 **Claims discipline.** Nothing is deployed until it is. Every sponsor is an integration target, never a partner. No bank has agreed to sign a credential. The Ebury-shaped fixture and the StableFX-shaped payload are labelled mocks in the README *and on screen*.
 
-**Assert receipt status, never exit code.** `cast send` exits `0` on a reverted transaction — observed in E5, receipt `status 0x0` with process exit `0`. PRD A-9. This is the failure that produces a green demo run containing a failed transaction.
+**Assert receipt status in the direction the step expects, never exit code.** Expected-success transactions assert `status == 0x1`. The intentional A-3 refusal asserts an explicitly *failed* receipt plus evidence of `DrawNotAllowed(CURE)` — a transport error or unrelated revert is not acceptance evidence. `cast send` exits `0` on a reverted transaction, observed in E5 with receipt `status 0x0`. PRD A-9. This is the failure that produces a green demo run containing a failed transaction.
 
 **Canonical Arc constants** live in `ARC-FIELD-NOTES.md` §1. RPC is `https://rpc.testnet.arc.network` — **not** `arc.io`, which appears in Arc's own tutorial and is wrong. Chain `5042002`, hex `0x4CEF52`.
 

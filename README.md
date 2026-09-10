@@ -1,8 +1,20 @@
-# FX Coverage Controls for Onchain Credit
+# Signa Covenant
 
-**Current state:** working and tested local prototype; **not yet deployed to Base Sepolia**  
-**Demonstration:** fictional COP-repayable Colombian coffee working-capital portfolio  
+**Capital access, backed by verified commitments.**
+
+Signa is the company. Covenant is the product: an FX coverage gate that makes authenticated coverage an enforceable condition of USDC drawdowns. Verified coverage determines whether a vault can release funds; when coverage changes, access follows the facility's policy.
+
+`CovenantVault` is the reference host that proves the gate works. The product is intended to support other host vaults, assets, and issuers; external host integrations are not yet implemented. The name reflects the financial commitments that govern capital access.
+
+**Current state:** working and tested local prototype; the Arc application is not yet deployed.
+
+**Delivery target:** the Arc Testnet EUR/USD scenario and acceptance criteria A-1 through A-4 in [PRD.md](./PRD.md). See [START-HERE.md](./START-HERE.md) for the current build queue and [ARC-FIELD-NOTES.md](./ARC-FIELD-NOTES.md) for verified chain behavior.
+
+**Existing local demonstration:** fictional COP-repayable Colombian coffee working-capital portfolio
+
 **Provider data:** mock only — no Ebury connection, integration, or endorsement
+
+The implementation and deployment instructions below describe the earlier Base-oriented prototype. They await the Arc rewrite and are not an Arc deployment guide.
 
 This repository demonstrates one narrow claim: independently authenticated exposure and hedge assertions can produce a deterministic FX coverage result that safely governs new capital actions in an EVM vault.
 
