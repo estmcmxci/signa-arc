@@ -5,7 +5,6 @@ import {
   createPublicClient,
   createWalletClient,
   custom,
-  decodeEventLog,
   formatUnits,
   http,
   type Abi,
@@ -91,12 +90,6 @@ type CoverageResult = {
   resultReason: number;
 };
 type HedgeView = StoredHedge & { eligibilityReason: number; adjustedNotional: bigint };
-type HistoryItem = {
-  eventName: string;
-  transactionHash: Hex;
-  blockNumber: bigint;
-  summary: string;
-};
 type ArcEvidenceStep = {
   action?: unknown;
   transactionHash?: unknown;
@@ -116,7 +109,7 @@ type LiveState = {
   cureDeadline: bigint;
   availableToDraw: bigint;
   hedges: HedgeView[];
-  history: HistoryItem[];
+  tokenSymbol: string;
 };
 
 // The three outcomes a write can settle into (research §5.1). Only the last one is an
@@ -249,7 +242,6 @@ let gate: GateState = { status: "idle" };
 let gateRequestId = 0;
 let gateDebounce: ReturnType<typeof setTimeout> | undefined;
 let lastActionOutcome: ActionOutcome | undefined;
-let historyError = "";
 const arcEvidence = loadArcEvidence();
 
 render();
@@ -265,7 +257,7 @@ async function refreshLive() {
   errorMessage = "";
   render();
   try {
-    const [policy, exposure, coverage, state, principal, cureDeadline, available, tradeIds] =
+    const [policy, exposure, coverage, state, principal, cureDeadline, available, tradeIds, tokenSymbol] =
       await Promise.all([
         read(addresses.facilityRegistry, facilityRegistryAbi, "getFacility", [facilityId]),
         read(addresses.credentialRegistry, credentialRegistryAbi, "currentExposure", [
@@ -279,6 +271,10 @@ async function refreshLive() {
         read(addresses.credentialRegistry, credentialRegistryAbi, "hedgeTradeIds", [
           facilityId,
         ]),
+        // Never hardcode the settlement asset's symbol — on Arc it is the real USDC
+        // predeploy, not a mock, and a stale hardcoded label is a claims-discipline bug
+        // as well as a cosmetic one. Ask the contract itself, every time.
+        read(addresses.token, mockTokenAbi, "symbol"),
       ]);
     const hedges = await Promise.all(
       (tradeIds as Hex[]).map(async (tradeId) => {
@@ -309,7 +305,7 @@ async function refreshLive() {
       cureDeadline: cureDeadline as bigint,
       availableToDraw: available as bigint,
       hedges,
-      history: await loadHistory(),
+      tokenSymbol: tokenSymbol as string,
     };
     lastRefreshedAt = Date.now();
     stale = false;
@@ -459,11 +455,11 @@ function render() {
           <div class="panel-head"><div><div class="section-kicker">Actions</div><h2>Coverage gate</h2></div><button id="connect" class="action">${walletAddress ? short(walletAddress) : "Connect wallet"}</button></div>
           <div id="draw-gate" class="gate gate-${gate.status}">${gateMarkup()}</div>
           <div class="controls">
-            <input id="amount" inputmode="decimal" value="${escapeHtml(amountValue)}" aria-label="Amount in mock USD" class="num" />
+            <input id="amount" inputmode="decimal" value="${escapeHtml(amountValue)}" aria-label="Amount in ${escapeHtml(tokenLabel())}" class="num" />
             <button id="sync" class="action-primary" ${disabled()}>Sync covenant</button>
             <button id="restore" ${disabled()}>Restore</button>
-            <button id="draw" ${disabled()}>Draw mUSD</button>
-            <button id="repay" ${disabled()}>Repay mUSD</button>
+            <button id="draw" ${disabled()}>Draw ${escapeHtml(tokenLabel())}</button>
+            <button id="repay" ${disabled()}>Repay ${escapeHtml(tokenLabel())}</button>
           </div>
           ${actionOutcomeMarkup()}
           <p class="footer-note">Every write is simulated first via <span class="mono">simulateContract</span>; a refusal is decoded from the vault's own custom error and shown before anything is signed. The Draw button stays enabled when held — a refusal is the gate working, not a reason to hide the control.</p>
@@ -514,12 +510,13 @@ function render() {
       </section>
 
       <section class="panel">
-        <div class="panel-head"><div><div class="section-kicker">Arc receipts</div><h2>Current deployment event history</h2></div>${configured && explorerUrl && addresses ? `<a href="${explorerUrl}/address/${addresses.covenantVault}" target="_blank" rel="noreferrer">Open vault ↗</a>` : ""}</div>
-        <div class="timeline">${liveHistoryRows()}</div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-head"><div><div class="section-kicker">Scenario evidence</div><h2>Arc EURC facility arc (A-1 → A-4)</h2></div><span class="mono">${arcEvidence ? `${arcEvidence.steps.length} steps` : "not yet recorded"}</span></div>
+        <div class="panel-head">
+          <div><div class="section-kicker">Scenario evidence</div><h2>Arc EURC facility arc (A-1 → A-4)</h2></div>
+          <div class="panel-head-actions">
+            <span class="mono">${arcEvidence ? `${arcEvidence.steps.length} steps` : "not yet recorded"}</span>
+            ${configured && explorerUrl && addresses ? `<a href="${explorerUrl}/address/${addresses.covenantVault}" target="_blank" rel="noreferrer">Open vault ↗</a>` : ""}
+          </div>
+        </div>
         ${arcEvidenceRows()}
       </section>
 
@@ -665,67 +662,6 @@ async function writeSimulatedRequest(wallet: ReturnType<typeof createWalletClien
   }
 }
 
-// Arc's public RPC rejects eth_getLogs over a wide range with -32012 "requested range
-// too large" (confirmed against rpc.testnet.arc.network directly — the exact cap isn't
-// documented and the RPC also rate-limits under repeated calls, -32005). 2,000 blocks
-// stays comfortably under both observed thresholds.
-const HISTORY_BLOCK_WINDOW = 2_000n;
-
-async function loadHistory(): Promise<HistoryItem[]> {
-  if (!addresses) return [];
-  let logs;
-  try {
-    const currentBlock = await publicClient.getBlockNumber();
-    const fromBlock =
-      currentBlock > HISTORY_BLOCK_WINDOW ? currentBlock - HISTORY_BLOCK_WINDOW : 0n;
-    logs = await publicClient.getLogs({
-      address: [
-        addresses.facilityRegistry,
-        addresses.credentialRegistry,
-        addresses.covenantVault,
-      ],
-      fromBlock,
-      toBlock: "latest",
-    } as never);
-    historyError = "";
-  } catch (error) {
-    // A degraded history read must never take the whole live read down with it — the
-    // facility policy, coverage, and state are already known-good by the time this
-    // runs, and history is the least essential thing on the page (E-UI-5: the failure
-    // state should be as narrow as what actually failed, not the whole dashboard).
-    historyError = errorText(error);
-    return [];
-  }
-  const combinedAbi = [
-    ...facilityRegistryAbi,
-    ...credentialRegistryAbi,
-    ...covenantVaultAbi,
-  ] as Abi;
-  return logs
-    .flatMap((log) => {
-      try {
-        const decoded = decodeEventLog({
-          abi: combinedAbi,
-          data: log.data,
-          topics: log.topics,
-          strict: false,
-        } as never) as { eventName: string; args: Record<string, unknown> };
-        return [
-          {
-            eventName: decoded.eventName,
-            transactionHash: log.transactionHash!,
-            blockNumber: log.blockNumber!,
-            summary: summarizeArgs(decoded.args),
-          },
-        ];
-      } catch {
-        return [];
-      }
-    })
-    .sort((a, b) => Number(b.blockNumber - a.blockNumber))
-    .slice(0, 24);
-}
-
 function loadArcEvidence(): ArcEvidence | undefined {
   const modules = import.meta.glob<{ default: unknown }>(
     "../../../scenarios/output/arc-facility-evidence.json",
@@ -745,6 +681,15 @@ async function read(
   args: readonly unknown[] = [],
 ): Promise<unknown> {
   return publicClient.readContract({ address, abi, functionName, args } as never);
+}
+
+// Read live, never hardcoded: on Arc the settlement asset is the real USDC predeploy
+// (0x3600…0000), not a mock, and a stale "mUSD" label is a claims-discipline bug, not
+// just a cosmetic one — it reads as demoing with a mock when the facility uses Arc's
+// native USDC. Falls back to the manifest's own symbol before the first live read
+// lands, so the buttons are never wrong even for a moment.
+function tokenLabel() {
+  return live?.tokenSymbol ?? manifest?.settlementAsset.symbol ?? "the settlement asset";
 }
 
 function manifestBadge() {
@@ -932,24 +877,6 @@ function hedgeRows() {
     .join("");
 }
 
-function liveHistoryRows() {
-  if (historyError) {
-    return `<div class="empty">Could not read recent events: ${escapeHtml(historyError)}. The panels above are unaffected — this read is independent.</div>`;
-  }
-  if (!live?.history.length) {
-    return `<div class="empty">${configured ? "No recent protocol events found in the last ~2,000 blocks." : "Configure a deployment to read Arc events."}</div>`;
-  }
-  return live.history
-    .map(
-      (item) => `<div class="event">
-        <div class="event-state">${escapeHtml(item.eventName)}</div>
-        <div class="event-copy">${escapeHtml(item.summary)}</div>
-        <div class="event-meta">block ${item.blockNumber}<br/>${transactionLink(item.transactionHash)}</div>
-      </div>`,
-    )
-    .join("");
-}
-
 function arcEvidenceRows() {
   if (!arcEvidence?.steps.length) {
     return `<div class="empty">Awaiting <span class="mono">scenarios/arc-facility.ts</span> (Lane B). This panel reads <span class="mono">scenarios/output/arc-facility-evidence.json</span> automatically once that file exists — nothing fabricated shown in its place.</div>`;
@@ -963,7 +890,7 @@ function arcEvidenceRows() {
       const reason =
         typeof step.resultReason === "number" ? resultReasons[step.resultReason] ?? "UNKNOWN" : "—";
       return `<div class="event">
-        <div class="event-state">${escapeHtml(actual.toUpperCase())}</div>
+        <div class="event-state">${escapeHtml(actual)}</div>
         <div class="event-copy">${escapeHtml(action)} · expected ${escapeHtml(expected)} · reason ${escapeHtml(reason)}</div>
         <div class="event-meta">${hash ? transactionLink(hash as Hex) : "—"}</div>
       </div>`;
@@ -975,14 +902,6 @@ function transactionLink(hash: Hex) {
   return explorerUrl
     ? `<a href="${explorerUrl}/tx/${hash}" target="_blank" rel="noreferrer">${short(hash)} ↗</a>`
     : short(hash);
-}
-
-function summarizeArgs(args: Record<string, unknown>) {
-  const values = Object.entries(args)
-    .filter(([key]) => !/^\d+$/.test(key))
-    .slice(0, 4)
-    .map(([key, value]) => `${key}: ${formatUnknown(value)}`);
-  return values.length ? values.join(" · ") : "Protocol state transition";
 }
 
 function formatUnknown(value: unknown): string {
