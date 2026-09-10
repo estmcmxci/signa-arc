@@ -249,6 +249,7 @@ let gate: GateState = { status: "idle" };
 let gateRequestId = 0;
 let gateDebounce: ReturnType<typeof setTimeout> | undefined;
 let lastActionOutcome: ActionOutcome | undefined;
+let historyError = "";
 const arcEvidence = loadArcEvidence();
 
 render();
@@ -664,19 +665,37 @@ async function writeSimulatedRequest(wallet: ReturnType<typeof createWalletClien
   }
 }
 
+// Arc's public RPC rejects eth_getLogs over a wide range with -32012 "requested range
+// too large" (confirmed against rpc.testnet.arc.network directly — the exact cap isn't
+// documented and the RPC also rate-limits under repeated calls, -32005). 2,000 blocks
+// stays comfortably under both observed thresholds.
+const HISTORY_BLOCK_WINDOW = 2_000n;
+
 async function loadHistory(): Promise<HistoryItem[]> {
   if (!addresses) return [];
-  const currentBlock = await publicClient.getBlockNumber();
-  const fromBlock = currentBlock > 50_000n ? currentBlock - 50_000n : 0n;
-  const logs = await publicClient.getLogs({
-    address: [
-      addresses.facilityRegistry,
-      addresses.credentialRegistry,
-      addresses.covenantVault,
-    ],
-    fromBlock,
-    toBlock: "latest",
-  } as never);
+  let logs;
+  try {
+    const currentBlock = await publicClient.getBlockNumber();
+    const fromBlock =
+      currentBlock > HISTORY_BLOCK_WINDOW ? currentBlock - HISTORY_BLOCK_WINDOW : 0n;
+    logs = await publicClient.getLogs({
+      address: [
+        addresses.facilityRegistry,
+        addresses.credentialRegistry,
+        addresses.covenantVault,
+      ],
+      fromBlock,
+      toBlock: "latest",
+    } as never);
+    historyError = "";
+  } catch (error) {
+    // A degraded history read must never take the whole live read down with it — the
+    // facility policy, coverage, and state are already known-good by the time this
+    // runs, and history is the least essential thing on the page (E-UI-5: the failure
+    // state should be as narrow as what actually failed, not the whole dashboard).
+    historyError = errorText(error);
+    return [];
+  }
   const combinedAbi = [
     ...facilityRegistryAbi,
     ...credentialRegistryAbi,
@@ -914,8 +933,11 @@ function hedgeRows() {
 }
 
 function liveHistoryRows() {
+  if (historyError) {
+    return `<div class="empty">Could not read recent events: ${escapeHtml(historyError)}. The panels above are unaffected — this read is independent.</div>`;
+  }
   if (!live?.history.length) {
-    return `<div class="empty">${configured ? "No recent protocol events found." : "Configure a deployment to read Arc events."}</div>`;
+    return `<div class="empty">${configured ? "No recent protocol events found in the last ~2,000 blocks." : "Configure a deployment to read Arc events."}</div>`;
   }
   return live.history
     .map(
