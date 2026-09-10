@@ -1,4 +1,5 @@
 import {
+  assertCanonicalScale,
   currencyToBytes3,
   credentialDomain,
   hashHedgeCredential,
@@ -76,7 +77,11 @@ export function mapProviderFixture(
     tradeIdCommitment: keccak256(toBytes(fixture.trade.id)),
     baseCurrency: currencyToBytes3(fixture.trade.buy_currency),
     quoteCurrency: currencyToBytes3(fixture.trade.sell_currency),
-    remainingNotional: parseSixDecimalAmount(fixture.trade.remaining_buy_amount),
+    // E-FIX-4 — every amount reaching a credential passes through decimals.ts.
+    remainingNotional: assertCanonicalScale(
+      parseSixDecimalAmount(fixture.trade.remaining_buy_amount),
+      "remainingNotional",
+    ),
     maturity,
     status: mapProviderStatus(fixture.trade.status),
     observedAt,
@@ -84,6 +89,56 @@ export function mapProviderFixture(
     sequence: BigInt(fixture.trade.sequence),
     sourceCommitment: keccak256(toBytes(canonicalJson(fixture))),
   };
+}
+
+/**
+ * E-FIX-2 — the maturity a public run books its trade at.
+ *
+ * `booking` is the sequence-1 fixture and `start` the chain block recorded as
+ * the run begins. The trade keeps its booked tenor. Compute it once per run,
+ * so every later sequence of the trade carries the same maturity.
+ */
+export function bookedMaturity(booking: unknown, start: { timestamp: bigint }): bigint {
+  const { trade } = parseProviderFixture(booking);
+  if (trade.sequence !== 1) {
+    throw new Error(`A trade is booked at sequence 1; received sequence ${trade.sequence}`);
+  }
+  return (
+    start.timestamp + toUnixSeconds(trade.maturity_date) - toUnixSeconds(trade.updated_at)
+  );
+}
+
+/**
+ * E-FIX-2 — re-observe a checked-in fixture at a recorded chain block.
+ *
+ * Checked-in fixtures keep fixed dates so local tests stay deterministic, and
+ * go stale a day later. Public runs time each observation from the chain,
+ * never the local clock, which can run ahead of it and evaluate
+ * NOT_YET_OBSERVED. Only the time fields move: observedAt becomes the block's
+ * timestamp, validUntil keeps the fixture's validity window, and maturity is
+ * the run's. Trade, amount, status and sequence stay the fixture's own.
+ */
+export function observeAt(
+  template: unknown,
+  block: { timestamp: bigint },
+  maturity: bigint,
+): ProviderFixture {
+  const fixture = parseProviderFixture(template);
+  if (maturity < block.timestamp) {
+    throw new Error("Cannot observe a trade past its maturity");
+  }
+  const validFor =
+    toUnixSeconds(fixture.trade.credential_valid_until) -
+    toUnixSeconds(fixture.trade.updated_at);
+  return parseProviderFixture({
+    ...fixture,
+    trade: {
+      ...fixture.trade,
+      maturity_date: toIsoTimestamp(maturity),
+      updated_at: toIsoTimestamp(block.timestamp),
+      credential_valid_until: toIsoTimestamp(block.timestamp + validFor),
+    },
+  });
 }
 
 export async function signHedgeCredential(args: {
@@ -147,6 +202,10 @@ function toUnixSeconds(value: string): bigint {
     throw new Error(`Invalid timestamp: ${value}`);
   }
   return BigInt(milliseconds / 1_000);
+}
+
+function toIsoTimestamp(seconds: bigint): string {
+  return new Date(Number(seconds) * 1_000).toISOString();
 }
 
 function canonicalJson(value: unknown): string {
