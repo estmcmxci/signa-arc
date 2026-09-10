@@ -178,15 +178,15 @@ Decided by the founder 2026-09-10. All three are baked into signed credentials a
 
 **E-DEC-1 — `outstandingValue` is denominated in the settlement currency (USD).** The coverage ratio compares a USD obligation against USD-delivering eligible hedge notional. `remainingNotional` maps from `remaining_buy_amount`, the buy leg, exactly as the adapter does today. Never divide a EUR amount by a USD amount, and never introduce an implicit exchange rate anywhere in the ratio. No code change; the fixtures already satisfy this.
 
-**E-DEC-2 — the demo moves real testnet EURC, and EURC is never presented as the exposure.**
+**E-DEC-2 — EURC is referenced, never moved.**
 
-This is a deliberate reversal of the original design position, taken so the EURC contract appears in the submission. The constraint matters more than the mechanism:
+*Decided reference-only 2026-09-10, reversing a same-day decision to move real EURC. The reasoning is recorded because the reversal is the substance.* Moving EURC would demonstrate **conversion** — the layer Covenant explicitly does not govern. A judge would watch a transfer the vault has no authority over, learn nothing about the product, and be invited to ask "is that the exposure?", which is the question that unwinds the thesis. It required five guardrails to stay safe. Reference-only buys the same optic for an hour of work and no thesis risk.
 
-- **E-EUR-1** EURC appears as a **conversion leg** — a labelled mock EUR→USD settlement movement demonstrating the StableFX-shaped seam this product sits above. It is evidence that the conversion layer exists and is not what we built.
-- **E-EUR-2** EURC balances are **never** presented, labelled, or implied to be the exposure. The exposure is a loan book in a servicing system, asserted by the exposure issuer under `ExposureCredential`. If an onchain token balance were the exposure, no credential would be needed and the product's reason for existing collapses. This is the one way to get E-DEC-2 wrong.
-- **E-EUR-3** The coverage ratio never reads an EURC balance. Coverage is computed from credentials only (R-F2-1 … R-F2-4). EURC movement is illustrative and has no authority over capital, the same rule the record plane obeys (R-F4-2).
-- **E-EUR-4** `CovenantVault` continues to hold and move **only** USDC. The settlement asset in the manifest stays `0x3600…0000`.
-- **E-EUR-5** Every EURC movement is labelled a mock on screen and in the README, like the Ebury-shaped fixture and the StableFX-shaped payload.
+- **E-EUR-1** The EURC contract `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` appears in the manifest, the dashboard and the README as the exposure's **denominating asset**, linked to Arcscan. No EURC is transferred, held, or approved anywhere in the demo.
+- **E-EUR-2** EURC is **never** presented, labelled, or implied to be the exposure. The exposure is a loan book in a servicing system, asserted by the exposure issuer under `ExposureCredential`. If an onchain token balance were the exposure, no credential would be needed and the product's reason for existing collapses. This is the one way to get E-DEC-2 wrong.
+- **E-EUR-3** The coverage ratio never reads an EURC balance. Coverage is computed from credentials only (R-F2-1 … R-F2-4).
+- **E-EUR-4** `CovenantVault` holds and moves **only** USDC. The manifest's settlement asset stays `0x3600…0000`.
+- **E-EUR-5** Wherever EURC appears, the denomination distinction is stated: the portfolio is denominated in EUR; the facility is funded, drawn and repaid in USDC.
 
 **E-DEC-3 — the issuer keys hold no gas.** They sign EIP-712 offchain; a keeper submits, per PRD §5. Two funded addresses suffice in practice, since the keeper may reuse the operator key. This is also the more honest architecture: a real bank verifier would never hold gas on this chain.
 

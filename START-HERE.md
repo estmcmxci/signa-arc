@@ -107,5 +107,5 @@ Backup mirror of the pre-purge history: `~/signa-backup-2026-09-09.git`.
 Decided 2026-09-10. Full text and the requirements they generate are in [EED.md](./EED.md) §7.
 
 1. **`outstandingValue` is denominated in the settlement currency (USD).** USD obligation against USD-delivering hedge notional. No implicit exchange rate anywhere in the ratio. No code change — the adapter already does this. (E-DEC-1)
-2. **The demo moves real testnet EURC**, as a labelled mock conversion leg. **EURC is never the exposure, never read by the ratio, never held by the vault.** Presenting an EURC balance as the exposure would contradict the reason the product exists — if exposure were onchain, no credential would be needed. (E-DEC-2, E-EUR-1 … E-EUR-5)
+2. **EURC is referenced, never moved.** The contract is named and linked as the exposure's denominating asset in the manifest, dashboard and README; no EURC is transferred, held or approved. Moving it would demonstrate conversion — a layer Covenant does not govern — and invite the reader to mistake a token balance for the exposure, which is the one thing that unwinds the thesis. (E-DEC-2, E-EUR-1 … E-EUR-5)
 3. **Issuer keys hold no gas.** They sign offchain; a keeper submits, per PRD §5. Two funded addresses suffice, since the keeper may reuse the operator key. (E-DEC-3)
