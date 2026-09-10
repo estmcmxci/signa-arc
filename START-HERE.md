@@ -6,6 +6,7 @@ Read this first. It is the only file that knows *where we are*. Everything else 
 |---|---|
 | **START-HERE.md** | Where we are. Build state, the queue, the rules. |
 | `ARC-DELIVERY-PLAN.md` | How we get there. Five staged deliveries with exit conditions, and the strategy decisions behind them. |
+| `EED.md` | What the pieces are, exactly. Interfaces, schemas, file ownership, handoff seams. Read before writing code another agent will call. |
 | `PRD.md` | What must be true. Requirements with IDs, acceptance criteria, risks. The contract. |
 | `ARC-FIELD-NOTES.md` | What Arc actually does. Verified constants, gotchas, corrections. The build brain. |
 | `.claude/skills/use-arc/SKILL.md` | Circle's own guidance, vendored verbatim. |

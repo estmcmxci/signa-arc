@@ -14,8 +14,6 @@ Signa is the company. Covenant is the product: an FX coverage gate that makes au
 
 **Provider data:** mock only — no Ebury connection, integration, or endorsement
 
-The implementation and deployment instructions below describe the earlier Base-oriented prototype. They await the Arc rewrite and are not an Arc deployment guide.
-
 This repository demonstrates one narrow claim: independently authenticated exposure and hedge assertions can produce a deterministic FX coverage result that safely governs new capital actions in an EVM vault.
 
 The product is an **FX coverage-control layer for onchain credit**. It does not recommend, arrange, execute, custody, or represent ownership of an FX derivative. An authorized signature proves who asserted defined fields; it does not independently prove the legal existence or enforceability of an offchain hedge.
@@ -74,7 +72,7 @@ pnpm install --frozen-lockfile
 pnpm check
 ```
 
-`pnpm check` builds the Solidity artifacts, typechecks all TypeScript, runs 15 typed-data/adapter/preflight/manifest tests, runs 25 Solidity tests, and builds the dashboard.
+`pnpm check` builds the Solidity artifacts, typechecks all TypeScript, runs 26 TypeScript tests across typed data, the decimals boundary, the provider adapter, preflight and manifest, runs 25 Solidity tests, and builds the dashboard.
 
 On 2026-08-23, the current authorization-epoch-hardened source passed that sequence from a fresh source-only snapshot after excluding dependency folders, compiler output, broadcasts, local environment files, and dashboard builds. This is not yet a public clean-checkout receipt because the directory has no standalone immutable commit. [GitHub Actions](./.github/workflows/check.yml) will provide that receipt after publication.
 
@@ -88,7 +86,9 @@ forge test --offline
 forge build contracts/src --offline --sizes
 ```
 
-## Replay the local coffee scenario
+## Replay the local scenario
+
+> This is the **Base-track** COP scenario, retained while the Arc scenario is built. It runs against local Anvil, not Base, and its evidence is local-only. It moves to the private Base repository once the Arc scenario replaces it.
 
 Start Anvil in one terminal at the fixture timestamp:
 
@@ -129,7 +129,7 @@ The CLI exports a signed credential. Use only a disposable local or testnet mock
 
 ```bash
 node --import tsx packages/provider-adapter/src/cli.ts \
-  packages/provider-adapter/fixtures/mock-forward-active.json \
+  packages/provider-adapter/fixtures/arc-forward-active.json \
   /tmp/mock-signed-hedge.json
 ```
 
@@ -144,7 +144,7 @@ cp apps/dashboard/.env.example apps/dashboard/.env.local
 pnpm --filter @fx-coverage/dashboard dev
 ```
 
-Without configured addresses, the page explicitly reports that Sepolia deployment is pending and shows only the separately labeled recorded local evidence. With addresses configured, it reads:
+Without configured addresses, the page explicitly reports that deployment is pending and shows only the separately labeled recorded local evidence. With addresses configured, it reads:
 
 - frozen facility policy;
 - current exposure and active hedge credentials;
@@ -155,55 +155,67 @@ Without configured addresses, the page explicitly reports that Sepolia deploymen
 
 Wallet controls call `syncCovenant`, `restoreCompliance`, `draw`, and `repay`. The UI does not possess issuer keys or calculate a competing frontend coverage result.
 
-## Base Sepolia deployment
+## Arc Testnet deployment
 
-Base is EVM-compatible. Base Sepolia uses chain ID `84532`, the public test endpoint `https://sepolia.base.org`, and [Sepolia Basescan](https://sepolia.basescan.org/). The public RPC is rate-limited. See Base Docs: [Connecting to Base](https://docs.base.org/base-chain/quickstart/connecting-to-base) and [Deploy Smart Contracts](https://docs.base.org/get-started/deploy-smart-contracts).
+Arc is Circle's EVM-compatible L1 where **USDC is the native gas token**. Canonical constants live in [ARC-FIELD-NOTES.md](./ARC-FIELD-NOTES.md) §1 and are not repeated elsewhere.
 
-The deployment script refuses any chain other than Base Sepolia and does not read a private key. Copy the example, fill four distinct role addresses, and import the facility-admin/deployer key into Foundry's encrypted keystore:
+| | |
+|---|---|
+| Chain ID | `5042002` (hex `0x4CEF52`) |
+| RPC | `https://rpc.testnet.arc.network` — **not** `arc.io`, which appears in Arc's own tutorial and is wrong |
+| Explorer | `https://testnet.arcscan.app` (Blockscout) |
+| USDC ERC-20 | `0x3600000000000000000000000000000000000000`, 6 decimals |
+| EURC | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a`, 6 decimals |
+| Faucet | `https://faucet.circle.com` — 20 USDC per address every 2 hours |
+
+`viem` ships Arc natively. Import `arcTestnet` from `viem/chains`; never hand-roll the chain definition.
+
+> **Not yet deployed.** `contracts/script/Deploy.s.sol` still guards on Base `84532` and uses `MockUSDC`. Retargeting it is stage 3 of [ARC-DELIVERY-PLAN.md](./ARC-DELIVERY-PLAN.md). The procedure below is the intended one, and its tooling is independently verified — see the smoke evidence in `ARC-FIELD-NOTES.md` §7.
+
+### One balance, two decimal views
+
+Arc's native USDC carries **18 decimals** and pays gas. The ERC-20 interface at `0x3600…0000` carries **6** and is what every balance, transfer and credential accounts in. They are the same balance seen twice, differing by 10¹².
+
+Mixing them inside the coverage ratio produces a result wrong by a factor of a trillion, with no revert — the vault reports compliance and releases capital. This is a filed, open, undocumented hazard against Arc itself ([`circlefin/arc-node#91`](https://github.com/circlefin/arc-node/issues/91)), not a hypothetical. Every amount crossing into a credential goes through `packages/credentials/src/decimals.ts` (requirement R-F2-7).
+
+### Fund the roles
+
+Four identities, never one key in two roles. The registry reverts with `IssuerRoleConflict` if the exposure and hedge issuers share an address.
 
 ```bash
-cp contracts/.env.example contracts/.env
-source contracts/.env
-cast wallet import deployer --interactive
-pnpm preflight:sepolia
+export ARC_TESTNET_RPC_URL=https://rpc.testnet.arc.network
+cast chain-id --rpc-url $ARC_TESTNET_RPC_URL          # expect 5042002
+cast wallet import deployer --interactive             # encrypted keystore, never a raw key
+```
+
+Fund the deployer, facility admin, and operator from the Circle faucet. The exposure and hedge issuers sign EIP-712 offchain and a keeper submits, so they hold no gas. Gas averages about $0.004 per transaction; fractional funding is ample.
+
+Never pass a private key as a command-line flag. Circle's own guidance is explicit that `--private-key` is acceptable only for local testing.
+
+### Deploy and verify
+
+Both `forge create` and `forge script --broadcast` are verified working against Arc, including multi-contract scripts with dependent constructor arguments under Solidity 0.8.30 / Prague.
+
+```bash
 forge script contracts/script/Deploy.s.sol:Deploy \
-  --rpc-url "$BASE_SEPOLIA_RPC_URL" \
-  --account deployer \
-  --broadcast \
-  --verify
+  --rpc-url $ARC_TESTNET_RPC_URL --account deployer --broadcast
+
+forge verify-contract $ADDR contracts/src/CovenantVault.sol:CovenantVault \
+  --chain-id 5042002 --verifier blockscout \
+  --verifier-url https://testnet.arcscan.app/api/
 ```
 
-Before preflight, set `SOURCE_COMMIT` to the exact standalone repository HEAD. Foundry and Etherscan API V2 use `ETHERSCAN_API_KEY` for BaseScan verification; the command reports only whether it is present. The read-only preflight requires chain `84532`, a live block, a clean standalone commit, four nonzero distinct role addresses, the `deployer` keystore alias, and nonzero test ETH balances for the facility admin and operator. The exposure and hedge issuers sign messages but do not send scenario transactions.
+Verification renders readable Solidity with decoded constructor arguments and needs no API key.
 
-`FACILITY_ADMIN` must be the imported deployer address. The script deploys and funds only the unrestricted test token; never send production assets to these prototype contracts.
+### Assert receipt status, never exit code
 
-The Sepolia policy uses an explicitly demo-only ten-minute cure period so both cure and breach receipts can be captured during a walkthrough. The local unit suite also exercises longer windows; any production facility would choose its own legally agreed duration.
+`cast send` exits `0` on a **reverted** transaction — observed with receipt `status 0x0`, `gasUsed 21000`, and a populated `revertReason`. Any script that treats exit code as success will report a green run containing a failed transaction.
 
-After deployment, do not claim a working Base Sepolia prototype until the manifest, explorer source verification, two accepted issuer credentials, core scenario receipts, and public dashboard are all independently checked.
+Assert in the direction each step expects. Every expected-success transaction asserts `status == 0x1`. The intentional refusal in A-3 asserts an explicitly **failed** receipt plus evidence of `DrawNotAllowed(CURE)`; a transport error or unrelated revert is not acceptance evidence. This is requirement A-9.
 
-Convert Foundry's broadcast file into the required validated manifest only after the deployment commit exists:
+### Credential freshness
 
-```bash
-SOURCE_COMMIT=<40-to-64-character-hex-commit> pnpm manifest:deployment
-```
-
-The generator reads the four role addresses already loaded from `contracts/.env`, rejects any chain other than `84532`, requires all five successful deployment receipts, checks that the broadcast deployer equals `FACILITY_ADMIN`, and writes `deployments/base-sepolia.json`.
-
-Run the onchain evidence arc with four disposable Base Sepolia test keys whose addresses match the manifest:
-
-```bash
-cp scenarios/.env.example scenarios/.env
-source scenarios/.env
-SCENARIO_PHASE=initial pnpm scenario:sepolia
-```
-
-Phase one records the compliant draw, failed draw after exposure growth, cure, restoration, second draw, and cancellation. It writes the exact cure deadline to `deployments/base-sepolia-scenario.json`. After that ten-minute deadline:
-
-```bash
-SCENARIO_PHASE=finalize pnpm scenario:sepolia
-```
-
-The final phase verifies that breach did not move vault funds, records the breach receipt, repays mock principal, and appends explorer links. The runner refuses a wrong chain, mismatched role key, replayed phase one, or premature finalization.
+Checked-in fixtures are deterministic for local tests. Public runs must generate labelled mock observations relative to a recorded chain timestamp before signing — `credentialMaxAge` is 24 hours, so fixtures with baked timestamps evaluate `UNASSESSED` on any later day. Save the generated fixtures, their source commitments, sequences and signed payloads alongside the evidence, and never modify a signed field afterward.
 
 ## Trust and safety assumptions
 

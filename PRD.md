@@ -222,7 +222,9 @@ Everything in `PRODUCT-THESIS.md` "Explicit exclusions." Plus for this window: p
 
 ## Next session
 
-This PRD is the contract. Scope for the remaining window lives in `CUTLIST.md` (private), which replaces the Engineering Execution Doc described below — at four days, writing an EED costs the morning the decimals test needs. The brief below is retained for the fuller build after submission.
+This PRD is the contract. **[EED.md](./EED.md) now exists** and carries the engineering contract — the `ICoverageGate` interface, the deployment manifest schema, file ownership, identities, and the fixture contract. [ARC-DELIVERY-PLAN.md](./ARC-DELIVERY-PLAN.md) owns sequencing; [START-HERE.md](./START-HERE.md) owns build state.
+
+The brief below is the original 2026-09-07 instruction for producing that document. It is **superseded** — its task one shipped, its four sponsor workstreams are cut, and it sequences to the 16th against a September 13 deadline. `EED.md` §0 reconciles it line by line. Retained only as provenance.
 
 > **First read `DESIGN-RATIONALE.md`** — it carries the reasoning behind every rule below, distilled from the walkthrough that preceded this PRD; without it the requirements look arbitrary. Then read `PRD.md`, `SYSTEM-ARCHITECTURE.md`, `ARC-SYSTEM-DESIGN.md`, `SPONSOR-STRATEGY-REVIEW.md`, `DEMO-WALKTHROUGH.md`, and `BACKLOG.md` in `~/signa`. Then inspect `contracts/src`, `packages/credentials`, `packages/provider-adapter`, `scripts/`, and `scenarios/`. Produce `EED.md` covering: the decimals normalisation and its failing test (R-F2-7) as task one; contract changes for Arc, including the EIP-712 domain for chain `5042002`; the CREATE2 deployment plan, four-identity setup, and deployment manifest; fixture and adapter changes for a EURC exposure and a StableFX-shaped quote; dashboard wiring to the manifest; then integration points and ship/cut gates for ENS (S-7), Privy (S-8), CRE (S-9), and the subgraph (S-10). Sequence it by day from the 8th to the 16th, with a named cut decision on the 14th. Reference PRD requirement IDs throughout. Do not start building until the EED exists.
 
