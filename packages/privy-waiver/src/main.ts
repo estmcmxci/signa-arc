@@ -45,12 +45,11 @@ async function quorumServer(id: string) {
   const vaultSetting = env.PRIVY_WAIVER_VAULT?.trim();
   const vault = vaultSetting ? getAddress(vaultSetting) : undefined;
   const plan = quorumFacilityPlan(manifest, walletAddress, env.PRIVY_QUORUM_FACILITY_LABEL?.trim() || undefined);
-  const signedHeaders = env.PRIVY_INTENT_SIGNED_HEADERS === "app-id+expiry" ? "app-id+expiry" : "app-id";
   const service = new QuorumAdminService(
     privy,
     arc,
     new JsonFileStore(defaultStorePath(env)),
-    { walletId: id, walletAddress, explorer: manifest.explorer, signedHeaders, ...(vault ? { vault } : {}) },
+    { walletId: id, walletAddress, explorer: manifest.explorer, ...(vault ? { vault } : {}) },
     plan,
   );
   return createApproverServer(service, async () => ({
@@ -63,6 +62,5 @@ async function quorumServer(id: string) {
     vaultStatus: vault ? await arc.vaultStatus(vault) : null,
     quorumFacilityId: plan.facilityId,
     maxWaiverDurationSeconds: manifest.facility.policy.maxWaiverDurationSeconds,
-    signedHeaders,
   }));
 }

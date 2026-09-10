@@ -169,6 +169,7 @@ function inspect(action) {
     const tx = payload.body?.params?.transaction || {};
     const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
     checks.push(['signs a transaction (eth_signTransaction)', payload.body?.method === 'eth_signTransaction']);
+    checks.push(['bound to this proposal', payload.intent_id === action.intentId]);
     checks.push(['target contract matches', same(tx.to, action.call.to)]);
     checks.push(['calldata matches', same(tx.data, action.call.data)]);
     checks.push(['chain is Arc Testnet', BigInt(tx.chain_id) === BigInt(action.call.chainId)]);
@@ -233,11 +234,17 @@ function renderActions(actions) {
   }
 }
 
+// The payload embeds the signing time and Privy accepts it for 300 seconds, so approving always
+// signs a fresh copy, checked the same way as the one on screen, and returns its timestamp.
 async function approve(action) {
-  const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, approver.privateKey, new TextEncoder().encode(action.signingPayload));
+  const payload = await api(`/api/actions/${encodeURIComponent(action.intentId)}/signing-payload`);
+  if (!inspect({ ...action, signingPayload: payload.text }).ok) {
+    throw new Error('The payload to sign does not match the proposed call. Not signing.');
+  }
+  const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, approver.privateKey, new TextEncoder().encode(payload.text));
   await api(`/api/actions/${encodeURIComponent(action.intentId)}/approve`, {
     method: 'POST',
-    body: JSON.stringify({ publicKey: approver.publicKey, signature: b64(signature), encoding: 'p1363', timestamp: Date.now() }),
+    body: JSON.stringify({ publicKey: approver.publicKey, signature: b64(signature), encoding: 'p1363', timestamp: payload.timestamp }),
   });
   await refresh();
 }

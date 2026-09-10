@@ -22,8 +22,11 @@ import {
 import { arcTestnet } from "viem/chains";
 
 /**
- * Everything on the Arc side of the quorum flow. Privy signs an RLP transaction and never learns
- * Arc exists; this module pins what it signs, checks what comes back, and broadcasts it.
+ * Everything on the Arc side of the quorum flow. Privy only signs (`eth_signTransaction`); this
+ * module pins what it signs, checks what comes back, and broadcasts it. That split is the design,
+ * not a workaround: Privy cannot broadcast on Arc at all (`eth_sendTransaction` answers 401 "App is
+ * not authorized to transact on chain eip155:5042002"), and signing only keeps the nonce, the fees
+ * and the check before broadcast in our hands.
  */
 
 export const COVENANT_STATES = ["UNASSESSED", "COMPLIANT", "CURE", "BREACH", "WAIVED"] as const;

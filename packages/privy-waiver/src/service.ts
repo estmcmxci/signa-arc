@@ -1,6 +1,7 @@
 import { parseEventLogs, type Address, type Hex } from "viem";
 
 import {
+  INTENT_SIGNATURE_WINDOW_MS,
   formatAuthorizationPayload,
   intentAuthorizationInput,
   normalizePublicKey,
@@ -33,7 +34,8 @@ import {
 
 /**
  * The quorum-gated admin flow: propose an admin call as a Privy intent, collect one authorization
- * signature per approver, then check the transaction Privy signs and broadcast it to Arc.
+ * signature per approver, then check the transaction Privy signs and broadcast it to Arc
+ * ourselves, because Privy cannot (see arc.ts).
  *
  * R-F3-7: a waiver is the one place a human overrides the covenant, so under Privy it takes m-of-n.
  * The facility's admin check is `msg.sender == admin`, so the quorum-owned wallet only has to be
@@ -45,8 +47,6 @@ export type ServiceConfig = {
   walletAddress: Address;
   explorer: string;
   vault?: Address;
-  /** Which Privy headers the approval payload carries. See `intentAuthorizationInput`. */
-  signedHeaders: "app-id" | "app-id+expiry";
 };
 
 /** One approver's signature, as the UI sends it. Browsers produce P1363; SDKs produce DER. */
@@ -54,6 +54,7 @@ export type Approval = {
   publicKey: string;
   signature: string;
   encoding: "der" | "p1363";
+  /** The timestamp inside the signed payload, as `signingPayloadFor` returned it. */
   timestamp: number;
 };
 
@@ -76,7 +77,10 @@ export type ActionView = {
     maxFeePerGasWei: string;
   };
   approvals: { threshold: number; members: { publicKey: string; signedAt: number | null }[] };
-  /** The exact text an approver signs. Present only while the intent can take approvals. */
+  /**
+   * What an approver signs, stamped with the time this view was built. Present only while the
+   * intent can take approvals. Approvers sign a fresh copy from `signingPayloadFor`.
+   */
   signingPayload?: string;
   broadcast?: BroadcastRecord & { explorerUrl: string };
 };
@@ -93,7 +97,6 @@ export class ServiceError extends Error {
 const OPEN_STATUSES = new Set(["pending", "granted", "processing", "executed"]);
 const QUANTITY_FIELDS = new Set(["chain_id", "nonce", "gas_limit", "max_fee_per_gas", "max_priority_fee_per_gas", "value", "type"]);
 const MAX_UINT32 = 2 ** 32 - 1;
-const APPROVAL_CLOCK_SKEW_MS = 10 * 60 * 1000;
 
 export class QuorumAdminService {
   constructor(
@@ -145,12 +148,25 @@ export class QuorumAdminService {
     return this.view(action, await this.privy.getIntent(intentId));
   }
 
-  /** The bytes an approver signs: the intent's recorded request, canonicalized. */
-  signingPayload(intent: RpcIntent): { text: string; bytes: Uint8Array<ArrayBuffer> } {
-    const extra =
-      this.config.signedHeaders === "app-id+expiry" ? { "privy-request-expiry": String(intent.expires_at) } : {};
-    const bytes = formatAuthorizationPayload(intentAuthorizationInput(intent.request_details, this.privy.appId, extra));
+  /** The bytes an approver signs to authorize `intent` at `timestamp`. */
+  signingPayload(intent: RpcIntent, timestamp: number): { text: string; bytes: Uint8Array<ArrayBuffer> } {
+    const bytes = formatAuthorizationPayload(intentAuthorizationInput(intent, this.privy.appId, timestamp));
     return { text: new TextDecoder().decode(bytes), bytes };
+  }
+
+  /**
+   * A payload to sign now. It embeds the current time and Privy accepts it for 300 seconds, so an
+   * approver fetches one when approving rather than signing whatever the page showed earlier.
+   */
+  async signingPayloadFor(intentId: string): Promise<{ text: string; timestamp: number }> {
+    const action = this.requireAction(intentId);
+    const intent = await this.privy.getIntent(intentId);
+    if (intent.status !== "pending") {
+      throw new ServiceError(`intent is ${intent.status}; only pending intents take approvals`, 409);
+    }
+    this.assertIntentMatches(intent, deserializePinned(action.pinned));
+    const timestamp = this.now();
+    return { text: this.signingPayload(intent, timestamp).text, timestamp };
   }
 
   /**
@@ -166,15 +182,16 @@ export class QuorumAdminService {
     this.assertIntentMatches(intent, deserializePinned(action.pinned));
     const member = keyMembers(intent).find((candidate) => sameKey(candidate.publicKey, approval.publicKey));
     if (!member) throw new ServiceError("that public key is not a member of this intent's quorum", 403);
-    if (Math.abs(this.now() - approval.timestamp) > APPROVAL_CLOCK_SKEW_MS) {
-      throw new ServiceError("approval timestamp is not current");
+    if (Math.abs(this.now() - approval.timestamp) > INTENT_SIGNATURE_WINDOW_MS) {
+      throw new ServiceError("approval timestamp is outside Privy's 300-second window; sign a fresh payload");
     }
     const signature =
       approval.encoding === "p1363"
         ? Buffer.from(p1363ToDer(Buffer.from(approval.signature, "base64"))).toString("base64")
         : approval.signature;
-    if (!verifyAuthorizationSignature(member.publicKey, this.signingPayload(intent).bytes, signature)) {
-      throw new ServiceError("signature does not verify over this intent's payload");
+    const payload = this.signingPayload(intent, approval.timestamp).bytes;
+    if (!verifyAuthorizationSignature(member.publicKey, payload, signature)) {
+      throw new ServiceError("signature does not verify over this intent's payload at that timestamp");
     }
     const updated = await this.privy.authorizeIntent(intentId, { signature, timestamp: approval.timestamp });
     return this.view(action, updated);
@@ -295,7 +312,7 @@ export class QuorumAdminService {
         maxFeePerGasWei: pinned.maxFeePerGas,
       },
       approvals: { threshold, members },
-      ...(intent.status === "pending" ? { signingPayload: this.signingPayload(intent).text } : {}),
+      ...(intent.status === "pending" ? { signingPayload: this.signingPayload(intent, this.now()).text } : {}),
       ...(action.broadcast
         ? { broadcast: { ...action.broadcast, explorerUrl: `${this.config.explorer}/tx/${action.broadcast.hash}` } }
         : {}),

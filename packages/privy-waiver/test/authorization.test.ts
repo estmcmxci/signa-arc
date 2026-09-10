@@ -90,21 +90,48 @@ test("an empty body is signed as an empty string, as the SDK does", () => {
   assert.deepEqual(input.body, {}, "formatting must not mutate the caller's request");
 });
 
-test("an intent's recorded request becomes the payload with only the app ID header", () => {
-  const input = intentAuthorizationInput(
-    { method: "POST", url: vectorInput.url, body: vectorInput.body },
-    "test-app-id",
-  );
-  assert.equal(decode(formatAuthorizationPayload(input)), SDK_CANONICAL);
-  const withExpiry = intentAuthorizationInput(
-    { method: "POST", url: vectorInput.url, body: vectorInput.body },
-    "test-app-id",
-    { "privy-request-expiry": "1789000000000" },
-  );
-  assert.match(
-    decode(formatAuthorizationPayload(withExpiry)),
-    /"headers":\{"privy-app-id":"test-app-id","privy-request-expiry":"1789000000000"\}/,
-  );
+test("an intent authorization is byte for byte the payload Privy's live /authorize accepted", () => {
+  // Accepted by POST /v1/intents/{id}/authorize on 2026-09-10, with only the app ID replaced.
+  // intent_id and timestamp are the two fields Privy's documentation omits; both are required.
+  const accepted =
+    '{"body":{"method":"eth_signTransaction","params":{"transaction":{"chain_id":5042002,"gas_limit":100000,"max_fee_per_gas":1000000000,"max_priority_fee_per_gas":1000000,"nonce":0,"to":"0x0000000000000000000000000000000000000001","type":2,"value":"0x0"}}},"headers":{"privy-app-id":"test-app-id"},"intent_id":"g2yqks6vt04omcu9sh29p6tk","method":"POST","timestamp":1789069834498,"url":"https://api.privy.io/v1/wallets/sfdwf26rn9nqszxv81hwbb9z/rpc","version":1}';
+  const intent = {
+    intent_id: "g2yqks6vt04omcu9sh29p6tk",
+    request_details: {
+      method: "POST" as const,
+      url: "https://api.privy.io/v1/wallets/sfdwf26rn9nqszxv81hwbb9z/rpc",
+      // Privy's normalized body, in the key order GET /v1/intents/{id} returns.
+      body: {
+        method: "eth_signTransaction",
+        params: {
+          transaction: {
+            to: "0x0000000000000000000000000000000000000001",
+            type: 2,
+            nonce: 0,
+            value: "0x0",
+            chain_id: 5042002,
+            gas_limit: 100000,
+            max_fee_per_gas: 1000000000,
+            max_priority_fee_per_gas: 1000000,
+          },
+        },
+      },
+    },
+  };
+  assert.equal(decode(formatAuthorizationPayload(intentAuthorizationInput(intent, "test-app-id", 1_789_069_834_498))), accepted);
+});
+
+test("a signature is bound to one intent and one timestamp", () => {
+  const key = vectorPrivateKey();
+  const intent = { intent_id: "intent-a", request_details: { method: "POST" as const, url: vectorInput.url, body: vectorInput.body } };
+  const signature = signAuthorizationPayload(key, formatAuthorizationPayload(intentAuthorizationInput(intent, "test-app-id", 1_000)));
+  assert.ok(verifyAuthorizationSignature(SDK_PUBLIC_KEY, formatAuthorizationPayload(intentAuthorizationInput(intent, "test-app-id", 1_000)), signature));
+  for (const other of [
+    intentAuthorizationInput({ ...intent, intent_id: "intent-b" }, "test-app-id", 1_000),
+    intentAuthorizationInput(intent, "test-app-id", 1_001),
+  ]) {
+    assert.ok(!verifyAuthorizationSignature(SDK_PUBLIC_KEY, formatAuthorizationPayload(other), signature));
+  }
 });
 
 test("the SDK's signature verifies here, and the key derivation matches the SDK's", () => {

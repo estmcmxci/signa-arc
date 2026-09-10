@@ -66,6 +66,9 @@ async function route(
   if (resource === "actions" && id) {
     const intentId = decodeURIComponent(id);
     if (method === "GET" && !action) return sendJson(response, 200, await service.get(intentId));
+    if (method === "GET" && action === "signing-payload") {
+      return sendJson(response, 200, await service.signingPayloadFor(intentId));
+    }
     if (method === "POST" && action === "approve") {
       return sendJson(response, 200, await service.approve(intentId, parseApproval(await readJson(request))));
     }
