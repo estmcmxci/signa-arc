@@ -34,6 +34,34 @@ All dates and target times below use EDT. Each stage must meet its exit conditio
 | September 12 | Clean reproduction, Arc README, repository publication, video | Public artifact package passes final review; submission completed that evening |
 | September 13, before noon | Deadline buffer | Verify submission receipt and accessibility of every submitted link |
 
+## Lanes and sync points
+
+The stages below are a *time* view of the work. This is the *ownership* view. Both describe the same five stages; run them together.
+
+**Under concurrent execution the stage dates above are sync-point dates, not per-lane dates.** A lane is not behind because it has not reached stage 4 — it is behind when it misses a sync point. Read the table below before reading your stage.
+
+| Lane | Owns | Touches stages | Blocked by |
+|---|---|---|---|
+| **A — Contracts** | `CoverageEngine.sol`, `CovenantVault.sol`, the two registries, `contracts/script/Deploy.s.sol`, `deployments/arc-testnet.json` | 2, 3 | Nothing. **This is the critical path** — everything else waits on its manifest |
+| **B — Evidence** | `packages/credentials/src/index.ts`, `packages/provider-adapter/fixtures/arc-forward-*.json`, `scenarios/arc-facility.ts` | 1, 3 | Needs A's addresses to *run*, not to be *written*. Write against the `EED.md` §4 manifest schema from the start |
+| **C — Surface** | `apps/dashboard/**`, `README.md`, Wave 1 Base removals | 4, 5 | Needs the real manifest only for final wiring. Build against a fixture manifest until S2 |
+
+**Sync points.**
+
+- **S1 — the gate compiles and fixtures sign.** B can run the full scenario locally against Anvil. A continues to deployment.
+- **S2 — deployed, manifest written, contracts verified.** B runs the acceptance sequence against Arc; C wires the dashboard to real state.
+- **S3 — evidence captured.** C writes the README and records the video against real explorer links.
+
+**Two ownerless things that break everyone at once.**
+
+`package.json` and `pnpm-lock.yaml` belong to the **integrator**, not to any lane. Three agents adding scripts or dependencies is the classic conflict, and it breaks `pnpm check` for all three simultaneously.
+
+**"Is it green" is a role.** Someone runs `pnpm check` on every merge and refuses work that breaks it. Twenty-six TypeScript tests and twenty-five Solidity tests are the only thing standing between three parallel lanes and a submission that does not build.
+
+**Every lane brief carries `EED.md` §8 verbatim** — `arcTestnet` from `viem/chains`, assert receipt status in the direction the step expects, one decimals convention, four identities with two that never share an address, claims discipline, and the gate answering one question only. A link is weaker than the text; these are the rules an agent violates while improvising.
+
+---
+
 ### 1. Complete scenario inputs and units
 
 Requirements: S-2, S-B, R-F1-1 through R-F1-6, R-F2-1 through R-F2-7.

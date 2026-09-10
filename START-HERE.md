@@ -70,6 +70,8 @@ Arc is Circle's L1 where USDC is the native gas token. It ships StableFX — an 
 
 Items 1–4 are the critical path. 5–7 are the submission gate.
 
+**Concurrent execution runs in three lanes** — Contracts, Evidence, Surface — with three sync points. See `ARC-DELIVERY-PLAN.md` §"Lanes and sync points" and the lane column in `EED.md` §2. Under lanes, the plan's stage dates are sync-point dates.
+
 **[ARC-DELIVERY-PLAN.md](./ARC-DELIVERY-PLAN.md) sequences this into five stages with exit conditions.** It is the execution document; this queue is the summary. Where they differ, the plan is more specific and wins on sequencing — but `PRD.md` still owns what must be true.
 
 **Schedule pressure, recorded once.** The plan dates stages 1–3 across September 9–10, with Arc deployment due on the 10th. As of the 10th none of it has started, so roughly a day of slip exists before execution begins. The dates are deliberately unchanged. The squeeze lands on stages 4 and 5 — the dashboard and the submission package — and stage 4 is a qualification requirement, not polish.

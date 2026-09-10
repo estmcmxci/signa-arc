@@ -69,19 +69,23 @@ interface ICoverageGate {
 
 So two agents do not write the same seam differently. **Owner** means: changes here go through that workstream; others read but do not edit.
 
-| Path | Owner | Notes |
+Lanes are defined in `ARC-DELIVERY-PLAN.md` §"Lanes and sync points".
+
+| Path | Lane | Notes |
 |---|---|---|
-| `contracts/src/CoverageEngine.sol` | Gate | Add `assess`; do not change `evaluate`'s semantics — 25 Solidity tests depend on them |
-| `contracts/src/CovenantVault.sol` | Gate | `draw()` routes through `assess`; lifecycle behaviour unchanged |
-| `contracts/src/{FacilityRegistry,CredentialRegistry}.sol` | Gate | Expect no change beyond the EIP-712 domain |
-| `contracts/script/Deploy.s.sol` | Deployment | Chain guard `84532` → `5042002`; `MockUSDC` → `0x3600…0000` |
+| `contracts/src/CoverageEngine.sol` | **A** | Add `assess`; do not change `evaluate`'s semantics — 25 Solidity tests depend on them |
+| `contracts/src/CovenantVault.sol` | **A** | `draw()` routes through `assess`; lifecycle behaviour unchanged |
+| `contracts/src/{FacilityRegistry,CredentialRegistry}.sol` | **A** | Expect no change beyond the EIP-712 domain |
+| `contracts/script/Deploy.s.sol` | **A** | Chain guard `84532` → `5042002`; `MockUSDC` → `0x3600…0000` |
+| `deployments/arc-testnet.json` | **A** | Written by the deploy step, read by B and C. §4 |
+| `packages/credentials/src/index.ts` | **B** | EIP-712 domain → chain `5042002` |
+| `packages/provider-adapter/fixtures/arc-forward-*.json` | **B** | See §5 |
+| `scenarios/arc-facility.ts` | **B** | New file. Does not exist |
+| `apps/dashboard/**` | **C** | §6 |
+| `README.md` | **C** | Arc rewrite, Wave 1 removals |
 | `packages/credentials/src/decimals.ts` | **Frozen** | R-F2-7. Shipped and tested. Changes require a new failing test first |
-| `packages/credentials/src/index.ts` | Credentials | EIP-712 domain → chain `5042002` |
-| `packages/provider-adapter/fixtures/arc-forward-*.json` | Fixtures | See §5 |
-| `scenarios/arc-facility.ts` | Scenario | New file. Does not exist |
 | `scenarios/coffee-facility.ts` | **Do not touch** | Base-track, leaves with Wave 1 |
-| `apps/dashboard/**` | Frontend | §6 |
-| `deployments/arc-testnet.json` | Deployment | Written by the deploy step, read by scenario and frontend. §4 |
+| `package.json`, `pnpm-lock.yaml` | **Integrator** | No lane edits these. Three agents adding scripts breaks `pnpm check` for all three |
 
 ## 3. Identities
 
