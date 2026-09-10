@@ -208,6 +208,26 @@ Result: byte-for-byte the same failure as E4 — `{"ok":false,"error":{"code":"U
 
 The wider lesson for any monitor: a watcher that queries a rate-limited third party becomes a liar under its own load. Watch local state unless there is genuinely no alternative.
 
+## 5c. Privy signs for Arc but cannot broadcast on it ⚠️
+
+Verified 2026-09-10 by probing eight chains with the identical `eth_sendTransaction` call from the same wallet:
+
+| Chain | Response |
+|---|---|
+| `eip155:1`, `8453`, `84532`, `11155111`, `10` | *Missing `privy-authorization-signature` header* |
+| `eip155:137`, `42161` | *The total cost … exceeds the balance* |
+| **`eip155:5042002` (Arc)** | **`App is not authorized to transact on chain`** |
+
+**Every other chain gets past the gate and fails on something about the request.** Polygon and Arbitrum got far enough that Privy estimated gas and read the wallet's balance — it holds live RPC connections to those chains. Arc never reaches that stage.
+
+Check order is **chain authorization → signature → gas/balance**. Arc fails at the first gate, before our request is examined at all.
+
+**Why:** "supported" means Privy operates RPC infrastructure for that chain — a per-chain integration on their side, not generic EVM compatibility. Broadcasting means holding a connection, estimating gas and tracking nonces on a network they have onboarded. Arc's public testnet is recent and is not on that list. There is no dashboard toggle; it is their infrastructure boundary, not our configuration. No public endpoint lists the allowlist either — `/v1/chains` and `/v1/networks` both 404 — so it is discoverable only by probing.
+
+**Signing needs none of that.** `eth_signTransaction` is a pure key operation inside the enclave over RLP bytes, and `chain_id` is just a field in the payload. So the architecture is forced and correct: **Privy signs, we broadcast.**
+
+**The trap:** the chain check fires at *authorize* time, not at *propose* time. `POST /v1/intents/wallets/{id}/rpc` for Arc returns `200 pending` quite happily; both approvals then fail with the 401 and the intent sits `pending` forever. An intent for an unsupported chain can be created and never executed.
+
 ## 6. Faucet — not a constraint
 
 `https://faucet.circle.com` — 20 USDC per address per chain every 2 hours; USDC, EURC, and cirBTC; Arc Testnet listed by default.
