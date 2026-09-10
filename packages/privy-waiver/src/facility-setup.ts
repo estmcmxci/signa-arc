@@ -5,11 +5,11 @@ import { facilityRegistryAbi, type ArcGateway, type ArcManifest, type FacilityPo
 /**
  * The facility a Privy quorum administers.
  *
- * The deployed facility's admin cannot be handed to a Privy wallet: FacilityRegistry writes the
- * policy once, in createFacility, and has no admin setter. So the quorum's wallet creates its own
- * facility in the same registry, under the same PRD §7 policy, and a second CovenantVault is bound
- * to it. Every step is an admin call the quorum approves, so the policy itself is created under
- * quorum, not just the waivers.
+ * A facility's admin cannot be handed over: FacilityRegistry writes the policy once, in
+ * createFacility, and has no admin setter. So the quorum's own wallet creates the facility, in the
+ * same registry and under the same PRD §7 policy, and a new CovenantVault is bound to it. It
+ * replaces the EOA-administered facility in the manifest. Every step is an admin call the quorum
+ * approves, so the policy itself is created under quorum, not just the waivers.
  */
 
 export const DEFAULT_QUORUM_FACILITY_LABEL = "signa-covenant-arc-eur-usd-privy-quorum";
@@ -129,12 +129,15 @@ export async function nextFacilitySetupStep(
   return { kind: "complete", description: vaultDeployInstruction(plan) };
 }
 
-/** The vault has no owner, so any funded key may deploy it once the facility is frozen. */
+/**
+ * The vault has no owner, so any funded key may deploy it once the facility is frozen.
+ * `--constructor-args` takes every value after it, so it must come last.
+ */
 export function vaultDeployInstruction(plan: QuorumFacilityPlan): string {
   return [
-    "Facility is frozen. Deploy its CovenantVault, then set PRIVY_WAIVER_VAULT to the address:",
+    "Facility is frozen. Deploy its CovenantVault, then record it in deployments/arc-testnet.json:",
     `forge create contracts/src/CovenantVault.sol:CovenantVault --broadcast \\`,
-    `  --constructor-args ${plan.facilityId} ${plan.registry} ${plan.engine} \\`,
-    `  --rpc-url https://rpc.testnet.arc.network --account signa-arc-admin`,
+    `  --rpc-url https://rpc.testnet.arc.network --account signa-arc-admin \\`,
+    `  --constructor-args ${plan.facilityId} ${plan.registry} ${plan.engine}`,
   ].join("\n");
 }

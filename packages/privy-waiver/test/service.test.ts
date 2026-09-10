@@ -3,15 +3,33 @@ import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
 
-import { encodeAbiParameters, encodeEventTopics, keccak256, type Address, type Hex } from "viem";
+import {
+  encodeAbiParameters,
+  encodeEventTopics,
+  keccak256,
+  parseTransaction,
+  type Address,
+  type Hex,
+  type TransactionSerializedEIP1559,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import {
+  INTENT_SIGNATURE_WINDOW_MS,
   formatAuthorizationPayload,
   intentAuthorizationInput,
   verifyAuthorizationSignature,
 } from "../src/authorization.ts";
-import { covenantVaultAbi, reasonCommitment, type ArcGateway, type ArcReceipt } from "../src/arc.ts";
+import {
+  covenantVaultAbi,
+  describeAdminCall,
+  reasonCommitment,
+  type ArcGateway,
+  type ArcReceipt,
+  type CoverageEvaluation,
+  type FacilityPolicy,
+  type VaultStatus,
+} from "../src/arc.ts";
 import { PrivyClient, type RpcIntent } from "../src/privy-client.ts";
 import { createApproverServer } from "../src/server.ts";
 import { QuorumAdminService, ServiceError, type ActionView, type Approval } from "../src/service.ts";
@@ -23,14 +41,42 @@ const walletAccount = privateKeyToAccount(WALLET_KEY);
 const WALLET_ID = "wallet-under-quorum";
 const APP_ID = "test-app-id";
 const VAULT: Address = "0x1970feb699BCd4dd268a3A8c2590929fc8fd67c2";
+const REGISTRY: Address = "0xB54fe913C4a7dE73Bc285338dCbb384AEec5e448";
+const ENGINE: Address = "0x3341B76fEFF4CE691781fEAa4C76EA95479b9b6b";
+const DEAD: Address = "0x000000000000000000000000000000000000dEaD";
 const FACILITY_ID: Hex = "0x39cbb5ce0d83241c8fe2be217023dd05dc80cecce06fb7df109a6c50452c4d1c";
+const OTHER_FACILITY_ID: Hex = "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2";
+
+const FACILITY_POLICY: FacilityPolicy = {
+  facilityId: FACILITY_ID,
+  settlementCurrency: "0x555344",
+  exposureCurrency: "0x455552",
+  minCoverageBps: 10_000,
+  credentialMaxAge: 86_400,
+  maturityTolerance: 604_800,
+  defaultHaircutBps: 500,
+  reserveAmount: 500_000n,
+  curePeriod: 432_000,
+  maxWaiverDuration: 259_200,
+  maxActiveHedges: 8,
+  settlementAsset: "0x3600000000000000000000000000000000000000",
+  admin: walletAccount.address,
+  operator: "0x7e09657321F1818825a9A15cedd9D95308130ED4",
+  frozen: true,
+};
 
 type RecordedRequest = { method: string; path: string; headers: Headers; body: unknown };
+
+/** Privy returns an intent's member keys in PEM, 64 characters a line, not the SPKI it was given. */
+const toPem = (spki: string) =>
+  `-----BEGIN PUBLIC KEY-----\n${(spki.match(/.{1,64}/g) ?? []).join("\n")}\n-----END PUBLIC KEY-----`;
+
 type FakeIntent = RpcIntent & { authorization_details: { threshold: number; members: { type: "key"; public_key: string; signed_at: number | null }[] }[] };
 
 /**
  * An in-memory stand-in for Privy's API, reached through PrivyClient's real HTTP code. It checks an
- * approval exactly as Privy is documented to: over the intent's recorded request, under a member key.
+ * approval the way the live API was measured to: over the intent's recorded request plus
+ * `intent_id` and the request's `timestamp`, which must be within 300 seconds, under a member key.
  */
 function fakePrivy(options: {
   members: string[];
@@ -63,10 +109,9 @@ function fakePrivy(options: {
         created_at: Date.now(),
         expires_at: Date.now() + 72 * 3_600_000,
         authorization_details: [
-          { threshold: 2, members: options.members.map((key) => ({ type: "key", public_key: key, signed_at: null })) },
+          { threshold: 2, members: options.members.map((key) => ({ type: "key", public_key: toPem(key), signed_at: null })) },
         ],
-        // Privy adds fields of its own to what it records, which is why approvers sign its copy.
-        request_details: { method: "POST", url: `https://api.privy.io/v1/wallets/${propose[1]}/rpc`, body: { ...recorded, chain_type: "ethereum" } },
+        request_details: { method: "POST", url: `https://api.privy.io/v1/wallets/${propose[1]}/rpc`, body: recorded },
       };
       intents.set(intent.intent_id, intent);
       return json(200, intent);
@@ -80,14 +125,20 @@ function fakePrivy(options: {
       intent.status = "rejected";
       return json(200, intent);
     }
-    const { signature, timestamp } = body as { signature: string; timestamp: number };
-    const payload = formatAuthorizationPayload(intentAuthorizationInput(intent.request_details, APP_ID));
+    const { signature, timestamp } = body as { signature?: string; timestamp?: number };
+    if (typeof timestamp !== "number") return json(400, { error: "[Input error] `timestamp` is required" });
+    if (Math.abs(Date.now() - timestamp) > INTENT_SIGNATURE_WINDOW_MS) {
+      return json(400, { error: "Timestamp is too far from current time. Expected within 300s" });
+    }
+    const payload = formatAuthorizationPayload(intentAuthorizationInput(intent, APP_ID, timestamp));
     const members = intent.authorization_details[0]?.members ?? [];
     const member = members.find(
       (candidate) =>
-        candidate.public_key !== undefined && verifyAuthorizationSignature(candidate.public_key, payload, signature),
+        typeof signature === "string" &&
+        candidate.public_key !== undefined &&
+        verifyAuthorizationSignature(candidate.public_key, payload, signature),
     );
-    if (!member) return json(401, { error: "Invalid authorization signature" });
+    if (!member) return json(400, { error: "No valid authorization key found for signature", code: "invalid_data" });
     member.signed_at = timestamp;
     if (members.filter((candidate) => candidate.signed_at).length >= 2) {
       const tx = (intent.request_details.body as { params: { transaction: Record<string, string | number> } }).params.transaction;
@@ -115,7 +166,34 @@ function fakePrivy(options: {
   return { fetchImpl, requests };
 }
 
-function fakeArc(): ArcGateway & { broadcast: Hex[] } {
+type ArcOptions = {
+  coverage?: Partial<CoverageEvaluation>;
+  vault?: Partial<VaultStatus>;
+  admin?: Address;
+  /** What the receipt's WaiverCreated says. By default, what the contract would: this facility, the approved commitment. */
+  waiverEvent?: "none" | { facilityId?: Hex; reasonCommitment?: Hex; address?: Address };
+};
+
+function waiverCreatedLog(hash: Hex, event: { facilityId: Hex; reasonCommitment: Hex; address: Address }): ArcReceipt["logs"][number] {
+  return {
+    address: event.address,
+    topics: encodeEventTopics({
+      abi: covenantVaultAbi,
+      eventName: "WaiverCreated",
+      args: { facilityId: event.facilityId, reasonCommitment: event.reasonCommitment },
+    }),
+    data: encodeAbiParameters([{ type: "uint64" }, { type: "uint64" }], [1_800_000_000n, 1_800_086_400n]),
+    blockNumber: 61_500_000n,
+    blockHash: `0x${"11".repeat(32)}`,
+    logIndex: 0,
+    transactionHash: hash,
+    transactionIndex: 0,
+    removed: false,
+  } as unknown as ArcReceipt["logs"][number];
+}
+
+/** Arc as the facility stands in CURE: coverage 6840 of 10000 bps, so a waiver would be accepted. */
+function fakeArc(options: ArcOptions = {}): ArcGateway & { broadcast: Hex[] } {
   const broadcast: Hex[] = [];
   return {
     broadcast,
@@ -128,35 +206,39 @@ function fakeArc(): ArcGateway & { broadcast: Hex[] } {
       broadcast.push(raw);
       return keccak256(raw);
     },
-    waitForReceipt: async (hash) => ({
-      transactionHash: hash,
-      status: "success",
-      blockNumber: 61_500_000n,
-      logs: [
-        {
-          address: VAULT,
-          topics: encodeEventTopics({
-            abi: covenantVaultAbi,
-            eventName: "WaiverCreated",
-            args: { facilityId: FACILITY_ID, reasonCommitment: reasonCommitment("mock signer outage") },
-          }),
-          data: encodeAbiParameters([{ type: "uint64" }, { type: "uint64" }], [1_800_000_000n, 1_800_086_400n]),
-          blockNumber: 61_500_000n,
-          blockHash: `0x${"11".repeat(32)}`,
-          logIndex: 0,
-          transactionHash: hash,
-          transactionIndex: 0,
-          removed: false,
-        } as unknown as ArcReceipt["logs"][number],
-      ],
-    }),
-    facilityExists: async () => true,
-    getFacility: async () => {
-      throw new Error("unused");
+    waitForReceipt: async (hash) => {
+      const raw = broadcast.find((candidate) => keccak256(candidate) === hash);
+      const data = raw ? parseTransaction(raw as TransactionSerializedEIP1559).data : undefined;
+      const approved = data ? (describeAdminCall(data).args[1] as Hex) : reasonCommitment("");
+      const event = options.waiverEvent;
+      const logs =
+        event === "none"
+          ? []
+          : [
+              waiverCreatedLog(hash, {
+                facilityId: event?.facilityId ?? FACILITY_ID,
+                reasonCommitment: event?.reasonCommitment ?? approved,
+                address: event?.address ?? VAULT,
+              }),
+            ];
+      return { transactionHash: hash, status: "success", blockNumber: 61_500_000n, logs };
     },
+    facilityExists: async () => true,
+    getFacility: async () => ({ ...FACILITY_POLICY, admin: options.admin ?? walletAccount.address }),
     isExposureIssuer: async () => true,
     isHedgeIssuer: async () => true,
-    vaultStatus: async () => ({ facilityId: FACILITY_ID, covenantState: "CURE", activeWaiver: false, waiverEndsAt: 0n }),
+    vaultStatus: async () => ({ facilityId: FACILITY_ID, covenantState: "CURE", activeWaiver: false, waiverEndsAt: 0n, ...options.vault }),
+    evaluateCoverage: async () => ({
+      assessed: true,
+      compliant: false,
+      coverageBps: 6_840,
+      requiredCoverageBps: 10_000,
+      eligibleHedgeCount: 1,
+      totalHedgeCount: 2,
+      exposureReason: "ELIGIBLE",
+      resultReason: "BELOW_THRESHOLD",
+      ...options.coverage,
+    }),
   };
 }
 
@@ -164,29 +246,52 @@ function fakeArc(): ArcGateway & { broadcast: Hex[] } {
 async function browserApprover() {
   const keys = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign", "verify"]);
   const publicKey = Buffer.from(await crypto.subtle.exportKey("spki", keys.publicKey)).toString("base64");
+  const signPayload = async (payload: { text: string; timestamp: number }): Promise<Approval> => {
+    const signature = await crypto.subtle.sign(
+      { name: "ECDSA", hash: "SHA-256" },
+      keys.privateKey,
+      new TextEncoder().encode(payload.text),
+    );
+    return { publicKey, signature: Buffer.from(signature).toString("base64"), encoding: "p1363", timestamp: payload.timestamp };
+  };
   return {
     publicKey,
-    async sign(view: ActionView, text = view.signingPayload): Promise<Approval> {
-      assert.ok(text, "a pending action exposes the payload to sign");
-      const signature = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, keys.privateKey, new TextEncoder().encode(text));
-      return { publicKey, signature: Buffer.from(signature).toString("base64"), encoding: "p1363", timestamp: Date.now() };
+    signPayload,
+    /** As the UI approves: fetch a fresh payload, sign it, return its timestamp. */
+    async sign(service: QuorumAdminService, intentId: string, tamper: (text: string) => string = (text) => text): Promise<Approval> {
+      const payload = await service.signingPayloadFor(intentId);
+      return signPayload({ text: tamper(payload.text), timestamp: payload.timestamp });
     },
   };
 }
 
-async function setup(privyOptions: Omit<Parameters<typeof fakePrivy>[0], "members"> = {}, members?: string[]) {
+async function setup(
+  privyOptions: Omit<Parameters<typeof fakePrivy>[0], "members"> = {},
+  members?: string[],
+  now: () => number = Date.now,
+  arcOptions: ArcOptions = {},
+) {
   const risk = await browserApprover();
   const treasury = await browserApprover();
   const privy = fakePrivy({ ...privyOptions, members: members ?? [risk.publicKey, treasury.publicKey] });
-  const arc = fakeArc();
+  const arc = fakeArc(arcOptions);
   const service = new QuorumAdminService(
     new PrivyClient({ appId: APP_ID, appSecret: "test-app-secret", apiUrl: "https://api.privy.io" }, privy.fetchImpl),
     arc,
     new MemoryActionStore(),
-    { walletId: WALLET_ID, walletAddress: walletAccount.address, explorer: "https://testnet.arcscan.app", vault: VAULT, signedHeaders: "app-id" },
+    {
+      walletId: WALLET_ID,
+      walletAddress: walletAccount.address,
+      explorer: "https://testnet.arcscan.app",
+      facility: { id: FACILITY_ID, vault: VAULT, registry: REGISTRY, coverageEngine: ENGINE },
+    },
+    undefined,
+    now,
   );
   return { service, privy, arc, risk, treasury };
 }
+
+const authorizeCalls = (requests: RecordedRequest[]) => requests.filter((request) => request.path.endsWith("/authorize"));
 
 test("a waiver goes propose, two approvals, Privy signs, verified broadcast", async () => {
   const { service, privy, arc, risk, treasury } = await setup();
@@ -196,39 +301,114 @@ test("a waiver goes propose, two approvals, Privy signs, verified broadcast", as
   assert.equal(proposed.call.functionName, "createWaiver");
   assert.deepEqual(proposed.call.args, ["86400", JSON.stringify(reasonCommitment("mock signer outage"))]);
   assert.equal(proposed.approvals.threshold, 2);
+  assert.deepEqual(
+    proposed.approvals.members.map((member) => member.publicKey),
+    [risk.publicKey, treasury.publicKey],
+    "PEM member keys come back as the approvers' own SPKI",
+  );
+  assert.equal(proposed.context?.covenantState, "CURE", "approvers see why they are asked");
+  assert.equal(proposed.context?.coverageBps, 6_840);
+  assert.equal(proposed.context?.resultReason, "BELOW_THRESHOLD");
 
   const proposal = privy.requests[0];
   assert.equal(proposal?.path, `/v1/intents/wallets/${WALLET_ID}/rpc`);
   assert.equal(proposal?.headers.get("authorization"), `Basic ${Buffer.from(`${APP_ID}:test-app-secret`).toString("base64")}`);
   assert.equal(proposal?.headers.get("privy-app-id"), APP_ID);
-  assert.equal(proposal?.headers.get("privy-request-expiry"), null, "no expiry header on proposals");
-  const sent = (proposal?.body as { method: string; params: { transaction: Record<string, unknown> } }).params.transaction;
-  assert.equal(sent.chain_id, 5_042_002);
-  assert.equal(sent.to, VAULT);
+  assert.equal(proposal?.headers.get("privy-request-expiry"), null, "no custom expiry on proposals");
+  const sent = (proposal?.body as { method: string; params: { transaction: Record<string, unknown> } });
+  assert.equal(sent.method, "eth_signTransaction", "Privy signs; it cannot send on Arc");
+  assert.equal(sent.params.transaction.chain_id, 5_042_002);
+  assert.equal(sent.params.transaction.to, VAULT);
 
-  const afterOne = await service.approve(proposed.intentId, await risk.sign(proposed));
+  const riskApproval = await risk.sign(service, proposed.intentId);
+  const afterOne = await service.approve(proposed.intentId, riskApproval);
   assert.equal(afterOne.status, "pending");
   assert.equal(afterOne.approvals.members.filter((member) => member.signedAt).length, 1);
   await assert.rejects(service.execute(proposed.intentId), (error: unknown) => error instanceof ServiceError && error.status === 409);
 
-  const authorize = privy.requests.find((request) => request.path.endsWith("/authorize"));
-  const sentApproval = authorize?.body as { signature: string; timestamp: number };
+  const sentApproval = authorizeCalls(privy.requests)[0]?.body as { signature: string; timestamp: number };
   assert.deepEqual(Object.keys(sentApproval).sort(), ["signature", "timestamp"]);
+  assert.equal(sentApproval.timestamp, riskApproval.timestamp, "Privy receives the timestamp that was signed");
   assert.ok(sentApproval.signature.startsWith("ME"), "Privy receives a DER signature, not the browser's P1363");
 
-  const afterTwo = await service.approve(proposed.intentId, await treasury.sign(afterOne));
+  const afterTwo = await service.approve(proposed.intentId, await treasury.sign(service, proposed.intentId));
   assert.equal(afterTwo.status, "executed");
 
   const done = await service.execute(proposed.intentId);
   assert.equal(arc.broadcast.length, 1);
   assert.equal(done.broadcast?.hash, keccak256(arc.broadcast[0] as Hex));
   assert.equal(done.broadcast?.status, "success");
-  assert.equal(done.broadcast?.waiverEndsAt, "1800086400");
+  assert.equal(done.broadcast?.signer, walletAccount.address);
+  assert.deepEqual(done.broadcast?.waiverCreated, {
+    facilityId: FACILITY_ID,
+    reasonCommitment: reasonCommitment("mock signer outage"),
+    startsAt: "1800000000",
+    endsAt: "1800086400",
+    logIndex: 0,
+    facilityMatches: true,
+    reasonCommitmentMatches: true,
+  });
   assert.equal(done.broadcast?.explorerUrl, `https://testnet.arcscan.app/tx/${done.broadcast?.hash}`);
 
   const again = await service.execute(proposed.intentId);
   assert.equal(again.broadcast?.hash, done.broadcast?.hash);
   assert.equal(arc.broadcast.length, 1, "executing twice broadcasts once");
+});
+
+test("a waiver the contract would refuse is never proposed, so it never collects approvals", async () => {
+  const cases: [string, ArcOptions, number, RegExp][] = [
+    ["compliant", { coverage: { compliant: true, coverageBps: 10_000, resultReason: "NONE" } }, 3_600, /compliant \(coverage 10000 bps, 10000 required\)/],
+    ["waiver active", { vault: { covenantState: "WAIVED", activeWaiver: true, waiverEndsAt: 1_800_000_000n } }, 3_600, /already active/],
+    ["another facility's vault", { vault: { facilityId: OTHER_FACILITY_ID } }, 3_600, /belongs to facility 0x899d/],
+    ["another admin", { admin: DEAD }, 3_600, /admin is 0x000000000000000000000000000000000000dEaD/],
+    ["longer than maxWaiverDuration", {}, 259_201, /longest waiver is 3 day\(s\)/],
+  ];
+  for (const [label, arcOptions, durationSeconds, pattern] of cases) {
+    const { service, privy, arc } = await setup({}, undefined, Date.now, arcOptions);
+    await assert.rejects(service.proposeWaiver({ durationSeconds, reason: "mock" }), pattern, label);
+    assert.equal(privy.requests.length, 0, `${label}: nothing reached Privy`);
+    assert.equal(arc.broadcast.length, 0);
+  }
+  const { service } = await setup();
+  assert.equal((await service.proposeWaiver({ durationSeconds: 259_200, reason: "mock" })).status, "pending", "the longest allowed waiver is proposed");
+});
+
+test("a successful receipt is not enough: WaiverCreated must name this facility and commit to the stated reason", async () => {
+  const cases: [string, NonNullable<ArcOptions["waiverEvent"]>, RegExp][] = [
+    ["another reason", { reasonCommitment: reasonCommitment("a different reason") }, /not to keccak256 of the stated reason/],
+    ["another facility", { facilityId: OTHER_FACILITY_ID }, /names facility 0x899d/],
+    ["no event", "none", /0 WaiverCreated events/],
+    ["an event from another contract", { address: DEAD }, /0 WaiverCreated events/],
+  ];
+  for (const [label, waiverEvent, pattern] of cases) {
+    const { service, arc, risk, treasury } = await setup({}, undefined, Date.now, { waiverEvent });
+    const proposed = await service.proposeWaiver({ durationSeconds: 3_600, reason: "mock signer outage" });
+    await service.approve(proposed.intentId, await risk.sign(service, proposed.intentId));
+    await service.approve(proposed.intentId, await treasury.sign(service, proposed.intentId));
+    await assert.rejects(service.execute(proposed.intentId), pattern, label);
+    assert.equal(arc.broadcast.length, 1);
+    const recorded = await service.get(proposed.intentId);
+    assert.equal(recorded.broadcast?.status, "success", `${label}: the mined transaction is still recorded`);
+  }
+});
+
+test("an approval is bound to the timestamp it signed and to Privy's 300-second window", async () => {
+  let clock = Date.now();
+  const { service, privy, risk } = await setup({}, undefined, () => clock);
+  const proposed = await service.proposeWaiver({ durationSeconds: 3_600, reason: "mock" });
+  const fresh = await service.signingPayloadFor(proposed.intentId);
+  assert.match(fresh.text, new RegExp(`"intent_id":"${proposed.intentId}"`));
+  assert.match(fresh.text, new RegExp(`"timestamp":${fresh.timestamp}`));
+
+  const approval = await risk.sign(service, proposed.intentId);
+  await assert.rejects(service.approve(proposed.intentId, { ...approval, timestamp: approval.timestamp + 1 }), /does not verify/);
+  clock += INTENT_SIGNATURE_WINDOW_MS + 1_000;
+  await assert.rejects(service.approve(proposed.intentId, approval), /300-second window/);
+  assert.equal(authorizeCalls(privy.requests).length, 0, "neither reached Privy");
+
+  clock = Date.now();
+  const accepted = await service.approve(proposed.intentId, await risk.sign(service, proposed.intentId));
+  assert.equal(accepted.approvals.members.filter((member) => member.signedAt).length, 1);
 });
 
 test("one proposal at a time: each pins the wallet's next nonce", async () => {
@@ -242,32 +422,32 @@ test("one proposal at a time: each pins the wallet's next nonce", async () => {
 test("a signature that does not verify over the payload never reaches Privy", async () => {
   const { service, privy, risk } = await setup();
   const proposed = await service.proposeWaiver({ durationSeconds: 3_600, reason: "mock" });
-  const forged = await risk.sign(proposed, (proposed.signingPayload ?? "").replace('"nonce":"0x3"', '"nonce":"0x4"'));
+  const forged = await risk.sign(service, proposed.intentId, (text) => text.replace('"nonce":"0x3"', '"nonce":"0x4"'));
   await assert.rejects(service.approve(proposed.intentId, forged), /does not verify/);
-  assert.equal(privy.requests.filter((request) => request.path.endsWith("/authorize")).length, 0);
+  assert.equal(authorizeCalls(privy.requests).length, 0);
 });
 
 test("a key outside the quorum is refused", async () => {
   const outsider = await browserApprover();
-  const { service, risk } = await setup({}, undefined);
+  const { service, risk } = await setup();
   const proposed = await service.proposeWaiver({ durationSeconds: 3_600, reason: "mock" });
-  await assert.rejects(service.approve(proposed.intentId, await outsider.sign(proposed)), /not a member/);
-  assert.ok(await service.approve(proposed.intentId, await risk.sign(proposed)));
+  await assert.rejects(service.approve(proposed.intentId, await outsider.sign(service, proposed.intentId)), /not a member/);
+  assert.ok(await service.approve(proposed.intentId, await risk.sign(service, proposed.intentId)));
 });
 
 test("a signed transaction that differs from the approved one is not broadcast", async () => {
   for (const privyOptions of [{ signOverrides: { nonce: 9 } }, { signWithKey: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" as Hex }]) {
     const { service, arc, risk, treasury } = await setup(privyOptions);
     const proposed = await service.proposeWaiver({ durationSeconds: 3_600, reason: "mock" });
-    const afterOne = await service.approve(proposed.intentId, await risk.sign(proposed));
-    await service.approve(proposed.intentId, await treasury.sign(afterOne));
+    await service.approve(proposed.intentId, await risk.sign(service, proposed.intentId));
+    await service.approve(proposed.intentId, await treasury.sign(service, proposed.intentId));
     await assert.rejects(service.execute(proposed.intentId), /differs from the approved one|not the admin wallet/);
     assert.equal(arc.broadcast.length, 0);
   }
 });
 
 test("if Privy records a different transaction than proposed, nothing is stored to approve", async () => {
-  const { service } = await setup({ alterRecordedTransaction: (tx) => (tx.to = "0x000000000000000000000000000000000000dEaD") });
+  const { service } = await setup({ alterRecordedTransaction: (tx) => (tx.to = DEAD) });
   await assert.rejects(service.proposeWaiver({ durationSeconds: 3_600, reason: "mock" }), /different request than was proposed/);
   assert.deepEqual(await service.list(), []);
 });
@@ -278,7 +458,7 @@ test("waiver proposals need a stated reason and a whole number of seconds", asyn
   await assert.rejects(service.proposeWaiver({ durationSeconds: 1.5, reason: "x" }), /whole number/);
 });
 
-test("the approver server serves the page and the flow over HTTP", async () => {
+test("the approver server serves the page and the flow over HTTP, and offers only waivers", async () => {
   const { service, risk } = await setup();
   const server = createApproverServer(service, async () => ({ chainId: 5_042_002 }));
   server.listen(0, "127.0.0.1");
@@ -287,7 +467,9 @@ test("the approver server serves the page and the flow over HTTP", async () => {
   try {
     const page = await fetch(`${base}/`);
     assert.equal(page.status, 200);
-    assert.match(await page.text(), /Covenant waiver approvals/);
+    const html = await page.text();
+    assert.match(html, /Covenant waiver approvals/);
+    assert.match(html, /demo server/i, "the page says plainly what it is");
 
     const created = await fetch(`${base}/api/waivers`, { method: "POST", body: JSON.stringify({ durationSeconds: 3_600, reason: "mock" }) });
     assert.equal(created.status, 201);
@@ -296,10 +478,16 @@ test("the approver server serves the page and the flow over HTTP", async () => {
     const malformed = await fetch(`${base}/api/actions/${view.intentId}/approve`, { method: "POST", body: JSON.stringify({}) });
     assert.equal(malformed.status, 400);
 
-    const approved = await fetch(`${base}/api/actions/${view.intentId}/approve`, { method: "POST", body: JSON.stringify(await risk.sign(view)) });
+    const payload = (await (await fetch(`${base}/api/actions/${view.intentId}/signing-payload`)).json()) as { text: string; timestamp: number };
+    assert.match(payload.text, new RegExp(`"intent_id":"${view.intentId}"`));
+    const approved = await fetch(`${base}/api/actions/${view.intentId}/approve`, { method: "POST", body: JSON.stringify(await risk.signPayload(payload)) });
     assert.equal(approved.status, 200);
     const listed = (await (await fetch(`${base}/api/actions`)).json()) as ActionView[];
     assert.equal(listed[0]?.approvals.members.filter((member) => member.signedAt).length, 1);
+
+    for (const route of ["/api/waivers/revoke", "/api/setup/next"]) {
+      assert.equal((await fetch(`${base}${route}`, { method: "POST" })).status, 404, `${route}: the policy lets the wallet sign only createWaiver`);
+    }
   } finally {
     server.close();
   }

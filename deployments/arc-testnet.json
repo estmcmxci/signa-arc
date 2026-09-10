@@ -2,8 +2,8 @@
   "chainId": 5042002,
   "rpcUrl": "https://rpc.testnet.arc.network",
   "explorer": "https://testnet.arcscan.app",
-  "sourceCommit": "7d66394654fa2147da495027af6d64cac38d2cf8",
-  "deployedAt": "2026-09-10T16:04:20.000Z",
+  "sourceCommit": "5fefd2322f148cdbd713fa9b266c74b6f044b940",
+  "deployedAt": "2026-09-10T20:52:58.000Z",
   "contracts": {
     "facilityRegistry": {
       "address": "0xB54fe913C4a7dE73Bc285338dCbb384AEec5e448",
@@ -21,9 +21,9 @@
       "block": 61422417
     },
     "covenantVault": {
-      "address": "0x1970feb699BCd4dd268a3A8c2590929fc8fd67c2",
-      "deployTx": "0xa6ee1d47676d80e9dc032cdb6816c6e5f90cc22f2c67cbd32c19b333280977d0",
-      "block": 61422421
+      "address": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+      "deployTx": "0xb1b66ee3b3494ec9878c0808269dd82beef2f523e823408a358fe75d2fe6da52",
+      "block": 61456107
     }
   },
   "settlementAsset": {
@@ -41,13 +41,31 @@
     "note": "Denominating asset of the exposure, referenced only (E-DEC-2). No EURC is transferred, held or approved. The exposure is a EUR-denominated loan book asserted by ExposureCredential; the facility is funded, drawn and repaid in USDC."
   },
   "roles": {
-    "facilityAdmin": "0x5cD42354a8adc5fD87717528662Dc0990617D428",
+    "facilityAdmin": "0x55C4DD3770A44695735717CB7b7005AC7dE9edA1",
     "operator": "0x7e09657321F1818825a9A15cedd9D95308130ED4",
     "exposureIssuer": "0x4317497399f27d52007d7f2012EAd27f148B6662",
     "hedgeIssuer": "0xAD515A2BE433e78B6b570064797626012e272e0a"
   },
+  "facilityAdminQuorum": {
+    "provider": "privy",
+    "note": "The facility admin is a Privy server wallet owned by a 2-of-2 key quorum. Every admin call, including this facility's creation and freeze, needs both approvers. Privy signs; the transaction is broadcast to Arc separately. Since 2026-09-10 a Privy policy owned by the quorum (policyId) lets the wallet sign only createWaiver on covenantVault, on this chain, moving no value.",
+    "keyQuorumId": "pbf1jtt1knpsl30eyp0z163t",
+    "walletId": "zc9i4be5osru1qyzfci337mi",
+    "threshold": 2,
+    "approvers": [
+      {
+        "role": "Risk officer",
+        "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEdTLnqVlKlu7pil38bXDIoTeFbbTWO2ILftJpmdIFKHejmkOrh+ssVfpBkr5mNkHLrSRlkC4eIA7FhSOPAIy+0A=="
+      },
+      {
+        "role": "Treasury lead",
+        "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAED4DCLEErSAdbIY64mQIcK4ZZHKfpvGP3T+UfA3YXFQsmSPpiQVDmwyoVkU5QsxnSgKjDleBwex40ODQtoZqPvA=="
+      }
+    ],
+    "policyId": "y5x9g8gglndai2hosm47zvxf"
+  },
   "facility": {
-    "id": "0x39cbb5ce0d83241c8fe2be217023dd05dc80cecce06fb7df109a6c50452c4d1c",
+    "id": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
     "policy": {
       "minCoverageBps": 10000,
       "defaultHaircutBps": 500,

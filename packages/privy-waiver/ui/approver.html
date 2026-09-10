@@ -5,89 +5,109 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Covenant waiver approvals</title>
 <style>
-  :root { color-scheme: light dark; --muted: #6b7280; --ok: #15803d; --bad: #b91c1c; --line: #d1d5db; font-family: ui-sans-serif, system-ui, sans-serif; }
-  body { max-width: 980px; margin: 2rem auto; padding: 0 1rem; line-height: 1.45; }
-  h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
-  h2 { font-size: 1.05rem; margin: 0 0 0.5rem; }
-  .muted { color: var(--muted); font-size: 0.9rem; }
-  section, article { border: 1px solid var(--line); border-radius: 8px; padding: 1rem; margin: 1rem 0; }
-  .mono, code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; word-break: break-all; }
-  pre { white-space: pre-wrap; }
-  .row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-  .badge { border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.8rem; border: 1px solid var(--line); }
-  .ok { color: var(--ok); }
-  .bad { color: var(--bad); }
-  button { padding: 0.4rem 0.8rem; cursor: pointer; }
-  input { padding: 0.35rem; }
-  dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 0.8rem; margin: 0.5rem 0; }
+  :root { color-scheme: light dark; --muted: #6b7280; --ok: #15803d; --bad: #b91c1c; --warn: #b45309; --info: #1d4ed8; --line: #8884; font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  body { max-width: 1120px; margin: 0 auto; padding: 0 24px 48px; }
+  .demo { position: sticky; top: 0; z-index: 2; margin: 0 -24px 20px; padding: 10px 24px; background: #fef3c7; color: #78350f; border-bottom: 1px solid #f59e0b; font-size: 14px; }
+  h1 { font-size: 22px; margin: 0 0 2px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  fieldset { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 0 0 18px; min-width: 0; }
+  legend { padding: 0 6px; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0 18px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .mono, code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; word-break: break-all; }
+  pre { white-space: pre-wrap; max-height: 260px; overflow: auto; }
+  input, button, textarea { font: inherit; padding: 6px 10px; border-radius: 6px; border: 1px solid #8886; background: transparent; color: inherit; }
+  textarea { width: 100%; box-sizing: border-box; }
+  button { cursor: pointer; }
+  button.go { background: #2563eb; color: #fff; border-color: #2563eb; }
+  button.approve { background: #15803d; color: #fff; border-color: #15803d; }
+  .pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 99px; border: 1px solid #8886; }
+  .big { font-size: 15px; padding: 3px 14px; }
+  .COMPLIANT, .executed, .success { background: #16a34a22; border-color: #16a34a; }
+  .CURE, .pending, .granted, .processing { background: #f59e0b22; border-color: #f59e0b; }
+  .BREACH, .rejected, .expired, .failed, .reverted { background: #dc262622; border-color: #dc2626; }
+  .WAIVED { background: #2563eb22; border-color: #2563eb; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 6px 0; }
   dt { color: var(--muted); }
-  #error { color: var(--bad); white-space: pre-wrap; }
+  dd { margin: 0; min-width: 0; }
+  ul.conditions { margin: 4px 0 8px; padding-left: 20px; }
+  .card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 6px 0; }
+  article { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 10px 0; }
+  ol.steps { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 10px 0; }
+  ol.steps li { font-size: 12.5px; padding: 3px 10px; border-radius: 6px; border: 1px dashed #8886; color: var(--muted); }
+  ol.steps li.done { border-style: solid; border-color: #16a34a; color: inherit; background: #16a34a14; }
+  #error { color: var(--bad); white-space: pre-wrap; margin: 0 0 12px; }
 </style>
 </head>
 <body>
+<div class="demo" role="note">
+  <strong>Local demo server.</strong> This page is served from 127.0.0.1 by a demo server that holds the Privy
+  app secret and has no login. It is not a production deployment. Approver keys are WebCrypto keys, stored
+  non-extractable in this browser's IndexedDB: not passkeys.
+</div>
 <h1>Covenant waiver approvals</h1>
-<p class="muted">
-  A waiver is the one action where a person overrides the covenant: it permits a draw that coverage
-  says should be refused. So it takes two approvers. Each approver signs in their own browser with a
-  key that never leaves it. This server holds Privy's app secret and no approver key. Privy signs the
-  transaction only after both approvals, and this server checks the signed transaction against what
-  was approved before broadcasting it to Arc.
-</p>
+<div class="sub" id="subline">Loading…</div>
 <div id="error" role="alert"></div>
 
-<section>
-  <h2>Facility</h2>
-  <dl id="info"><dt>Loading</dt><dd>…</dd></dl>
-</section>
+<div class="grid">
+  <fieldset>
+    <legend>Why a waiver</legend>
+    <div id="why" class="muted">Loading…</div>
+  </fieldset>
+  <fieldset>
+    <legend>What the admin key may sign</legend>
+    <div id="policy" class="muted">Loading…</div>
+  </fieldset>
+</div>
 
-<section>
-  <h2>You are approving as</h2>
-  <div class="row">
-    <input id="approver-name" placeholder="Approver name, e.g. Risk" />
-    <button id="use-approver">Use</button>
-  </div>
-  <div id="approver" class="muted">No approver selected.</div>
-</section>
+<fieldset>
+  <legend>Approvers in this browser</legend>
+  <div class="grid" id="approvers"></div>
+  <p class="muted">A waiver needs both approvers. Each signs Privy's authorization payload with their own P-256 key; the key never leaves
+    the browser and this server never sees it. For this demo both keys are in one browser; in use, each approver holds only their own.</p>
+</fieldset>
 
-<section id="propose-section">
-  <h2>Propose</h2>
-  <form id="propose-waiver" class="row">
-    <label>Duration in hours <input id="duration" type="number" min="1" step="1" value="24" /></label>
-    <input id="reason" size="48" placeholder="Reason, e.g. hedge verifier outage, ticket OPS-1234" />
-    <button type="submit">Propose waiver</button>
+<fieldset id="propose-section">
+  <legend>Propose a waiver</legend>
+  <form id="propose-waiver">
+    <textarea id="reason" rows="2" placeholder="Reason. Only its keccak256 hash goes on chain, as the waiver's reason commitment; the text stays here."></textarea>
+    <div class="row" style="margin-top:8px">
+      <label>Duration <input id="hours" type="number" min="1" step="1" value="1" style="width:80px" /> hours</label>
+      <button class="go" type="submit">Propose</button>
+      <span id="propose-note" class="muted"></span>
+    </div>
   </form>
-  <p class="muted">Only the reason's hash goes on chain, as the waiver's reason commitment.</p>
-  <div class="row">
-    <button id="propose-revoke">Propose waiver revocation</button>
-    <button id="propose-setup">Propose next facility setup step</button>
-  </div>
-</section>
+  <p class="muted">Before proposing, the server reads the chain: the vault must belong to this facility, the facility must not be compliant,
+    no waiver may be active, and the duration must be within maxWaiverDuration. A proposal the contract would refuse is never sent to the approvers.</p>
+</fieldset>
 
-<h2>Proposals</h2>
-<div id="actions" class="muted">None yet.</div>
+<fieldset>
+  <legend>Waivers</legend>
+  <div id="actions" class="muted">None yet.</div>
+  <details id="history-section" hidden><summary class="muted">Earlier admin actions, approved by the same quorum (facility setup)</summary><div id="history"></div></details>
+</fieldset>
 
 <script>
 'use strict';
 const ALG = { name: 'ECDSA', namedCurve: 'P-256' };
 const CREATE_WAIVER_SELECTOR = '0x6738bca7';
+const DEFAULT_ROLES = ['Risk officer', 'Treasury lead'];
 const $ = (selector) => document.querySelector(selector);
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const b64 = (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer)));
 const unb64 = (text) => Uint8Array.from(atob(text.trim()), (c) => c.charCodeAt(0));
 const short = (text) => (text && text.length > 20 ? `${text.slice(0, 10)}…${text.slice(-8)}` : text);
+const time = (ms) => (ms ? new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '');
+const dateTime = (ms) => (ms ? new Date(ms).toLocaleString() : '');
 const openDetails = new Set();
-let approver = null;
-let lastActions = [];
+const keys = {};
 let info = {};
+let renderedApprovers = '';
 
-function showError(error) {
-  $('#error').textContent = error ? String(error.message || error) : '';
-}
-
-async function run(task) {
-  showError(null);
-  try { await task(); } catch (error) { showError(error); }
-}
+function showError(error) { $('#error').textContent = error ? String(error.message || error) : ''; }
+async function run(task) { showError(null); try { await task(); } catch (error) { showError(error); } }
 
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json' } });
@@ -96,7 +116,14 @@ async function api(path, options = {}) {
   return body;
 }
 
-// Approver keys: one per name in this origin's IndexedDB. Private keys are created or imported
+const link = (kind, value, label) => (value
+  ? `<a class="mono" href="${esc(info.explorer)}/${kind}/${esc(value)}" target="_blank" rel="noreferrer">${esc(label ?? value)}</a>`
+  : '<span class="muted">not set</span>');
+const roles = () => (info.approvers?.length ? info.approvers.map((approver) => approver.role) : DEFAULT_ROLES);
+const quorumKeyOf = (role) => info.approvers?.find((approver) => approver.role === role)?.publicKey;
+const roleOf = (publicKey) => info.approvers?.find((approver) => approver.publicKey === publicKey)?.role ?? `key ${short(publicKey)}`;
+
+// ---- Approver keys: one per role in this origin's IndexedDB. Private keys are imported or created
 // non-extractable, so page scripts can sign with them but can never read them back out.
 function keyStore(mode, operation) {
   return new Promise((resolve, reject) => {
@@ -112,54 +139,111 @@ function keyStore(mode, operation) {
   });
 }
 
-async function useApprover(name) {
-  const stored = await keyStore('readonly', (store) => store.get(name));
-  approver = { name, ...(stored || {}) };
-  localStorage.setItem('signa-approver', name);
-  renderApprover();
-  renderActions(lastActions);
+async function loadKeys() {
+  for (const role of roles()) {
+    const stored = await keyStore('readonly', (store) => store.get(role));
+    if (stored) keys[role] = stored; else delete keys[role];
+  }
+  renderedApprovers = '';
+  renderApprovers();
+  renderAll();
 }
 
-function renderApprover() {
-  const box = $('#approver');
-  if (!approver) { box.textContent = 'No approver selected.'; return; }
-  box.innerHTML = approver.publicKey
-    ? `<p><strong>${esc(approver.name)}</strong> holds a P-256 key in this browser. Public key, for the Privy key quorum:</p>
-       <p class="mono">${esc(approver.publicKey)}</p>
-       <button id="forget-key">Forget this key</button>`
-    : `<p><strong>${esc(approver.name)}</strong> has no key in this browser yet.</p>
-       <button id="create-key">Create a key here</button>
-       <p class="muted">Or import an existing base64 PKCS8 key, such as one scripts/smoke.ts wrote:</p>
-       <div class="row"><input id="import-pkcs8" size="64" placeholder="base64 PKCS8 private key" /><button id="import-key">Import</button></div>`;
-  $('#create-key')?.addEventListener('click', () => run(createKey));
-  $('#import-key')?.addEventListener('click', () => run(() => importKey($('#import-pkcs8').value)));
-  $('#forget-key')?.addEventListener('click', () => run(forgetKey));
-}
-
-async function storeKey(publicKey, privateKey) {
-  await keyStore('readwrite', (store) => store.put({ publicKey, privateKey }, approver.name));
-  await useApprover(approver.name);
-}
-
-async function createKey() {
-  const pair = await crypto.subtle.generateKey(ALG, false, ['sign', 'verify']);
-  await storeKey(b64(await crypto.subtle.exportKey('spki', pair.publicKey)), pair.privateKey);
-}
-
-async function importKey(encoded) {
+// The public key is derived through a short-lived extractable copy; only the non-extractable
+// signing key is stored.
+async function importKeyFor(role, encoded) {
   const pkcs8 = unb64(encoded.trim().replace(/^wallet-auth:/, ''));
   const readable = await crypto.subtle.importKey('pkcs8', pkcs8, ALG, true, ['sign']);
   const { kty, crv, x, y } = await crypto.subtle.exportKey('jwk', readable);
-  const publicKey = await crypto.subtle.importKey('jwk', { kty, crv, x, y }, ALG, true, ['verify']);
-  await storeKey(b64(await crypto.subtle.exportKey('spki', publicKey)), await crypto.subtle.importKey('pkcs8', pkcs8, ALG, false, ['sign']));
+  const verifyKey = await crypto.subtle.importKey('jwk', { kty, crv, x, y }, ALG, true, ['verify']);
+  const publicKey = b64(await crypto.subtle.exportKey('spki', verifyKey));
+  const privateKey = await crypto.subtle.importKey('pkcs8', pkcs8, ALG, false, ['sign']);
+  await keyStore('readwrite', (store) => store.put({ publicKey, privateKey }, role));
+  await loadKeys();
 }
 
-async function forgetKey() {
-  if (!confirm(`Delete ${approver.name}'s key from this browser? It cannot be recovered.`)) return;
-  await keyStore('readwrite', (store) => store.delete(approver.name));
-  await useApprover(approver.name);
+async function createKeyFor(role) {
+  const pair = await crypto.subtle.generateKey(ALG, false, ['sign', 'verify']);
+  const publicKey = b64(await crypto.subtle.exportKey('spki', pair.publicKey));
+  await keyStore('readwrite', (store) => store.put({ publicKey, privateKey: pair.privateKey }, role));
+  await loadKeys();
 }
 
+async function forgetKeyFor(role) {
+  if (!confirm(`Delete the ${role} key from this browser? It cannot be recovered from here.`)) return;
+  await keyStore('readwrite', (store) => store.delete(role));
+  await loadKeys();
+}
+
+function renderApprovers() {
+  const signature = JSON.stringify([roles(), info.walletId, Object.entries(keys).map(([role, key]) => [role, key.publicKey])]);
+  if (signature === renderedApprovers) return;
+  renderedApprovers = signature;
+  const container = $('#approvers');
+  container.innerHTML = '';
+  for (const role of roles()) {
+    const key = keys[role];
+    const expected = quorumKeyOf(role);
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = key
+      ? `<div class="row"><strong>${esc(role)}</strong>${expected ? (key.publicKey === expected
+            ? '<span class="pill success">key matches the quorum member</span>'
+            : '<span class="pill failed">NOT the quorum\'s key for this role</span>') : ''}</div>
+         <div class="mono muted">${esc(short(key.publicKey))}</div>
+         <button data-forget>Forget this key</button>`
+      : `<div class="row"><strong>${esc(role)}</strong><span class="muted">no key in this browser</span></div>
+         <div class="row"><input type="password" autocomplete="off" size="30" placeholder="base64 PKCS8 private key" data-pkcs8 />
+           <button data-import>Import</button>${info.walletId ? '' : '<button data-create>Create a key here</button>'}</div>`;
+    card.querySelector('[data-forget]')?.addEventListener('click', () => run(() => forgetKeyFor(role)));
+    card.querySelector('[data-import]')?.addEventListener('click', () => run(() => importKeyFor(role, card.querySelector('[data-pkcs8]').value)));
+    card.querySelector('[data-create]')?.addEventListener('click', () => run(() => createKeyFor(role)));
+    container.append(card);
+  }
+}
+
+// ---- Facility status and policy.
+function renderWhy() {
+  const readiness = info.readiness;
+  if (!info.walletId) { $('#why').innerHTML = 'Key-setup mode: no Privy wallet yet.'; return; }
+  if (!readiness) { $('#why').innerHTML = 'No facility: the manifest\'s facility admin is not this wallet.'; return; }
+  if (readiness.error) { $('#why').innerHTML = `<span class="bad">Could not read the chain: ${esc(readiness.error)}</span>`; return; }
+  const coverage = readiness.coverage;
+  $('#why').innerHTML = `
+    <div class="row"><span class="pill big ${esc(readiness.covenantState)}">${esc(readiness.covenantState)}</span>
+      ${readiness.activeWaiver ? `<span>waiver active until ${esc(dateTime(Number(readiness.waiverEndsAt) * 1000))}</span>` : ''}</div>
+    <dl>
+      <dt>Coverage</dt><dd><strong>${esc(coverage.coverageBps)}</strong> of ${esc(coverage.requiredCoverageBps)} bps required
+        <span class="muted">(${esc(coverage.resultReason)}; ${esc(coverage.eligibleHedgeCount)} of ${esc(coverage.totalHedgeCount)} hedges eligible; exposure ${esc(coverage.exposureReason)})</span></dd>
+      <dt>Waiver now</dt><dd>${readiness.refusals.length
+        ? `<span class="bad">The contract would refuse one:</span><ul class="conditions">${readiness.refusals.map((refusal) => `<li>${esc(refusal)}</li>`).join('')}</ul>`
+        : '<span class="ok">The contract would accept one.</span> Coverage is below the threshold, so without a waiver draws are refused.'}</dd>
+      <dt>Longest waiver</dt><dd>${esc(readiness.maxWaiverDurationSeconds / 3600)} hours <span class="muted">(maxWaiverDuration, enforced by the contract)</span></dd>
+    </dl>`;
+  $('#propose-note').innerHTML = readiness.refusals.length ? '<span class="warn">The server will refuse to propose: see "Why a waiver".</span>' : '';
+}
+
+function renderPolicy() {
+  const policies = info.policies;
+  if (!info.walletId) { $('#policy').innerHTML = ''; return; }
+  if (!policies || policies.error) { $('#policy').innerHTML = `<span class="bad">Could not read the wallet's policies${policies?.error ? `: ${esc(policies.error)}` : ''}</span>`; return; }
+  if (!policies.length) { $('#policy').innerHTML = '<span class="bad">No Privy policy is attached: the admin key could sign any call both approvers approve.</span>'; return; }
+  const describe = (condition) => {
+    if (condition.field === 'to' && String(condition.value).toLowerCase() === String(info.facility?.vault).toLowerCase()) return `to = ${link('address', condition.value, short(condition.value))} <span class="muted">(this facility's vault)</span>`;
+    if (condition.field === 'chain_id') return `chain = ${esc(condition.value)} <span class="muted">(Arc Testnet)</span>`;
+    if (condition.field === 'function_name') return `function = <code>${esc(condition.value)}</code>`;
+    return `${esc(condition.field)} ${condition.operator === 'eq' ? '=' : esc(condition.operator)} <code>${esc(condition.value)}</code>`;
+  };
+  $('#policy').innerHTML = policies.map((policy) => `
+    <div><strong>${esc(policy.name)}</strong> <span class="muted mono">${esc(policy.id)}</span></div>
+    <div class="muted">Owned by ${policy.owner_id ? `key quorum <span class="mono">${esc(policy.owner_id)}</span>: changing it takes both approvers` : '<span class="bad">nobody: the app secret alone could change it</span>'}</div>
+    ${policy.rules.map((rule) => `<div style="margin-top:6px">${esc(rule.action)} <code>${esc(rule.method)}</code> only when:</div>
+      <ul class="conditions">${rule.conditions.map((condition) => `<li>${describe(condition)}</li>`).join('')}</ul>`).join('')}
+  `).join('') + `<p class="muted">Privy denies everything else: <code>revokeWaiver</code>, any other contract, any other chain.
+    It cannot cap the duration (a <code>uint32</code>, which Privy's calldata matcher cannot compare), so the contract and this server do.</p>`;
+}
+
+// ---- Proposals.
 // Reads the transaction out of the exact text being signed, so what is shown is what is signed.
 function inspect(action) {
   const checks = [];
@@ -169,6 +253,7 @@ function inspect(action) {
     const tx = payload.body?.params?.transaction || {};
     const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
     checks.push(['signs a transaction (eth_signTransaction)', payload.body?.method === 'eth_signTransaction']);
+    checks.push(['bound to this proposal', payload.intent_id === action.intentId]);
     checks.push(['target contract matches', same(tx.to, action.call.to)]);
     checks.push(['calldata matches', same(tx.data, action.call.data)]);
     checks.push(['chain is Arc Testnet', BigInt(tx.chain_id) === BigInt(action.call.chainId)]);
@@ -184,60 +269,101 @@ function inspect(action) {
   return { checks, decoded, ok: checks.every(([, ok]) => ok) };
 }
 
-function renderActions(actions) {
-  lastActions = actions;
-  const container = $('#actions');
-  if (!actions.length) { container.textContent = 'None yet.'; return; }
-  container.innerHTML = '';
-  for (const action of actions) {
-    const mine = approver?.publicKey ? action.approvals.members.find((member) => member.publicKey === approver.publicKey) : undefined;
-    const signedCount = action.approvals.members.filter((member) => member.signedAt).length;
-    const inspection = action.signingPayload ? inspect(action) : null;
-    const article = document.createElement('article');
-    article.innerHTML = `
-      <div class="row"><strong>${esc(action.kind)}</strong><span class="badge">${esc(action.status)}</span>
-        <span class="muted">${signedCount} of ${esc(action.approvals.threshold)} approvals · expires ${new Date(action.expiresAt).toLocaleString()}</span></div>
-      <p>${esc(action.description)}</p>
-      ${action.reason ? `<p><strong>Stated reason:</strong> ${esc(action.reason)}</p>` : ''}
-      <dl>
-        <dt>Call</dt><dd class="mono">${esc(action.call.functionName)}(${action.call.args.map(esc).join(', ')})</dd>
-        <dt>Contract</dt><dd class="mono">${esc(action.call.to)}</dd>
-        <dt>Nonce · gas · fee cap</dt><dd class="mono">${esc(action.call.nonce)} · ${esc(action.call.gasLimit)} · ${esc(action.call.maxFeePerGasWei)} wei</dd>
-        <dt>Approvers</dt><dd>${action.approvals.members.map((member) => `<div class="mono">${member.signedAt ? '<span class="ok">signed</span>' : 'waiting'} · ${esc(short(member.publicKey))}${member.publicKey === approver?.publicKey ? ' <strong>(you)</strong>' : ''}</div>`).join('')}</dd>
-      </dl>
-      ${inspection ? `<details><summary>What you sign: ${inspection.ok ? '<span class="ok">matches the call above</span>' : '<span class="bad">does NOT match the call above</span>'}</summary>
-        <ul>${inspection.checks.map(([label, ok]) => `<li class="${ok ? 'ok' : 'bad'}">${ok ? 'yes' : 'NO'}: ${esc(label)}</li>`).join('')}</ul>
-        ${inspection.decoded ? `<p class="mono">${esc(inspection.decoded)}</p>` : ''}
-        <pre>${esc(action.signingPayload)}</pre></details>` : ''}
-      ${action.broadcast ? `<p>On Arc: <a href="${esc(action.broadcast.explorerUrl)}" target="_blank" rel="noreferrer" class="mono">${esc(short(action.broadcast.hash))}</a>,
-        receipt <strong class="${action.broadcast.status === 'success' ? 'ok' : 'bad'}">${esc(action.broadcast.status)}</strong>${action.broadcast.waiverEndsAt ? `, waiver ends ${new Date(Number(action.broadcast.waiverEndsAt) * 1000).toLocaleString()}` : ''}</p>` : ''}
-      <div class="row buttons"></div>`;
-    const details = article.querySelector('details');
-    if (details) {
-      details.open = openDetails.has(action.intentId);
-      details.addEventListener('toggle', () => (details.open ? openDetails.add(action.intentId) : openDetails.delete(action.intentId)));
-    }
-    const buttons = article.querySelector('.buttons');
-    const button = (label, handler) => {
-      const element = document.createElement('button');
-      element.textContent = label;
-      element.addEventListener('click', () => run(handler));
-      buttons.append(element);
-    };
-    if (action.status === 'pending' && mine && !mine.signedAt && approver.privateKey && inspection?.ok) {
-      button(`Approve as ${approver.name}`, () => approve(action));
-    }
-    if (action.status === 'pending') button('Reject', () => post(action, 'reject'));
-    if (action.status === 'executed' && !action.broadcast) button('Verify and broadcast to Arc', () => post(action, 'execute'));
-    container.append(article);
-  }
+function steps(action) {
+  const members = action.approvals.members;
+  const signed = (role) => members.find((member) => roleOf(member.publicKey) === role)?.signedAt;
+  const waiver = action.broadcast?.waiverCreated;
+  return [
+    ['Proposed', true, action.createdAt],
+    ...roles().map((role) => [`${role} approved`, Boolean(signed(role)), signed(role)]),
+    ['Privy signed', action.status === 'executed' || Boolean(action.broadcast)],
+    ['Broadcast to Arc', Boolean(action.broadcast)],
+    ['Receipt 0x1', action.broadcast?.status === 'success'],
+    ...(action.kind === 'waiver.create' ? [['WaiverCreated checked', Boolean(waiver?.facilityMatches && waiver?.reasonCommitmentMatches)]] : []),
+  ];
 }
 
-async function approve(action) {
-  const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, approver.privateKey, new TextEncoder().encode(action.signingPayload));
+function renderAction(action) {
+  const signedCount = action.approvals.members.filter((member) => member.signedAt).length;
+  const inspection = action.signingPayload ? inspect(action) : null;
+  const waiver = action.broadcast?.waiverCreated;
+  const context = action.context;
+  const article = document.createElement('article');
+  article.innerHTML = `
+    <div class="row"><strong>${action.kind === 'waiver.create' ? 'Waiver' : esc(action.kind)}</strong>
+      <span class="pill ${esc(action.status)}">${esc(action.status)}</span>
+      <span class="muted">${signedCount} of ${esc(action.approvals.threshold)} approvals · Privy intent <span class="mono">${esc(action.intentId)}</span> · proposed ${esc(dateTime(action.createdAt))}</span></div>
+    <ol class="steps">${steps(action).map(([label, done, at]) => `<li class="${done ? 'done' : ''}">${done ? '✓' : '…'} ${esc(label)}${at ? ` <span class="muted">${esc(time(at))}</span>` : ''}</li>`).join('')}</ol>
+    <dl>
+      <dt>Being approved</dt><dd class="mono">${esc(action.call.functionName)}(${action.call.args.map(esc).join(', ')})</dd>
+      ${action.reason ? `<dt>Stated reason</dt><dd>${esc(action.reason)} <span class="muted">(offchain; its hash is the reason commitment)</span></dd>` : ''}
+      ${context ? `<dt>Why, when proposed</dt><dd><span class="pill ${esc(context.covenantState)}">${esc(context.covenantState)}</span> coverage ${esc(context.coverageBps)} of ${esc(context.requiredCoverageBps)} bps (${esc(context.resultReason)}) at ${esc(dateTime(context.checkedAt))}</dd>` : ''}
+      <dt>Contract</dt><dd>${link('address', action.call.to)}</dd>
+      <dt>Nonce · gas · fee cap</dt><dd class="mono">${esc(action.call.nonce)} · ${esc(action.call.gasLimit)} · ${esc(action.call.maxFeePerGasWei)} wei</dd>
+      <dt>Approvers</dt><dd>${action.approvals.members.map((member) => `<div>${member.signedAt ? `<span class="ok">signed ${esc(dateTime(member.signedAt))}</span>` : '<span class="warn">waiting</span>'} · ${esc(roleOf(member.publicKey))}</div>`).join('')}</dd>
+      ${action.broadcast ? `<dt>On Arc</dt><dd>${link('tx', action.broadcast.hash, short(action.broadcast.hash))}, block ${esc(action.broadcast.blockNumber)},
+        receipt <span class="pill ${esc(action.broadcast.status)}">${action.broadcast.status === 'success' ? '0x1 success' : esc(action.broadcast.status)}</span>
+        ${action.broadcast.signer ? `<div class="muted">signed by ${esc(action.broadcast.signer)}, the admin wallet; checked field by field against what was approved before broadcast</div>` : ''}</dd>` : ''}
+      ${waiver ? `<dt>WaiverCreated</dt><dd>
+        <div>facilityId <span class="mono">${esc(short(waiver.facilityId))}</span> ${waiver.facilityMatches ? '<span class="ok">= this facility</span>' : '<span class="bad">NOT this facility</span>'}</div>
+        <div>reasonCommitment <span class="mono">${esc(short(waiver.reasonCommitment))}</span> ${waiver.reasonCommitmentMatches ? '<span class="ok">= keccak256 of the stated reason</span>' : '<span class="bad">does NOT match the stated reason</span>'}</div>
+        <div>from ${esc(dateTime(Number(waiver.startsAt) * 1000))} until <strong>${esc(dateTime(Number(waiver.endsAt) * 1000))}</strong></div></dd>` : ''}
+    </dl>
+    ${inspection ? `<details><summary>What each approver signs: ${inspection.ok ? '<span class="ok">matches the call above</span>' : '<span class="bad">does NOT match the call above</span>'}</summary>
+      <ul>${inspection.checks.map(([label, ok]) => `<li class="${ok ? 'ok' : 'bad'}">${ok ? 'yes' : 'NO'}: ${esc(label)}</li>`).join('')}</ul>
+      ${inspection.decoded ? `<p class="mono">${esc(inspection.decoded)}</p>` : ''}
+      <pre>${esc(action.signingPayload)}</pre></details>` : ''}
+    <div class="row buttons"></div>`;
+  const details = article.querySelector('details');
+  if (details) {
+    details.open = openDetails.has(action.intentId);
+    details.addEventListener('toggle', () => (details.open ? openDetails.add(action.intentId) : openDetails.delete(action.intentId)));
+  }
+  const buttons = article.querySelector('.buttons');
+  const button = (label, handler, className = '') => {
+    const element = document.createElement('button');
+    element.textContent = label;
+    element.className = className;
+    element.addEventListener('click', () => run(handler));
+    buttons.append(element);
+  };
+  if (action.status === 'pending' && inspection?.ok) {
+    for (const role of roles()) {
+      const key = keys[role];
+      const member = key && action.approvals.members.find((candidate) => candidate.publicKey === key.publicKey);
+      if (member && !member.signedAt) button(`Approve as ${role}`, () => approve(action, role), 'approve');
+    }
+  }
+  if (action.status === 'pending') button('Reject', () => post(action, 'reject'));
+  if (action.status === 'executed' && !action.broadcast) button('Verify and broadcast to Arc', () => post(action, 'execute'), 'go');
+  return article;
+}
+
+let lastActions = [];
+function renderAll() {
+  const waivers = lastActions.filter((action) => action.kind.startsWith('waiver.'));
+  const history = lastActions.filter((action) => !action.kind.startsWith('waiver.'));
+  const container = $('#actions');
+  container.innerHTML = '';
+  if (!waivers.length) container.textContent = 'No waiver proposed yet.';
+  for (const action of waivers) container.append(renderAction(action));
+  $('#history-section').hidden = !history.length;
+  $('#history').innerHTML = '';
+  for (const action of history) $('#history').append(renderAction(action));
+}
+
+// The payload embeds the signing time and Privy accepts it for 300 seconds, so approving always
+// signs a fresh copy, checked the same way as the one on screen, and returns its timestamp.
+async function approve(action, role) {
+  const key = keys[role];
+  const payload = await api(`/api/actions/${encodeURIComponent(action.intentId)}/signing-payload`);
+  if (!inspect({ ...action, signingPayload: payload.text }).ok) {
+    throw new Error('The payload to sign does not match the proposed call. Not signing.');
+  }
+  const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key.privateKey, new TextEncoder().encode(payload.text));
   await api(`/api/actions/${encodeURIComponent(action.intentId)}/approve`, {
     method: 'POST',
-    body: JSON.stringify({ publicKey: approver.publicKey, signature: b64(signature), encoding: 'p1363', timestamp: Date.now() }),
+    body: JSON.stringify({ publicKey: key.publicKey, signature: b64(signature), encoding: 'p1363', timestamp: payload.timestamp }),
   });
   await refresh();
 }
@@ -248,50 +374,35 @@ async function post(action, verb) {
 }
 
 function renderInfo() {
-  const link = (kind, value) => (value
-    ? `<a class="mono" href="${esc(info.explorer)}/${kind}/${esc(value)}" target="_blank" rel="noreferrer">${esc(value)}</a>`
-    : '<span class="muted">not set</span>');
   $('#propose-section').hidden = !info.walletId;
-  if (!info.walletId) {
-    $('#info').innerHTML = `<dt>Setup</dt><dd>No Privy wallet yet. Each approver picks a name below and creates a key in this browser.
-      Then run <code>scripts/smoke.ts --public-keys=&lt;first&gt;,&lt;second&gt;</code> with both public keys and set PRIVY_WALLET_ID.</dd>`;
-    return;
-  }
-  const status = info.vaultStatus;
-  $('#info').innerHTML = `
-    <dt>Chain</dt><dd>Arc Testnet (${esc(info.chainId)})</dd>
-    <dt>Admin wallet</dt><dd>${link('address', info.walletAddress)} <span class="muted">Privy wallet ${esc(info.walletId)}, owned by ${esc(info.walletOwnerId ?? 'nobody')}</span></dd>
-    <dt>Vault</dt><dd>${link('address', info.vault)}</dd>
-    <dt>Covenant state</dt><dd>${status ? `${esc(status.covenantState)}${status.activeWaiver ? `, waiver active until ${new Date(Number(status.waiverEndsAt) * 1000).toLocaleString()}` : ''}` : '<span class="muted">no vault yet: finish facility setup</span>'}</dd>
-    <dt>Quorum facility</dt><dd class="mono">${esc(info.quorumFacilityId)}</dd>
-    <dt>Longest waiver</dt><dd>${esc(info.maxWaiverDurationSeconds / 3600)} hours</dd>`;
+  $('#subline').innerHTML = info.walletId
+    ? `CovenantVault ${link('address', info.facility?.vault, short(info.facility?.vault))} · Arc Testnet ${esc(info.chainId)} ·
+       admin = Privy ${esc(info.threshold ?? 2)}-of-${esc(roles().length)} quorum wallet ${link('address', info.walletAddress, short(info.walletAddress))}
+       <span class="muted">(Privy wallet ${esc(info.walletId)}, owned by key quorum ${esc(info.walletOwnerId ?? 'nobody')})</span>`
+    : 'Key-setup mode: each approver creates a key in this browser. Build the quorum from the public keys, then restart with PRIVY_WALLET_ID.';
+  renderWhy();
+  renderPolicy();
+  renderApprovers();
 }
 
 async function refresh() {
+  const firstLoad = !info.chainId;
   info = await api('/api/info');
+  if (firstLoad) await loadKeys();
   renderInfo();
-  if (info.walletId) renderActions(await api('/api/actions'));
+  if (info.walletId) { lastActions = await api('/api/actions'); renderAll(); }
 }
 
-$('#use-approver').addEventListener('click', () => run(() => useApprover($('#approver-name').value.trim() || 'Approver')));
 $('#propose-waiver').addEventListener('submit', (event) => {
   event.preventDefault();
   run(async () => {
-    await api('/api/waivers', { method: 'POST', body: JSON.stringify({ durationSeconds: Math.round(Number($('#duration').value) * 3600), reason: $('#reason').value }) });
+    await api('/api/waivers', { method: 'POST', body: JSON.stringify({ durationSeconds: Math.round(Number($('#hours').value) * 3600), reason: $('#reason').value }) });
     await refresh();
   });
 });
-$('#propose-revoke').addEventListener('click', () => run(async () => { await api('/api/waivers/revoke', { method: 'POST' }); await refresh(); }));
-$('#propose-setup').addEventListener('click', () => run(async () => {
-  const result = await api('/api/setup/next', { method: 'POST' });
-  if (result.complete) alert(result.description);
-  await refresh();
-}));
 
-const remembered = localStorage.getItem('signa-approver');
-if (remembered) { $('#approver-name').value = remembered; run(() => useApprover(remembered)); }
 run(refresh);
-setInterval(() => refresh().catch(showError), 5000);
+setInterval(() => refresh().catch(showError), 4000);
 </script>
 </body>
 </html>

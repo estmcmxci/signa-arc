@@ -40,15 +40,19 @@ async function route(
     response.end(readFileSync(UI_PATH, "utf8"));
     return;
   }
+  if (method === "GET" && pathname === "/favicon.ico") {
+    response.writeHead(204);
+    response.end();
+    return;
+  }
   if (api !== "api") return sendJson(response, 404, { error: "not found" });
 
   if (method === "GET" && resource === "info" && !id) return sendJson(response, 200, await info());
   if (!service) {
-    return sendJson(response, 409, {
-      error: "no Privy wallet is configured yet: create the quorum first (WIRE-UP.md, step 4)",
-    });
+    return sendJson(response, 409, { error: "no Privy wallet is configured: set PRIVY_WALLET_ID (see WIRE-UP.md)" });
   }
   if (method === "GET" && resource === "actions" && !id) return sendJson(response, 200, await service.list());
+  // The only admin call offered: the wallet's Privy policy lets it sign nothing else (policy.ts).
   if (method === "POST" && resource === "waivers" && !id) {
     const body = await readJson(request);
     return sendJson(
@@ -57,15 +61,12 @@ async function route(
       await service.proposeWaiver({ durationSeconds: Number(body.durationSeconds), reason: String(body.reason ?? "") }),
     );
   }
-  if (method === "POST" && resource === "waivers" && id === "revoke") {
-    return sendJson(response, 201, await service.proposeWaiverRevocation());
-  }
-  if (method === "POST" && resource === "setup" && id === "next") {
-    return sendJson(response, 201, await service.proposeNextSetupStep());
-  }
   if (resource === "actions" && id) {
     const intentId = decodeURIComponent(id);
     if (method === "GET" && !action) return sendJson(response, 200, await service.get(intentId));
+    if (method === "GET" && action === "signing-payload") {
+      return sendJson(response, 200, await service.signingPayloadFor(intentId));
+    }
     if (method === "POST" && action === "approve") {
       return sendJson(response, 200, await service.approve(intentId, parseApproval(await readJson(request))));
     }

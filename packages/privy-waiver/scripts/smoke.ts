@@ -8,13 +8,16 @@ import {
   generateAuthorizationKeyPair,
   importAuthorizationPublicKey,
   intentAuthorizationInput,
+  normalizePublicKey,
   signAuthorizationPayload,
+  verifyAuthorizationSignature,
   type AuthorizationKeyPair,
 } from "../src/authorization.ts";
 import { toPrivyTransaction, verifySignedTransaction, type PinnedTransaction } from "../src/arc.ts";
 import {
   PrivyApiError,
   PrivyClient,
+  keyMembers,
   loadPrivyConfig,
   signedTransactionOf,
   type RpcIntent,
@@ -22,14 +25,14 @@ import {
 } from "../src/privy-client.ts";
 
 /**
- * REQUIRES CREDENTIALS. Run this first, the moment PRIVY_APP_ID and PRIVY_APP_SECRET exist.
- * In about a minute, and without touching Arc, it answers the questions nobody could answer
- * without an account:
- *   1. Can a free app create a 2-of-2 key quorum and a wallet the quorum owns?
- *   2. Will Privy sign a transaction for Arc's chain ID, 5042002?
- *   3. Does the hand-rolled POST /v1/intents/{id}/authorize work, and with which signed headers?
+ * REQUIRES CREDENTIALS. In about a minute, and without touching Arc, it proves the three things
+ * that need a Privy account:
+ *   1. A free app can create a 2-of-2 key quorum and a wallet the quorum owns.
+ *   2. Privy signs a transaction for Arc's chain ID, 5042002.
+ *   3. The hand-rolled POST /v1/intents/{id}/authorize works: two approvals execute an intent.
  *
- *   node --env-file=packages/privy-waiver/.env --import tsx packages/privy-waiver/scripts/smoke.ts
+ *   set -a; . ./.env; set +a          # credentials in the repository root's .env
+ *   node --import tsx packages/privy-waiver/scripts/smoke.ts
  *
  * With --public-keys=<spki>,<spki> it instead creates the demo quorum and wallet from the public
  * keys approvers created in the approver UI, and prints the PRIVY_WALLET_ID to use.
@@ -78,6 +81,14 @@ async function smoke(): Promise<void> {
   const wallet = await client.createWallet({ chain_type: "ethereum", owner_id: quorum.id, display_name: "Signa smoke test" });
   const address = getAddress(wallet.address);
   console.log(`    quorum ${quorum.id} owns wallet ${wallet.id} at ${address}`);
+  const listed = ((await client.getKeyQuorum(quorum.id)).authorization_keys ?? []).map((entry) =>
+    normalizePublicKey(entry.public_key),
+  );
+  const ours = [keyA.publicKey, keyB.publicKey].map(normalizePublicKey);
+  if (listed.length !== ours.length || !ours.every((key) => listed.includes(key))) {
+    throw new Error(`the quorum lists ${JSON.stringify(listed)} under authorization_keys, not our two keys`);
+  }
+  console.log("    the quorum lists exactly our two keys under authorization_keys");
 
   // Nothing is broadcast: the wallet is unfunded and these transactions only prove signing.
   const transaction = (nonce: number): PinnedTransaction => ({
@@ -117,44 +128,43 @@ async function smoke(): Promise<void> {
   console.log("[3] Intent: propose, then authorize with key A and key B (the hand-rolled call)");
   const intentTx = transaction(1);
   let intent = await client.proposeRpcIntent(wallet.id, request(intentTx));
-  console.log(`    intent ${intent.intent_id} is ${intent.status}; request_details.url = ${intent.request_details.url}`);
-  const variants: { name: "app-id" | "app-id+expiry"; headers: () => { "privy-request-expiry"?: string } }[] = [
-    { name: "app-id", headers: () => ({}) },
-    { name: "app-id+expiry", headers: () => ({ "privy-request-expiry": String(intent.expires_at) }) },
-  ];
-  const authorize = async (key: AuthorizationKeyPair, variant: (typeof variants)[number]): Promise<RpcIntent> => {
-    const payload = formatAuthorizationPayload(intentAuthorizationInput(intent.request_details, client.appId, variant.headers()));
-    return client.authorizeIntent(intent.intent_id, { signature: signAuthorizationPayload(key.privateKey, payload), timestamp: Date.now() });
+  console.log(`    intent ${intent.intent_id} is ${intent.status}`);
+
+  const authorize = async (name: string, key: AuthorizationKeyPair): Promise<RpcIntent> => {
+    // Sign Privy's normalized copy of the request, from GET, never the body we proposed.
+    const current = await client.getIntent(intent.intent_id);
+    const timestamp = Date.now();
+    const payload = formatAuthorizationPayload(intentAuthorizationInput(current, client.appId, timestamp));
+    const signature = signAuthorizationPayload(key.privateKey, payload);
+    // Privy gives one error for every bad signature, so rule out our own before blaming the payload.
+    if (!keyMembers(current).some((member) => verifyAuthorizationSignature(member.publicKey, payload, signature))) {
+      throw new Error(`${name}'s signature does not verify under any member key the intent lists`);
+    }
+    try {
+      return await client.authorizeIntent(intent.intent_id, { signature, timestamp });
+    } catch (error) {
+      if (error instanceof PrivyApiError) console.log(`    ${name} signed: ${new TextDecoder().decode(payload)}`);
+      throw error;
+    }
   };
 
-  let accepted: (typeof variants)[number] | undefined;
-  for (const variant of variants) {
-    try {
-      intent = await authorize(keyA, variant);
-      accepted = variant;
-      break;
-    } catch (error) {
-      if (!(error instanceof PrivyApiError)) throw error;
-      console.log(`    signed headers "${variant.name}" rejected: ${error.status} ${error.responseBody.slice(0, 300)}`);
-    }
-  }
-  if (!accepted) throw new Error("Privy rejected both payload variants. See WIRE-UP.md, 'If authorize is rejected'.");
-  console.log(`    key A accepted with signed headers "${accepted.name}"; intent is ${intent.status}`);
+  intent = await authorize("key A", keyA);
+  console.log(`    key A accepted; intent is ${intent.status}`);
   if (intent.status !== "pending") throw new Error("one signature of two should leave the intent pending");
 
-  intent = await authorize(keyB, accepted);
-  for (let attempt = 0; attempt < 30 && ["granted", "processing"].includes(intent.status); attempt++) {
+  intent = await authorize("key B", keyB);
+  for (let attempt = 0; attempt < 30 && intent.status !== "executed" && ["pending", "granted", "processing"].includes(intent.status); attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 1_000));
     intent = await client.getIntent(intent.intent_id);
   }
+  if (intent.status === "executed" && !signedTransactionOf(intent)) intent = await client.getIntent(intent.intent_id);
   const signed = signedTransactionOf(intent);
   if (intent.status !== "executed" || !signed) {
     throw new Error(`intent ended ${intent.status}; action_result = ${JSON.stringify(intent.action_result)}`);
   }
   await verifySignedTransaction(signed, intentTx);
-  console.log("    key B executed the intent; the signed transaction is the one proposed");
+  console.log("    key B executed the intent; the signed transaction is the one proposed and recovers to the wallet");
 
-  console.log("\nAll three unknowns are closed. Add to packages/privy-waiver/.env:");
-  console.log(`PRIVY_INTENT_SIGNED_HEADERS=${accepted.name}`);
+  console.log("\nAll three pass.");
   console.log(`# Smoke wallet ${wallet.id} (${address}). Throwaway approver keys: ${keyDirectory}`);
 }

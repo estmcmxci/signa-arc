@@ -78,6 +78,9 @@ function fakeArc(overrides: Partial<ArcGateway> = {}): ArcGateway & { calls: str
     vaultStatus: async () => {
       throw new Error("no vault");
     },
+    evaluateCoverage: async () => {
+      throw new Error("no engine");
+    },
   };
   return Object.assign(base, overrides, { calls });
 }
@@ -188,7 +191,7 @@ test("facility setup proposes exactly what the chain is missing, in order, then 
   assert.equal(plan.policy.reserveAmount, 500_000n);
   assert.equal(plan.policy.settlementCurrency, "0x555344");
   assert.equal(plan.policy.exposureCurrency, "0x455552");
-  assert.notEqual(plan.facilityId, manifest.facility.id, "the quorum's facility is a new one");
+  assert.equal(plan.facilityId, manifest.facility.id, "the manifest records the quorum's facility");
 
   const state = { exists: false, exposure: false, hedge: false, frozen: false, admin: adminWallet.address as Address };
   const arc = fakeArc({
