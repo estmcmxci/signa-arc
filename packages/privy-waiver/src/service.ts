@@ -190,21 +190,15 @@ export class QuorumAdminService {
       this.arc.getFacility(facility.registry, facility.id),
       this.arc.evaluateCoverage(facility.coverageEngine, facility.id),
     ]);
-    const refusals: string[] = [];
-    if (status.facilityId.toLowerCase() !== facility.id.toLowerCase()) {
-      refusals.push(`vault ${facility.vault} belongs to facility ${status.facilityId}, not ${facility.id}`);
-    }
-    if (!isAddressEqual(policy.admin, this.config.walletAddress)) {
-      refusals.push(`the facility's admin is ${policy.admin}, not this quorum's wallet ${this.config.walletAddress}`);
-    }
-    if (status.activeWaiver) {
-      refusals.push(`a waiver is already active, until ${new Date(Number(status.waiverEndsAt) * 1_000).toISOString()}`);
-    }
-    if (coverage.compliant) {
-      refusals.push(
-        `the facility is compliant (coverage ${coverage.coverageBps} bps, ${coverage.requiredCoverageBps} required), and createWaiver refuses a compliant facility`,
-      );
-    }
+    const refusals = waiverRefusals({
+      facility,
+      walletAddress: this.config.walletAddress,
+      vaultFacilityId: status.facilityId,
+      admin: policy.admin,
+      activeWaiver: status.activeWaiver,
+      waiverEndsAt: status.waiverEndsAt,
+      coverage,
+    });
     return {
       facilityId: facility.id,
       vault: facility.vault,
@@ -464,6 +458,38 @@ export class QuorumAdminService {
     }
     return this.config.facility;
   }
+}
+
+/**
+ * Every reason `createWaiver` would refuse a waiver of any duration, given the chain's state. Pure,
+ * so the same rule can be applied to state read at any block.
+ */
+export function waiverRefusals(input: {
+  facility: FacilityConfig;
+  walletAddress: Address;
+  vaultFacilityId: Hex;
+  admin: Address;
+  activeWaiver: boolean;
+  waiverEndsAt: bigint;
+  coverage: CoverageEvaluation;
+}): string[] {
+  const { facility, coverage } = input;
+  const refusals: string[] = [];
+  if (input.vaultFacilityId.toLowerCase() !== facility.id.toLowerCase()) {
+    refusals.push(`vault ${facility.vault} belongs to facility ${input.vaultFacilityId}, not ${facility.id}`);
+  }
+  if (!isAddressEqual(input.admin, input.walletAddress)) {
+    refusals.push(`the facility's admin is ${input.admin}, not this quorum's wallet ${input.walletAddress}`);
+  }
+  if (input.activeWaiver) {
+    refusals.push(`a waiver is already active, until ${new Date(Number(input.waiverEndsAt) * 1_000).toISOString()}`);
+  }
+  if (coverage.compliant) {
+    refusals.push(
+      `the facility is compliant (coverage ${coverage.coverageBps} bps, ${coverage.requiredCoverageBps} required), and createWaiver refuses a compliant facility`,
+    );
+  }
+  return refusals;
 }
 
 function sameKey(a: string, b: string): boolean {

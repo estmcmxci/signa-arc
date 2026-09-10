@@ -281,23 +281,33 @@ export function createArcGateway(manifest: ArcManifest): ArcGateway {
       };
     },
     async evaluateCoverage(engine, facilityId) {
-      const result = await client.readContract({
-        address: engine,
-        abi: coverageEngineAbi,
-        functionName: "evaluate",
-        args: [facilityId],
-      });
-      return {
-        assessed: result.assessed,
-        compliant: result.compliant,
-        coverageBps: result.coverageBps,
-        requiredCoverageBps: result.requiredCoverageBps,
-        eligibleHedgeCount: result.eligibleHedgeCount,
-        totalHedgeCount: result.totalHedgeCount,
-        exposureReason: enumName(EXPOSURE_REASONS, result.exposureReason),
-        resultReason: enumName(RESULT_REASONS, result.resultReason),
-      };
+      return toCoverageEvaluation(
+        await client.readContract({ address: engine, abi: coverageEngineAbi, functionName: "evaluate", args: [facilityId] }),
+      );
     },
+  };
+}
+
+/** Names the enums in a raw `CoverageEngine.evaluate` result. */
+export function toCoverageEvaluation(result: {
+  assessed: boolean;
+  compliant: boolean;
+  coverageBps: number;
+  requiredCoverageBps: number;
+  eligibleHedgeCount: number;
+  totalHedgeCount: number;
+  exposureReason: number;
+  resultReason: number;
+}): CoverageEvaluation {
+  return {
+    assessed: result.assessed,
+    compliant: result.compliant,
+    coverageBps: result.coverageBps,
+    requiredCoverageBps: result.requiredCoverageBps,
+    eligibleHedgeCount: result.eligibleHedgeCount,
+    totalHedgeCount: result.totalHedgeCount,
+    exposureReason: enumName(EXPOSURE_REASONS, result.exposureReason),
+    resultReason: enumName(RESULT_REASONS, result.resultReason),
   };
 }
 

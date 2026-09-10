@@ -8,9 +8,12 @@ import {
   http,
   isAddressEqual,
   keccak256,
+  parseAbi,
   parseEventLogs,
   parseTransaction,
   recoverTransactionAddress,
+  type Address,
+  type Log,
   type TransactionSerializedEIP1559,
 } from "viem";
 import { arcTestnet } from "viem/chains";
@@ -26,15 +29,18 @@ import {
 import {
   COVENANT_STATES,
   RESULT_REASONS,
+  coverageEngineAbi,
   covenantVaultAbi,
   createArcGateway,
   describeAdminCall,
   enumName,
+  facilityRegistryAbi,
   loadManifest,
   reasonCommitment,
+  toCoverageEvaluation,
 } from "../src/arc.ts";
 import { PrivyClient, keyMembers, loadPrivyConfig, signedTransactionOf } from "../src/privy-client.ts";
-import { QuorumAdminService, type ActionView, type FacilityConfig } from "../src/service.ts";
+import { QuorumAdminService, waiverRefusals, type ActionView, type FacilityConfig } from "../src/service.ts";
 import { JsonFileStore, defaultStorePath } from "../src/store.ts";
 
 /**
@@ -42,22 +48,33 @@ import { JsonFileStore, defaultStorePath } from "../src/store.ts";
  * facility the contract would accept a waiver for: not compliant, no waiver active.
  *
  * One waiver, end to end, through the QuorumAdminService the approver console uses:
- *   1. pre-validate against the chain, then propose createWaiver as a Privy intent;
- *   2. approve as the risk officer, then as the treasury lead, each signing a fresh payload;
- *   3. take the transaction Privy signed, check it, broadcast it to Arc, and assert the receipt is
- *      0x1 and that WaiverCreated names this facility and commits to the stated reason.
+ *   1. pre-validate against the chain;
+ *   2. propose createWaiver as a Privy intent: 0 of 2;
+ *   3. approve as the risk officer: 1 of 2, still pending;
+ *   4. approve as the treasury lead: 2 of 2, and Privy signs;
+ *   5. broadcast the transaction Privy signed to Arc ourselves, because Privy cannot;
+ *   6. assert the receipt is 0x1 and WaiverCreated names this facility and the stated reason;
+ *   7. read activeWaiver() and covenantState() back from the chain.
  * It then re-reads the intent from Privy and the receipt from Arc, independently of the service,
  * and writes evidence/arc-waiver-evidence.{json,md}.
  *
  *   set -a; . ./.env; set +a
  *   node --import tsx packages/privy-waiver/scripts/run-waiver.ts --check
- *   node --import tsx packages/privy-waiver/scripts/run-waiver.ts --duration=3600 --reason="..."
+ *   node --import tsx packages/privy-waiver/scripts/run-waiver.ts --duration=3600 --reason="..." \
+ *     [--earlier-refusal-block=<block where pre-validation refused>]
  *
  * --check only reads the chain and says whether the contract would accept a waiver now.
+ * --earlier-refusal-block re-reads the chain at that block and records the same guard's refusal.
  */
 
 const EVIDENCE = new URL("../evidence/", import.meta.url);
 const OPEN = ["pending", "granted", "processing", "executed"];
+const LOG_CHUNK = 2_000n;
+
+const credentialEventsAbi = parseAbi([
+  "event ExposureCredentialAccepted(bytes32 indexed facilityId, address indexed issuer, bytes32 indexed digest, uint64 sequence, uint128 outstandingValue, uint64 acceptedAt)",
+  "event HedgeCredentialAccepted(bytes32 indexed facilityId, bytes32 indexed tradeIdCommitment, address indexed issuer, bytes32 digest, uint64 sequence, uint8 status, uint128 remainingNotional, uint64 acceptedAt)",
+]);
 
 const options = new Map(
   process.argv.slice(2).map((arg) => {
@@ -65,6 +82,7 @@ const options = new Map(
     return [key, value.join("=")] as const;
   }),
 );
+const earlierRefusalBlock = options.get("earlier-refusal-block") ? BigInt(options.get("earlier-refusal-block") ?? "") : undefined;
 
 const env = process.env;
 const directory = approverKeyDirectory(env);
@@ -78,6 +96,7 @@ if (!record?.walletId || !record.walletAddress) {
   throw new Error(`no quorum recorded in ${directory}: run provision-quorum.ts first`);
 }
 const { walletId, keyQuorumId } = record;
+const policyId = record.policyId ?? null;
 
 const privy = new PrivyClient(loadPrivyConfig(env));
 const wallet = await privy.getWallet(walletId);
@@ -95,7 +114,7 @@ const facility: FacilityConfig = {
   registry: manifest.contracts.facilityRegistry.address,
   coverageEngine: manifest.contracts.coverageEngine.address,
 };
-const policyAttached = record.policyId !== undefined && (wallet.policy_ids ?? []).includes(record.policyId);
+const policyAttached = policyId !== null && (wallet.policy_ids ?? []).includes(policyId);
 const client = createPublicClient({ chain: arcTestnet, transport: http(manifest.rpcUrl) });
 const service = new QuorumAdminService(privy, createArcGateway(manifest), new JsonFileStore(defaultStorePath(env)), {
   walletId,
@@ -103,14 +122,39 @@ const service = new QuorumAdminService(privy, createArcGateway(manifest), new Js
   explorer: manifest.explorer,
   facility,
 });
+const link = (kind: "address" | "tx" | "block", value: string) => `${manifest.explorer}/${kind}/${value}`;
+
+/** The chain as `createWaiver` would see it at `blockNumber`, and the guard's verdict on it. */
+async function stateAt(blockNumber: bigint) {
+  const vault = { address: facility.vault, abi: covenantVaultAbi, blockNumber } as const;
+  const [vaultFacilityId, state, activeWaiver, waiverEndsAt, policy, result, block] = await Promise.all([
+    client.readContract({ ...vault, functionName: "facilityId" }),
+    client.readContract({ ...vault, functionName: "covenantState" }),
+    client.readContract({ ...vault, functionName: "activeWaiver" }),
+    client.readContract({ ...vault, functionName: "waiverEndsAt" }),
+    client.readContract({ address: facility.registry, abi: facilityRegistryAbi, functionName: "getFacility", args: [facility.id], blockNumber }),
+    client.readContract({ address: facility.coverageEngine, abi: coverageEngineAbi, functionName: "evaluate", args: [facility.id], blockNumber }),
+    client.getBlock({ blockNumber }),
+  ]);
+  const coverage = toCoverageEvaluation(result);
+  return {
+    block: blockNumber.toString(),
+    blockTimestamp: new Date(Number(block.timestamp) * 1_000).toISOString(),
+    covenantState: enumName(COVENANT_STATES, state),
+    activeWaiver,
+    waiverEndsAt: waiverEndsAt > 0n ? new Date(Number(waiverEndsAt) * 1_000).toISOString() : null,
+    coverage,
+    refusals: waiverRefusals({ facility, walletAddress, vaultFacilityId, admin: policy.admin, activeWaiver, waiverEndsAt, coverage }),
+  };
+}
 
 const gas = await client.getBalance({ address: walletAddress });
 const beforeBlock = await client.getBlockNumber();
-const before = await service.waiverReadiness();
+const before = await stateAt(beforeBlock);
 console.log(`facility ${facility.id}`);
 console.log(`vault    ${facility.vault}`);
 console.log(`admin    ${walletAddress} (Privy wallet ${walletId}, key quorum ${keyQuorumId})`);
-console.log(`policy   ${record.policyId ?? "none"}${policyAttached ? ", attached" : ", NOT attached"}`);
+console.log(`policy   ${policyId ?? "none"}${policyAttached ? ", attached" : ", NOT attached"}`);
 console.log(`gas      ${formatEther(gas)} USDC`);
 console.log(
   `\nblock ${beforeBlock}: covenant state ${before.covenantState}, coverage ${before.coverage.coverageBps} of ${before.coverage.requiredCoverageBps} bps (${before.coverage.resultReason}), waiver active: ${before.activeWaiver}`,
@@ -128,22 +172,50 @@ if (options.has("check")) {
 if (!policyAttached) throw new Error("the admin wallet's policy is not attached: run provision-policy.ts first");
 if (gas < 10n ** 16n) throw new Error("the admin wallet needs gas: fund it with USDC first");
 
+// The same guard, applied to the chain at the block where it refused earlier. Not fatal: evidence only.
+const earlierRefusal = earlierRefusalBlock === undefined
+  ? null
+  : await stateAt(earlierRefusalBlock).catch((error: unknown) => ({ block: earlierRefusalBlock.toString(), error: String(error) }));
+
+type Step = { step: number; what: string; result: string; intentStatus?: string; approvals?: string; at: string; trace: string };
+const steps: Step[] = [];
+const signedCount = (view: ActionView) => `${view.approvals.members.filter((member) => member.signedAt).length} of ${view.approvals.threshold}`;
+const say = (step: Step) => {
+  steps.push(step);
+  console.log(`[${step.step}] ${step.what}: ${step.result}${step.intentStatus ? ` (intent ${step.intentStatus}, ${step.approvals})` : ""}`);
+};
+
+say({
+  step: 1,
+  what: "Pre-validation against the chain",
+  result: open ? `resumed intent ${open.intentId}, proposed earlier` : "passed: the contract would accept a waiver",
+  at: new Date().toISOString(),
+  trace: `block ${beforeBlock}`,
+});
+
 let proposed: ActionView;
 if (open) {
   proposed = open;
-  console.log(`\nresuming waiver intent ${open.intentId} (${open.status})`);
 } else {
   const durationSeconds = Number(options.get("duration"));
   const reason = options.get("reason")?.trim() ?? "";
   if (!reason || !Number.isInteger(durationSeconds)) throw new Error('pass --duration=<seconds> and --reason="<why>"');
   proposed = await service.proposeWaiver({ durationSeconds, reason });
-  console.log(`\nproposed intent ${proposed.intentId}: ${proposed.description}`);
 }
+say({
+  step: 2,
+  what: "Intent proposed to Privy",
+  result: `intent ${proposed.intentId}: ${proposed.call.functionName}(${proposed.call.args.join(", ")})`,
+  intentStatus: proposed.status,
+  approvals: signedCount(proposed),
+  at: new Date(proposed.createdAt).toISOString(),
+  trace: `Privy intent ${proposed.intentId}`,
+});
 
 // Collects both approvals, keeping each signature so the evidence can be re-verified.
 const sent = new Map<string, { signature: string; timestamp: number; payloadSha256: string }>();
 let view = proposed;
-for (const approver of approvers) {
+for (const [index, approver] of approvers.entries()) {
   view = await service.get(proposed.intentId);
   if (view.status !== "pending") break;
   const publicKey = normalizePublicKey(approver.publicKey);
@@ -153,15 +225,26 @@ for (const approver of approvers) {
   const payload = await service.signingPayloadFor(proposed.intentId);
   const bytes = new TextEncoder().encode(payload.text);
   const signature = signAuthorizationPayload(approver.privateKey, bytes);
+  const payloadSha256 = createHash("sha256").update(bytes).digest("hex");
   view = await service.approve(proposed.intentId, { publicKey: approver.publicKey, signature, encoding: "der", timestamp: payload.timestamp });
-  sent.set(publicKey, { signature, timestamp: payload.timestamp, payloadSha256: createHash("sha256").update(bytes).digest("hex") });
-  console.log(`approved as ${approver.label} at ${new Date(payload.timestamp).toISOString()}: intent is ${view.status}`);
+  sent.set(publicKey, { signature, timestamp: payload.timestamp, payloadSha256 });
+  say({
+    step: 3 + index,
+    what: `${approver.label} authorized`,
+    result: "signature checked against the quorum member key, then accepted by POST /v1/intents/{id}/authorize",
+    intentStatus: view.status,
+    approvals: signedCount(view),
+    at: new Date(payload.timestamp).toISOString(),
+    trace: `signed payload sha256 ${payloadSha256}`,
+  });
 }
 for (let attempt = 0; attempt < 30 && ["pending", "granted", "processing"].includes(view.status); attempt++) {
   await new Promise((resolve) => setTimeout(resolve, 1_000));
   view = await service.get(proposed.intentId);
 }
-if (view.status !== "executed") throw new Error(`intent ${proposed.intentId} ended ${view.status}`);
+const lastApproval = steps.at(-1);
+if (lastApproval && lastApproval.intentStatus !== view.status) lastApproval.result += `; the intent then became ${view.status}`;
+if (view.status !== "executed") throw new Error(`STOPPED after approvals: intent ${proposed.intentId} is ${view.status}, not executed`);
 
 let assertionError: string | null = null;
 let executed: ActionView;
@@ -172,8 +255,14 @@ try {
   executed = await service.get(proposed.intentId);
 }
 const broadcast = executed.broadcast;
-if (!broadcast) throw new Error(`nothing was broadcast: ${assertionError}`);
-console.log(`broadcast ${broadcast.hash}: receipt ${broadcast.status}, block ${broadcast.blockNumber}`);
+if (!broadcast) throw new Error(`STOPPED at step 5: nothing was broadcast: ${assertionError}`);
+say({
+  step: 5,
+  what: "Signed transaction broadcast to Arc with viem",
+  result: "eth_sendRawTransaction of action_result.response_body.data.signed_transaction; Privy cannot send on Arc",
+  at: new Date().toISOString(),
+  trace: broadcast.hash,
+});
 
 // Everything below is re-read from Privy and from Arc, not taken from the service.
 const intent = await privy.getIntent(proposed.intentId);
@@ -185,9 +274,9 @@ const recoveredSigner = await recoverTransactionAddress({ serializedTransaction:
 const receipt = await client.getTransactionReceipt({ hash: broadcast.hash });
 const transaction = await client.getTransaction({ hash: broadcast.hash });
 const block = await client.getBlock({ blockNumber: receipt.blockNumber });
-const after = await service.waiverReadiness();
 const call = describeAdminCall(proposed.call.data);
 const statedReason = proposed.reason ?? "";
+const expectedCommitment = reasonCommitment(statedReason);
 
 const events = parseEventLogs({ abi: covenantVaultAbi, logs: receipt.logs }).map((log) => ({
   contract: isAddressEqual(log.address, facility.vault) ? "CovenantVault" : log.address,
@@ -197,6 +286,58 @@ const events = parseEventLogs({ abi: covenantVaultAbi, logs: receipt.logs }).map
 }));
 const waiverEvents = events.filter((event) => event.contract === "CovenantVault" && event.event === "WaiverCreated");
 const waiverArgs = waiverEvents[0]?.args ?? {};
+const receiptOk = receipt.status === "success";
+const facilityOk = String(waiverArgs.facilityId).toLowerCase() === facility.id.toLowerCase();
+const commitmentOk = String(waiverArgs.reasonCommitment).toLowerCase() === expectedCommitment.toLowerCase();
+say({
+  step: 6,
+  what: "Receipt and WaiverCreated asserted",
+  result:
+    receiptOk && waiverEvents.length === 1 && facilityOk && commitmentOk
+      ? "receipt status 0x1; exactly one WaiverCreated, naming this facility and committing to keccak256 of the stated reason"
+      : `FAILED: receipt ${receipt.status}, ${waiverEvents.length} WaiverCreated, facility ${facilityOk}, commitment ${commitmentOk}`,
+  at: new Date(Number(block.timestamp) * 1_000).toISOString(),
+  trace: `${receipt.transactionHash}, block ${receipt.blockNumber}`,
+});
+
+const readBackBlock = await client.getBlockNumber();
+const readBack = await stateAt(readBackBlock > receipt.blockNumber ? readBackBlock : receipt.blockNumber);
+say({
+  step: 7,
+  what: "Read back from the chain",
+  result: `activeWaiver() = ${readBack.activeWaiver}, covenantState() = ${readBack.covenantState}, waiver ends ${readBack.waiverEndsAt}`,
+  at: readBack.blockTimestamp,
+  trace: `block ${readBack.block}`,
+});
+
+// What set the state the waiver started from: the vault's last sync, and the credentials behind it.
+const historyFrom = (earlierRefusalBlock ?? beforeBlock - 10_000n) + 1n;
+async function logsIn(address: Address, fromBlock: bigint, toBlock: bigint): Promise<Log[]> {
+  const logs: Log[] = [];
+  for (let start = fromBlock; start <= toBlock; start += LOG_CHUNK) {
+    const end = start + LOG_CHUNK - 1n < toBlock ? start + LOG_CHUNK - 1n : toBlock;
+    logs.push(...(await client.getLogs({ address, fromBlock: start, toBlock: end })));
+  }
+  return logs;
+}
+const history = await (async () => {
+  const syncs = parseEventLogs({ abi: covenantVaultAbi, logs: await logsIn(facility.vault, historyFrom, beforeBlock), eventName: "CovenantSynchronized" });
+  const credentials = parseEventLogs({ abi: credentialEventsAbi, logs: await logsIn(manifest.contracts.credentialRegistry.address, historyFrom, beforeBlock) })
+    .filter((log) => String(log.args.facilityId).toLowerCase() === facility.id.toLowerCase());
+  const described = (log: { eventName: string; transactionHash: string | null; blockNumber: bigint | null; args: unknown }) => ({
+    event: log.eventName,
+    transactionHash: log.transactionHash,
+    explorer: log.transactionHash ? link("tx", log.transactionHash) : null,
+    blockNumber: String(log.blockNumber),
+    args: readable(log.eventName, log.args as Record<string, unknown>),
+  });
+  const lastSync = syncs.at(-1);
+  return {
+    searchedBlocks: `${historyFrom}..${beforeBlock}`,
+    stateSetBy: lastSync ? described(lastSync) : null,
+    credentialUpdates: credentials.map(described),
+  };
+})().catch((error: unknown) => ({ searchedBlocks: `${historyFrom}..${beforeBlock}`, error: String(error) }));
 
 const approvals = keyMembers(intent)
   .map((member) => {
@@ -221,9 +362,10 @@ const approvals = keyMembers(intent)
   })
   .sort((a, b) => (a.signedAt ?? "").localeCompare(b.signedAt ?? ""));
 
-const link = (kind: "address" | "tx" | "block", value: string) => `${manifest.explorer}/${kind}/${value}`;
 const assertions = {
-  receiptStatusIs0x1: receipt.status === "success",
+  preValidationPassed: before.refusals.length === 0,
+  bothApproversSigned: approvals.filter((approval) => approval.signedAt !== null && approval.role !== "not one of our approvers").length === 2,
+  everyRecordedSignatureVerifies: approvals.every((approval) => approval.signatureVerifies !== false),
   signedByTheAdminWallet: isAddressEqual(recoveredSigner, walletAddress),
   signedTransactionIsTheApprovedOne:
     decoded.chainId === proposed.call.chainId &&
@@ -232,12 +374,12 @@ const assertions = {
     (decoded.nonce ?? 0) === proposed.call.nonce &&
     (decoded.value ?? 0n) === 0n,
   broadcastHashIsTheSignedTransaction: keccak256(signedTransaction) === receipt.transactionHash,
+  receiptStatusIs0x1: receiptOk,
   exactlyOneWaiverCreated: waiverEvents.length === 1,
-  waiverCreatedNamesThisFacility: String(waiverArgs.facilityId).toLowerCase() === facility.id.toLowerCase(),
-  waiverCreatedCommitsToTheStatedReason: String(waiverArgs.reasonCommitment).toLowerCase() === reasonCommitment(statedReason).toLowerCase(),
-  bothApproversSigned: approvals.filter((approval) => approval.signedAt !== null && approval.role !== "not one of our approvers").length === 2,
-  everyRecordedSignatureVerifies: approvals.every((approval) => approval.signatureVerifies !== false),
-  covenantIsWaivedAfter: after.covenantState === "WAIVED" && after.activeWaiver,
+  waiverCreatedNamesThisFacility: facilityOk,
+  waiverCreatedCommitsToTheStatedReason: commitmentOk,
+  activeWaiverReadBackTrue: readBack.activeWaiver === true,
+  covenantStateReadBackWaived: readBack.covenantState === "WAIVED",
   serviceAssertionsPassed: assertionError === null,
 };
 const outcome = Object.values(assertions).every(Boolean) ? "waiver created and verified" : "FAILED";
@@ -262,6 +404,7 @@ const evidence = {
     covenantVault: { address: facility.vault, explorer: link("address", facility.vault) },
     facilityRegistry: facility.registry,
     coverageEngine: facility.coverageEngine,
+    credentialRegistry: manifest.contracts.credentialRegistry.address,
   },
   admin: {
     address: walletAddress,
@@ -269,22 +412,32 @@ const evidence = {
     privyWalletId: walletId,
     keyQuorumId,
     threshold: view.approvals.threshold,
-    policyId: record.policyId ?? null,
+    policyId,
     policyAttached,
   },
+  steps,
   preValidation: {
-    block: beforeBlock.toString(),
-    covenantState: before.covenantState,
-    coverage: before.coverage,
-    activeWaiver: before.activeWaiver,
-    maxWaiverDurationSeconds: before.maxWaiverDurationSeconds,
-    refusals: before.refusals,
+    passed: before.refusals.length === 0,
+    statement:
+      before.refusals.length === 0
+        ? `Passed at block ${beforeBlock}: the facility was ${before.covenantState} and not compliant (${before.coverage.coverageBps} of ${before.coverage.requiredCoverageBps} bps, ${before.coverage.resultReason}), no waiver was active, the vault is this facility's and its admin is this wallet, so the contract would accept a waiver and it was proposed.`
+        : `Did not pass at block ${beforeBlock}; an intent proposed earlier was resumed.`,
+    ...before,
+    maxWaiverDurationSeconds: manifest.facility.policy.maxWaiverDurationSeconds,
+    ...history,
   },
+  earlierRefusal: earlierRefusal
+    ? {
+        ...earlierRefusal,
+        statement:
+          "The same guard refused a waiver at this block, while the facility was compliant. scripts/run-waiver.ts --check and the console's POST /api/waivers (HTTP 409) both answered with the refusal below, and nothing was proposed to Privy. It is re-derived here from the chain's state at that block.",
+      }
+    : null,
   proposal: {
     intentId: proposed.intentId,
     createdAt: privyTime(intent.created_at),
     statedReason,
-    reasonCommitment: reasonCommitment(statedReason),
+    reasonCommitment: expectedCommitment,
     call: { to: proposed.call.to, functionName: call.functionName, args: proposed.call.args, data: proposed.call.data },
     pinned: {
       chainId: proposed.call.chainId,
@@ -320,20 +473,22 @@ const evidence = {
     sender: transaction.from,
     to: transaction.to,
     expectedStatus: "0x1",
-    actualStatus: receipt.status === "success" ? "0x1" : "0x0",
+    actualStatus: receiptOk ? "0x1" : "0x0",
     gasUsed: receipt.gasUsed.toString(),
     effectiveGasPrice: receipt.effectiveGasPrice.toString(),
   },
   events,
-  covenantState: {
-    before: before.covenantState,
-    after: after.covenantState,
-    waiverEndsAt: after.activeWaiver ? new Date(Number(after.waiverEndsAt) * 1_000).toISOString() : null,
-  },
+  readBack,
+  covenantState: { before: before.covenantState, after: readBack.covenantState, waiverEndsAt: readBack.waiverEndsAt },
   assertions,
   assertionError,
   policy: policyControls
-    ? { evidence: "arc-policy-evidence.json", checkedAt: policyControls.generatedAt, controls: policyControls.controls.map(({ name, expected, actual }) => ({ name, expected, actual })), governance: policyControls.governance.map(({ name, refused }) => ({ name, refused })) }
+    ? {
+        evidence: "arc-policy-evidence.json",
+        checkedAt: policyControls.generatedAt,
+        controls: policyControls.controls.map(({ name, expected, actual }) => ({ name, expected, actual })),
+        governance: policyControls.governance.map(({ name, refused }) => ({ name, refused })),
+      }
     : null,
   disclaimer:
     "Arc Testnet only: testnet USDC, a fictional facility, no real counterparties. The two approvers signed from their persisted P-256 keys through the same QuorumAdminService the browser console uses.",
@@ -357,7 +512,7 @@ function readable(eventName: string, args: Record<string, unknown>): Record<stri
       out[key] = enumName(COVENANT_STATES, Number(value));
     } else if (eventName === "CovenantSynchronized" && key === "reason") {
       out[key] = enumName(RESULT_REASONS, Number(value));
-    } else if ((key === "startsAt" || key === "endsAt" || key === "cureDeadline") && typeof value === "bigint" && value > 0n) {
+    } else if (["startsAt", "endsAt", "cureDeadline", "acceptedAt"].includes(key) && typeof value === "bigint" && value > 0n) {
       out[key] = `${value} (${new Date(Number(value) * 1_000).toISOString()})`;
     } else {
       out[key] = typeof value === "bigint" ? value.toString() : value;
@@ -374,7 +529,11 @@ function markdown(): string {
   const yes = (value: boolean | null) => (value === null ? "not recorded" : value ? "yes" : "**NO**");
   const short = (hash: string) => `${hash.slice(0, 10)}…`;
   const cell = (value: unknown) => String(value).replace(/\|/g, "\\|");
+  const args = (values: Record<string, unknown>) => Object.entries(values).map(([key, value]) => `${key} \`${cell(value)}\``).join(", ");
+  const traceCell = (trace: string) => (/^0x[0-9a-f]{64}$/i.test(trace) ? `[${short(trace)}](${link("tx", trace)})` : cell(trace));
   const { coverage } = before;
+  const setBy = "stateSetBy" in history ? history.stateSetBy : null;
+  const credentialUpdates = "credentialUpdates" in history ? history.credentialUpdates : [];
   return [
     `# ${evidence.title}`,
     "",
@@ -382,23 +541,59 @@ function markdown(): string {
     "",
     `Outcome: **${outcome}**. ${evidence.disclaimer}`,
     "",
-    `Deployed source \`${manifest.sourceCommit}\`. Facility \`${facility.id}\`, vault [${facility.vault}](${link("address", facility.vault)}). Admin [${walletAddress}](${link("address", walletAddress)}): Privy wallet \`${walletId}\`, owned by 2-of-2 key quorum \`${keyQuorumId}\`, governed by policy \`${evidence.admin.policyId}\`.`,
+    `Deployed source \`${manifest.sourceCommit}\`. Facility \`${facility.id}\`, vault [${facility.vault}](${link("address", facility.vault)}). Admin [${walletAddress}](${link("address", walletAddress)}): Privy wallet \`${walletId}\`, owned by 2-of-2 key quorum \`${keyQuorumId}\`, governed by policy \`${policyId}\`.`,
     "",
-    "## What was approved, and why",
+    "## The seven steps",
     "",
-    `Before proposing, at block ${beforeBlock}, the service read the chain: covenant state **${before.covenantState}**, coverage ${coverage.coverageBps} of ${coverage.requiredCoverageBps} bps (${coverage.resultReason}; exposure ${coverage.exposureReason}; ${coverage.eligibleHedgeCount} of ${coverage.totalHedgeCount} hedges eligible), no waiver active, longest waiver ${before.maxWaiverDurationSeconds} s. The contract would accept a waiver, so it was proposed.`,
+    "| # | Step | Result | Intent | Approvals | At | Trace |",
+    "|---|---|---|---|---|---|---|",
+    ...steps.map((step) => `| ${step.step} | ${step.what} | ${cell(step.result)} | ${step.intentStatus ?? ""} | ${step.approvals ?? ""} | ${step.at} | ${traceCell(step.trace)} |`),
+    "",
+    "## Pre-validation",
+    "",
+    `**${evidence.preValidation.passed ? "Passed" : "Did not pass"}.** ${evidence.preValidation.statement}`,
+    "",
+    `At block ${beforeBlock}: covenant state **${before.covenantState}**, coverage ${coverage.coverageBps} of ${coverage.requiredCoverageBps} bps (${coverage.resultReason}; exposure ${coverage.exposureReason}; ${coverage.eligibleHedgeCount} of ${coverage.totalHedgeCount} hedges eligible), waiver active: ${before.activeWaiver}, longest waiver ${manifest.facility.policy.maxWaiverDurationSeconds} s.`,
+    "",
+    ...(setBy
+      ? [
+          `That state was set by \`${setBy.event}\` in [${setBy.transactionHash}](${setBy.explorer}), block ${setBy.blockNumber}: ${args(setBy.args)}.`,
+          "",
+        ]
+      : []),
+    ...(credentialUpdates.length > 0
+      ? [
+          "Credential updates to this facility since the earlier refusal:",
+          "",
+          "| Event | Transaction | Block | Arguments |",
+          "|---|---|---|---|",
+          ...credentialUpdates.map((update) => `| ${update.event} | [${short(String(update.transactionHash))}](${update.explorer}) | ${update.blockNumber} | ${args(update.args)} |`),
+          "",
+        ]
+      : []),
+    ...(earlierRefusal
+      ? [
+          "### It refused earlier, while the facility was compliant",
+          "",
+          "error" in earlierRefusal
+            ? `Re-reading the chain at block ${earlierRefusal.block} failed: ${earlierRefusal.error}`
+            : `${evidence.earlierRefusal?.statement}\n\nAt block ${earlierRefusal.block} (${earlierRefusal.blockTimestamp}): covenant state **${earlierRefusal.covenantState}**, coverage ${earlierRefusal.coverage.coverageBps} of ${earlierRefusal.coverage.requiredCoverageBps} bps (${earlierRefusal.coverage.resultReason}). The guard's verdict at that block:\n\n${earlierRefusal.refusals.map((refusal) => `> ${refusal}`).join("\n")}`,
+          "",
+        ]
+      : []),
+    "## What was approved",
     "",
     "| | |",
     "|---|---|",
     `| Privy intent | \`${proposed.intentId}\`, created ${evidence.proposal.createdAt} |`,
     `| Stated reason (offchain) | ${cell(statedReason)} |`,
-    `| reasonCommitment | \`${evidence.proposal.reasonCommitment}\` = keccak256 of the stated reason |`,
+    `| reasonCommitment | \`${expectedCommitment}\` = keccak256 of the stated reason |`,
     `| Call | \`${call.functionName}(${proposed.call.args.join(", ")})\` on the vault |`,
     `| Pinned | chain ${proposed.call.chainId}, nonce ${proposed.call.nonce}, gas limit ${proposed.call.gasLimit}, fee cap ${proposed.call.maxFeePerGasWei} wei, value 0 |`,
     "",
     `## Approvals: ${approvals.filter((approval) => approval.signedAt).length} of ${view.approvals.threshold}`,
     "",
-    "Each approver signed Privy's authorization payload for this intent (its recorded request, `intent_id` and `timestamp`) with ECDSA P-256, and the signature was checked before it was forwarded to `POST /v1/intents/{id}/authorize`.",
+    "Each approver signed Privy's authorization payload for this intent (its recorded request, `intent_id` and `timestamp`) with ECDSA P-256. Each signature was checked against the quorum member key before it was forwarded to `POST /v1/intents/{id}/authorize`, and is re-verified here against the intent as Privy now returns it.",
     "",
     "| Order | Approver | Public key | Signed at (Privy) | Payload SHA-256 | Signature verifies |",
     "|---|---|---|---|---|---|",
@@ -409,19 +604,29 @@ function markdown(): string {
     "",
     "## Signed by Privy, broadcast by us",
     "",
-    `Privy executed the intent at ${evidence.privySigned.executedAt} and returned the signed transaction. It recovers to \`${recoveredSigner}\`, the admin wallet, and every field matches what the approvers were shown. Privy cannot broadcast on Arc, so it was sent with viem.`,
+    `Privy executed the intent at ${evidence.privySigned.executedAt} and returned the signed transaction. It recovers to \`${recoveredSigner}\`, the admin wallet, and every field matches what the approvers were shown. Privy cannot broadcast on Arc (\`401 App is not authorized to transact on chain\`), so it was sent with viem.`,
     "",
     "| Criterion | Action | Transaction | Block | Sender | Expected | Actual | Gas used | Covenant state |",
     "|---|---|---|---|---|---|---|---|---|",
-    `| R-F3-7 | createWaiver, ${proposed.call.args[0]} s | [${short(receipt.transactionHash)}](${evidence.broadcast.explorer}) | [${receipt.blockNumber}](${evidence.broadcast.blockExplorer}) | \`${transaction.from}\` | 0x1 | ${evidence.broadcast.actualStatus} | ${receipt.gasUsed} | ${before.covenantState} → ${after.covenantState} |`,
+    `| R-F3-7 | createWaiver, ${proposed.call.args[0]} s | [${short(receipt.transactionHash)}](${evidence.broadcast.explorer}) | [${receipt.blockNumber}](${evidence.broadcast.blockExplorer}) | \`${transaction.from}\` | 0x1 | ${evidence.broadcast.actualStatus} | ${receipt.gasUsed} | ${before.covenantState} → ${readBack.covenantState} |`,
     "",
     `Transaction \`${receipt.transactionHash}\`, mined ${evidence.broadcast.blockTimestamp}.`,
     "",
-    "## Events",
+    "Signed transaction, as Privy returned it:",
+    "",
+    "```",
+    signedTransaction,
+    "```",
+    "",
+    "## Events in the receipt",
     "",
     "| Contract | Event | Arguments |",
     "|---|---|---|",
-    ...events.map((event) => `| ${event.contract} | ${event.event} | ${Object.entries(event.args).map(([key, value]) => `${key} \`${cell(value)}\``).join(", ")} |`),
+    ...events.map((event) => `| ${event.contract} | ${event.event} | ${args(event.args)} |`),
+    "",
+    "## Read back from the chain",
+    "",
+    `At block ${readBack.block} (${readBack.blockTimestamp}): \`activeWaiver()\` = **${readBack.activeWaiver}**, \`covenantState()\` = **${readBack.covenantState}**, waiver ends ${readBack.waiverEndsAt}. Covenant state before: ${before.covenantState}, at block ${before.block}.`,
     "",
     "## Assertions",
     "",
