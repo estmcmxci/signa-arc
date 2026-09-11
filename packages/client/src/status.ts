@@ -1,23 +1,12 @@
-import {
-  BaseError,
-  ContractFunctionRevertedError,
-  ContractFunctionZeroDataError,
-  isAddressEqual,
-  type Address,
-  type Hex,
-  type PublicClient,
-} from "viem";
-import { arcTestnet } from "viem/chains";
+import { isAddressEqual, type Address } from "viem";
 
 import { coverageEngineAbi, covenantVaultAbi, credentialRegistryAbi, facilityRegistryAbi } from "./abis.ts";
 import type { DeploymentManifest } from "./deployment.ts";
 import { SignaError } from "./errors.ts";
-import { redactRpcUrl } from "./redact.ts";
+import { openSession, type BlockContext, type ReadClient, type Session } from "./rpc.ts";
 
-/** The reads `readDeploymentStatus` makes. A viem PublicClient provides them; tests inject one. */
-export type StatusClient = Pick<PublicClient, "getChainId" | "getBlock" | "getCode" | "readContract">;
-
-export type BlockContext = { number: string; hash: Hex; timestamp: string };
+/** The reads `readDeploymentStatus` makes. Kept as its own name for callers that only check status. */
+export type StatusClient = ReadClient;
 
 export type StatusCheck = { check: string; detail: string };
 
@@ -35,41 +24,26 @@ export type DeploymentStatus = { chainId: number; block: BlockContext; checks: S
  * reporting `false`, so no later command runs against it. It says nothing about coverage or
  * covenant state.
  */
-export async function readDeploymentStatus(
-  client: StatusClient,
-  manifest: DeploymentManifest,
-  rpcUrl: string,
-): Promise<DeploymentStatus> {
-  const rpc = redactRpcUrl(rpcUrl);
-  const transport = <T>(read: () => Promise<T>) => rpcRead(rpc, rpcUrl, read);
-
-  const chainId = await transport(() => client.getChainId());
-  if (chainId !== arcTestnet.id) {
-    throw new SignaError("CHAIN_MISMATCH", `the RPC at ${rpc} reports chain ${chainId}; this manifest is for Arc Testnet (${arcTestnet.id})`);
-  }
-  const block = await transport(() => client.getBlock({ blockTag: "latest" }));
-  const blockNumber = block.number;
-  const checks: StatusCheck[] = [{ check: "chain", detail: `the RPC reports chain ${chainId}, Arc Testnet` }];
+export async function readDeploymentStatus(client: ReadClient, manifest: DeploymentManifest, rpcUrl: string): Promise<DeploymentStatus> {
+  const session = await openSession(client, rpcUrl);
+  const { blockNumber } = session;
+  const checks: StatusCheck[] = [{ check: "chain", detail: `the RPC reports chain ${session.chainId}, Arc Testnet` }];
 
   for (const [name, record] of Object.entries(manifest.contracts)) {
-    const code = await transport(() => client.getCode({ address: record.address, blockNumber }));
+    const code = await session.transport(() => client.getCode({ address: record.address, blockNumber }));
     if (!code || code === "0x") {
       throw new SignaError("DEPLOYMENT_MISMATCH", `no contract code at ${name} ${record.address} at block ${blockNumber}`);
     }
     checks.push({ check: `code.${name}`, detail: `${record.address} has ${(code.length - 2) / 2} bytes of code` });
   }
 
-  const { facilityRegistry, credentialRegistry, coverageEngine, covenantVault } = manifest.contracts;
-  const read = <T>(label: string, call: () => Promise<T>) => contractRead(rpc, rpcUrl, label, call);
-  const vault = { address: covenantVault.address, abi: covenantVaultAbi, blockNumber } as const;
-  const engine = { address: coverageEngine.address, abi: coverageEngineAbi, blockNumber } as const;
-
-  const vaultFacility = await read("CovenantVault.facilityId()", () => client.readContract({ ...vault, functionName: "facilityId" }));
-  if (vaultFacility.toLowerCase() !== manifest.facility.id.toLowerCase()) {
-    throw new SignaError("DEPLOYMENT_MISMATCH", `vault ${covenantVault.address} is bound to facility ${vaultFacility}, not the manifest's ${manifest.facility.id}`);
-  }
+  const vaultFacility = await requireVaultBinding(session, manifest);
   checks.push({ check: "vault.facilityId", detail: `the vault is bound to facility ${vaultFacility}` });
 
+  const { facilityRegistry, credentialRegistry, coverageEngine, covenantVault } = manifest.contracts;
+  const read = session.contract;
+  const vault = { address: covenantVault.address, abi: covenantVaultAbi, blockNumber } as const;
+  const engine = { address: coverageEngine.address, abi: coverageEngineAbi, blockNumber } as const;
   const wiring: [string, Address, () => Promise<Address>][] = [
     ["vault.facilityRegistry", facilityRegistry.address, () => read("CovenantVault.facilityRegistry()", () => client.readContract({ ...vault, functionName: "facilityRegistry" }))],
     ["vault.coverageEngine", coverageEngine.address, () => read("CovenantVault.coverageEngine()", () => client.readContract({ ...vault, functionName: "coverageEngine" }))],
@@ -96,40 +70,17 @@ export async function readDeploymentStatus(
   if (!exists) throw new SignaError("DEPLOYMENT_MISMATCH", `facility ${manifest.facility.id} does not exist in registry ${facilityRegistry.address}`);
   checks.push({ check: "facilityRegistry.facilityExists", detail: `facility ${manifest.facility.id} exists` });
 
-  return {
-    chainId,
-    block: { number: blockNumber.toString(), hash: block.hash, timestamp: new Date(Number(block.timestamp) * 1_000).toISOString() },
-    checks,
-  };
+  return { chainId: session.chainId, block: session.block, checks };
 }
 
-/** A transport failure. The message never carries the raw URL, which may hold a key. */
-async function rpcRead<T>(rpc: string, rawUrl: string, read: () => Promise<T>): Promise<T> {
-  try {
-    return await read();
-  } catch (error) {
-    throw new SignaError("RPC_UNAVAILABLE", scrub(`RPC request to ${rpc} failed: ${reason(error)}`, rawUrl, rpc), true);
+/** The vault must be bound to the manifest's facility before anything is read through it. */
+export async function requireVaultBinding(session: Session, manifest: DeploymentManifest): Promise<string> {
+  const { covenantVault } = manifest.contracts;
+  const facilityId = await session.contract("CovenantVault.facilityId()", () =>
+    session.client.readContract({ address: covenantVault.address, abi: covenantVaultAbi, blockNumber: session.blockNumber, functionName: "facilityId" }),
+  );
+  if (facilityId.toLowerCase() !== manifest.facility.id.toLowerCase()) {
+    throw new SignaError("DEPLOYMENT_MISMATCH", `vault ${covenantVault.address} is bound to facility ${facilityId}, not the manifest's ${manifest.facility.id}`);
   }
-}
-
-/** A revert or empty return means the address is not the contract the manifest says it is. */
-async function contractRead<T>(rpc: string, rawUrl: string, label: string, read: () => Promise<T>): Promise<T> {
-  try {
-    return await read();
-  } catch (error) {
-    const contractFailure =
-      error instanceof BaseError &&
-      error.walk((cause) => cause instanceof ContractFunctionRevertedError || cause instanceof ContractFunctionZeroDataError) !== null;
-    if (contractFailure) throw new SignaError("DEPLOYMENT_MISMATCH", `${label} reverted or returned no data: ${reason(error)}`);
-    throw new SignaError("RPC_UNAVAILABLE", scrub(`RPC request to ${rpc} failed during ${label}: ${reason(error)}`, rawUrl, rpc), true);
-  }
-}
-
-function reason(error: unknown): string {
-  if (error instanceof BaseError) return error.shortMessage;
-  return error instanceof Error ? error.message : String(error);
-}
-
-function scrub(message: string, rawUrl: string, redacted: string): string {
-  return rawUrl ? message.split(rawUrl).join(redacted) : message;
+  return facilityId;
 }

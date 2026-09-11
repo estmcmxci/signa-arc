@@ -3,11 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Signa Covenant client: deployment manifest validation, generated ABIs and read-only deployment checks.",
+  "description": "Signa Covenant client: deployment manifest validation, generated ABIs, block-pinned reads, draw simulation and offline credential inspection.",
   "exports": {
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@fx-coverage/credentials": "workspace:*",
+    "@fx-coverage/provider-adapter": "workspace:*",
     "viem": "^2.56.3"
   }
 }
