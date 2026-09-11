@@ -9,7 +9,8 @@ export type TxServices={snapshot:typeof readSnapshot;simulate:typeof simulate;al
 export const services:TxServices={
   snapshot:readSnapshot,simulate,
   allowance:sender=>rpc.readContract({address:manifest!.settlementAsset.address,abi:erc20Abi,functionName:'allowance',args:[sender,manifest!.contracts.covenantVault.address]}),
-  wait:(hash,onReplaced)=>rpc.waitForTransactionReceipt({hash,timeout:60_000,confirmations:1,onReplaced:r=>onReplaced(r.transaction.hash,r.reason==='cancelled')}),
+  // Only a repriced replacement is the same request; any other replacement took the nonce and this action did not execute.
+  wait:(hash,onReplaced)=>rpc.waitForTransactionReceipt({hash,timeout:60_000,confirmations:1,onReplaced:r=>onReplaced(r.transaction.hash,r.reason!=='repriced')}),
   receipt:async(row,receipt)=>{
     const updated:LedgerRow={...row,hash:receipt.transactionHash,status:row.status==='cancelled'?'cancelled':receipt.status==='success'?'confirmed':'reverted',block:receipt.blockNumber.toString(),gasUsed:receipt.gasUsed.toString(),feeNative:(receipt.gasUsed*receipt.effectiveGasPrice).toString()};
     try{const block=await rpc.getBlock({blockNumber:receipt.blockNumber});updated.blockTimestamp=new Date(Number(block.timestamp)*1000).toISOString();}catch{/* receipt status remains known */}
@@ -27,6 +28,8 @@ export const services:TxServices={
   },
 };
 export class HeldAction extends Error{constructor(public verdict:Verdict){super(verdict.code);}}
+/** A wallet rejection arrives nested: viem wraps the provider's 4001 inside its contract and transaction errors. */
+function declined(error:unknown):boolean{let e=error as {code?:unknown;cause?:unknown}|null|undefined;for(let depth=0;e&&depth<8;depth++,e=e.cause as typeof e)if(e.code===4001)return true;return false;}
 export async function executeAction(action:Exclude<Action,'approve'>,amount:bigint,sender:Sender,record:(row:LedgerRow)=>void,deps:TxServices=services):Promise<LedgerRow[]> {
   const m=manifest;if(!m)throw new Error('No manifest.');const finished:LedgerRow[]=[];
   async function identity(){
@@ -51,7 +54,7 @@ export async function executeAction(action:Exclude<Action,'approve'>,amount:bigi
         throw error;
       }
     }catch(error){
-      if(!row.hash){const code=(error as {code?:number;cause?:{code?:number}})?.code??(error as {cause?:{code?:number}})?.cause?.code;row={...row,status:code===4001?'declined':'unknown',message:code===4001?'The wallet request was declined. No transaction was submitted.':'The wallet did not return a transaction hash. Check wallet activity before retrying.'};record(row);}
+      if(!row.hash){const rejected=declined(error);row={...row,status:rejected?'declined':'unknown',message:rejected?'The wallet request was declined. No transaction was submitted.':'The wallet did not return a transaction hash. Check wallet activity before retrying.'};record(row);}
       throw error;
     }
   }
