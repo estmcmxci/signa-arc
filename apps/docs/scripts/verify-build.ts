@@ -20,6 +20,8 @@ const PAGES: [html: string, markdown: string, llms: string][] = [
   ["agents/index.html", "assets/md/agents.md", "/agents"],
   ["guides/inspect-a-facility/index.html", "assets/md/guides/inspect-a-facility.md", "/guides/inspect-a-facility"],
   ["guides/explain-a-refused-draw/index.html", "assets/md/guides/explain-a-refused-draw.md", "/guides/explain-a-refused-draw"],
+  ["guides/submit-a-credential/index.html", "assets/md/guides/submit-a-credential.md", "/guides/submit-a-credential"],
+  ["guides/send-and-reconcile/index.html", "assets/md/guides/send-and-reconcile.md", "/guides/send-and-reconcile"],
   ["reference/commands/index.html", "assets/md/reference/commands.md", "/reference/commands"],
   ["reference/errors/index.html", "assets/md/reference/errors.md", "/reference/errors"],
   ["reference/envelope/index.html", "assets/md/reference/envelope.md", "/reference/envelope"],

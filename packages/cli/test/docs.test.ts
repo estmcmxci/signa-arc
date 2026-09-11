@@ -39,6 +39,8 @@ function documentedCommands(): { file: string; command: string }[] {
 const PARSED_OUTPUT = /--json\b|--format(?:\s+|=)(?:json|jsonl|yaml)\b|--llms|--schema\b/;
 /** `<file>` and `[record]` in a usage synopsis: a shape to fill in, not a runnable example. */
 const PLACEHOLDER = /^[<[].*[>\]]$/;
+/** An elided value, as in a hash abbreviated for reading. Illustrative, so never executed. */
+const ELIDED = /\u2026/;
 /**
  * A documented command that names a signer. These are never executed here: running one would
  * unlock a real keystore on whoever's machine this runs on and broadcast a transaction. Their
@@ -79,7 +81,7 @@ test("every signa command the docs show, in a block or a sentence, is one signa 
       );
     }
     if (words.length === 0 || words.some((word) => PLACEHOLDER.test(word)) || ran.has(command)) continue;
-    if (NAMES_A_SIGNER.test(command)) continue;
+    if (NAMES_A_SIGNER.test(command) || ELIDED.test(command)) continue;
     ran.add(command);
     const args = words.map((word) => (word.endsWith(".json") && !existsSync(join(fileURLToPath(REPO_ROOT), word)) ? envelope : word));
     const run = await runSigna(args.some((arg) => SELECTS_OUTPUT.test(arg)) ? args : [...args, "--json"]);

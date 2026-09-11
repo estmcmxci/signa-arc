@@ -5,7 +5,9 @@ description: "Every signa command, generated from the shipped command tree: argu
 
 # Commands
 
-Generated from the command tree `signa` ships, so it cannot drift from the binary. Every command in this release is read-only: none takes a key, and none sends a transaction.
+Generated from the command tree `signa` ships, so it cannot drift from the binary.
+
+Most commands only read, and need no key. The commands that take `--account` sign with a Foundry keystore and broadcast exactly one transaction: they are marked below, and they are the only ones that can move anything.
 
 Add `--json` for one JSON document on stdout, or `--schema --format json` for a command's JSON Schema. [For agents](/agents) describes the shared result shape and the error codes.
 
@@ -17,7 +19,7 @@ Simulate and send CovenantVault.restoreCompliance, which returns a cured facilit
 pnpm signa covenant restore --account <account> [options]
 ```
 
-Reads only: no key, no transaction.
+**Signs and sends one transaction.** It is simulated first as the named signer; if that refuses, nothing is broadcast. The hash is recorded in the operation journal before any receipt wait, and success is decided by the receipt.
 
 ### Options
 
@@ -73,7 +75,7 @@ Simulate and send CovenantVault.syncCovenant, which records the covenant state t
 pnpm signa covenant sync --account <account> [options]
 ```
 
-Reads only: no key, no transaction.
+**Signs and sends one transaction.** It is simulated first as the named signer; if that refuses, nothing is broadcast. The hash is recorded in the operation journal before any receipt wait, and success is decided by the receipt.
 
 ### Options
 
@@ -269,7 +271,7 @@ Submit a signed credential envelope to the registry: checked offline, checked ag
 pnpm signa credentials submit <file> --account <account> [options]
 ```
 
-Reads only: no key, no transaction.
+**Signs and sends one transaction.** It is simulated first as the named signer; if that refuses, nothing is broadcast. The hash is recorded in the operation journal before any receipt wait, and success is decided by the receipt.
 
 ### Arguments
 
@@ -332,7 +334,7 @@ Simulate CovenantVault.draw as the facility's operator, then send it once. This 
 pnpm signa draw send --account <account> --amount <amount> [options]
 ```
 
-Reads only: no key, no transaction.
+**Signs and sends one transaction.** It is simulated first as the named signer; if that refuses, nothing is broadcast. The hash is recorded in the operation journal before any receipt wait, and success is decided by the receipt.
 
 ### Options
 

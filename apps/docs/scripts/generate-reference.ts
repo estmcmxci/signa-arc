@@ -55,7 +55,9 @@ export async function renderCommandsPage(): Promise<string> {
     frontmatter("Commands", "Every signa command, generated from the shipped command tree: arguments, options, environment variables, output fields and examples."),
     "# Commands",
     "",
-    "Generated from the command tree `signa` ships, so it cannot drift from the binary. Every command in this release is read-only: none takes a key, and none sends a transaction.",
+    "Generated from the command tree `signa` ships, so it cannot drift from the binary.",
+    "",
+    "Most commands only read, and need no key. The commands that take `--account` sign with a Foundry keystore and broadcast exactly one transaction: they are marked below, and they are the only ones that can move anything.",
     "",
     "Add `--json` for one JSON document on stdout, or `--schema --format json` for a command's JSON Schema. [For agents](/agents) describes the shared result shape and the error codes.",
     "",
@@ -64,7 +66,13 @@ export async function renderCommandsPage(): Promise<string> {
     const { args, options, env, output } = command.schema ?? {};
     lines.push(`## signa ${command.name}`, "", command.description ?? "", "");
     lines.push("```bash", `pnpm signa ${command.name}${usage(args, options)}`, "```", "");
-    lines.push(`Reads only: no key, no transaction${needsRpc(command.name) ? "" : ", and no RPC"}.`, "");
+    const signs = Boolean(options?.properties?.["account"]);
+    lines.push(
+      signs
+        ? "**Signs and sends one transaction.** It is simulated first as the named signer; if that refuses, nothing is broadcast. The hash is recorded in the operation journal before any receipt wait, and success is decided by the receipt."
+        : `Reads only: no key, no transaction${needsRpc(command.name) ? "" : ", and no RPC"}.`,
+      "",
+    );
     if (args?.properties) lines.push(...fields("Arguments", args, "Argument"));
     if (options?.properties) lines.push(...fields("Options", options, "Option", true));
     if (env?.properties) lines.push(...fields("Environment variables", env, "Variable"));
@@ -113,11 +121,29 @@ export function renderErrorsPage(): string {
         ["`UPDATE_FAILED`", "`--update` cannot run: `signa` is not published."],
       ],
     ),
-    "## Reserved",
+    ...(reserved.length === 0
+      ? []
+      : [
+          "## Reserved",
+          "",
+          "These codes are fixed now so the set stays stable as commands are added. Nothing raises them yet.",
+          "",
+          ...table(["Code", "Meaning"], reserved.map((code) => [`\`${code}\``, ERROR_DESCRIPTIONS[code].meaning])),
+        ]),
+    "## Was anything broadcast?",
     "",
-    "These codes are fixed now so the set stays stable when write commands arrive. Nothing raises them yet.",
+    "For a write command this is the question that matters, and the code answers it on its own. incur fixes the error document to `code`, `message` and `retryable`, so a failure that left a transaction on the chain carries its hash in the `cta` rather than in a field of its own. The operation journal records the same hash as structured JSON.",
     "",
-    ...table(["Code", "Meaning"], reserved.map((code) => [`\`${code}\``, ERROR_DESCRIPTIONS[code].meaning])),
+    ...table(
+      ["Outcome", "Broadcast", "Where the hash is"],
+      [
+        ["Exit 0, a `kind: transaction` result", "Yes, and mined successfully", "`transaction.hash`"],
+        ["`ACTION_REFUSED`, `SIGNER_ROLE_MISMATCH`, `STALE_SEQUENCE`, `SIGNER_UNAVAILABLE`, `SIMULATION_FAILED`, `INVALID_*`, `CHAIN_MISMATCH`, `DEPLOYMENT_MISMATCH`", "No. Nothing reached the chain and nothing was spent", "There is none"],
+        ["`TRANSACTION_REVERTED`", "Yes, and it failed: receipt status 0x0", "`cta.commands[0]`, and the journal"],
+        ["`TRANSACTION_PENDING`", "Yes, and its fate is not yet known. It was not retried or replaced", "`cta.commands[0]`, and the journal"],
+        ["`RPC_UNAVAILABLE`", "Unknown if it happened during the wait. Check the journal", "The journal, when the send got that far"],
+      ],
+    ),
     "## Exit codes",
     "",
     ...table(
@@ -125,7 +151,8 @@ export function renderErrorsPage(): string {
       [
         ["A completed report, including an offline inspection", "0"],
         ["A completed simulation, whether the draw is permitted or refused", "0"],
-        ["Any error above, including a failed simulation", "1"],
+        ["A send whose transaction mined successfully", "0"],
+        ["Any error above, including a refused send, a reverted transaction and a receipt timeout", "1"],
       ],
     ),
     "A refused draw is a valid covenant outcome: the inquiry succeeded, so the exit code is 0 and `allowed` is `false`. A transport failure, or a revert no contract error decodes, is a failed inquiry and exits 1.",

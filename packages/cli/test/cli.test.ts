@@ -198,3 +198,17 @@ test("--update cannot install anything: the workspace package declares no signa 
   assert.equal(error.code, "UPDATE_FAILED");
   assert.match(error.message, /No update installer is configured for 'signa'/);
 });
+
+test("every command that signs is marked destructive and hidden from MCP clients", () => {
+  // incur exposes commands as MCP tools by default. A command that can move funds must not be
+  // one of them. There is no MCP server to interrogate here, so this reads the definitions.
+  const source = readFileSync(new URL("../src/cli.ts", import.meta.url), "utf8");
+  const blocks = source.split(/\.command\(/).slice(1).filter((block) => /options: writeOptions/.test(block));
+  assert.equal(blocks.length, 4, "credentials submit, covenant sync, covenant restore and draw send all sign");
+  for (const block of blocks) {
+    const definition = block.slice(0, block.indexOf("async run"));
+    const name = /description: "([^"]{0,60})/.exec(definition)?.[1] ?? "?";
+    assert.match(definition, /mcp: false/, `a signing command must set mcp: false (${name})`);
+    assert.match(definition, /destructive: true/, `a signing command must be marked destructive (${name})`);
+  }
+});

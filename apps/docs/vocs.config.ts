@@ -20,6 +20,8 @@ export default defineConfig({
       items: [
         { text: "Inspect a facility", link: "/guides/inspect-a-facility" },
         { text: "Explain a refused draw", link: "/guides/explain-a-refused-draw" },
+        { text: "Submit a credential", link: "/guides/submit-a-credential" },
+        { text: "Send and reconcile an operation", link: "/guides/send-and-reconcile" },
       ],
     },
     {

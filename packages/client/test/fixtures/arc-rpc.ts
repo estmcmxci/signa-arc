@@ -198,6 +198,10 @@ export function fakeArcClient(options: FakeArcOptions = {}) {
         const address = String(list[0]).toLowerCase();
         return options.missingCode && address === options.missingCode.toLowerCase() ? "0x" : "0x60806040";
       }
+      // No transaction the fixture knows about: `tx show` reports it as unknown to this node.
+      case "eth_getTransactionByHash":
+      case "eth_getTransactionReceipt":
+        return null;
       case "eth_call": {
         const call = list[0] as { to: Address; data: Hex };
         const { functionName, args } = decodeFunctionData({ abi: ALL_ABIS, data: call.data });

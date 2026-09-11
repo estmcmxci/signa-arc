@@ -24,7 +24,9 @@ The deployment is on Arc Testnet, chain 5042002. The facility is fictional, the 
 
 ## The signa CLI today
 
-`signa` inspects the deployment from the command line. Every command is read-only and needs no key.
+`signa` inspects and operates the facility from the command line.
+
+These commands only read. None takes a key, and none can change anything.
 
 | Command | What it does | Needs |
 |---|---|---|
@@ -34,6 +36,16 @@ The deployment is on Arc Testnet, chain 5042002. The facility is fictional, the 
 | `signa credentials list` | Lists the assertions the registry holds, with sequences and their age at the report block | An RPC; no key |
 | `signa credentials inspect <file>` | Checks a signed credential envelope offline: format, domain, facility, digest and recovered signer | Nothing: no RPC, no key |
 | `signa draw simulate --amount <USDC>` | Simulates the vault's own `draw` as the operator, and decodes a refusal | An RPC; no key |
+| `signa tx show <hash>` | Reports whether a transaction is pending, mined, or mined and reverted, with its decoded reason | An RPC; no key |
 | `signa evidence show [record]` | Shows the recorded runs above, with every transaction linked | Nothing: no RPC, no key |
 
-Commands that submit credentials, sync, restore or send a draw are specified but not built yet; they will appear here when they exist. The CLI is not published: [Run locally](/run-locally) has the commands. The [Quickstart](/quickstart) takes five minutes.
+These commands sign with a named Foundry keystore and each broadcast exactly one transaction. Every one simulates first and refuses without broadcasting if the simulation refuses. See [Send and reconcile an operation](/guides/send-and-reconcile).
+
+| Command | What it does | Needs |
+|---|---|---|
+| `signa credentials submit <file> --account <name>` | Submits a signed envelope, after checking it offline and against the current sequence | A keystore |
+| `signa covenant sync --account <name>` | Records the covenant state the engine evaluates now | A keystore |
+| `signa covenant restore --account <name>` | Returns a cured facility to COMPLIANT, when coverage genuinely allows it | A keystore |
+| `signa draw send --amount <USDC> --account <name>` | Draws as the facility's operator. This moves funds | A keystore |
+
+Repayment, deposit approval and issuer signing are specified but not built yet; they will appear here when they exist. The CLI is not published: [Run locally](/run-locally) has the commands. The [Quickstart](/quickstart) takes five minutes.

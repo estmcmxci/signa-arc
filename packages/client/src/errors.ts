@@ -27,13 +27,13 @@ export const ERROR_DESCRIPTIONS: Record<SignaErrorCode, { meaning: string; raise
   INVALID_INPUT: {
     meaning:
       "An argument, option or input file has the wrong shape. Examples: an RPC URL that is not http(s); a draw amount that is not a positive six-decimal number; a credential envelope that is malformed, or signed for another chain, registry or facility.",
-    raisedBy: "status, facility show, coverage show, credentials list, credentials inspect, draw simulate",
+    raisedBy: "every command that takes input, including every write command",
   },
   INVALID_MANIFEST: {
     meaning: "The deployment manifest cannot be read, is not JSON, or fails validation. There is no fallback to another manifest.",
     raisedBy: "every command that reads a manifest",
   },
-  CHAIN_MISMATCH: { meaning: "The RPC is not on Arc Testnet (5042002).", raisedBy: "status, facility show, coverage show, credentials list, draw simulate" },
+  CHAIN_MISMATCH: { meaning: "The RPC is not on Arc Testnet (5042002). A write command checks this before it opens a keystore.", raisedBy: "every live command" },
   DEPLOYMENT_MISMATCH: {
     meaning:
       "The chain disagrees with the manifest. A contract has no code; a read reverts or returns nothing; or the wiring differs, as with a vault bound to another facility or an operator the facility does not name.",
@@ -52,12 +52,35 @@ export const ERROR_DESCRIPTIONS: Record<SignaErrorCode, { meaning: string; raise
       "The simulated draw reverted without revert data, or with data that no known contract error decodes. Unlike a decoded refusal, which is a completed inquiry, this is a failed one.",
     raisedBy: "draw simulate",
   },
-  STALE_SEQUENCE: { meaning: "Reserved for P1 credential submission: the registry already holds this sequence or a later one.", raisedBy: "not raised in this release" },
-  SIGNER_UNAVAILABLE: { meaning: "Reserved for P1 operations: no signer could be opened.", raisedBy: "not raised in this release" },
-  SIGNER_ROLE_MISMATCH: { meaning: "Reserved for P1 operations: the signer is not the role the operation needs.", raisedBy: "not raised in this release" },
-  ACTION_REFUSED: { meaning: "Reserved for P1 operations: a requested send refused during preflight. Nothing was broadcast.", raisedBy: "not raised in this release" },
-  TRANSACTION_REVERTED: { meaning: "Reserved for P1 operations: the transaction was mined with receipt status 0x0.", raisedBy: "not raised in this release" },
-  TRANSACTION_PENDING: { meaning: "Reserved for P1 operations: no receipt arrived before the timeout. The hash is kept.", raisedBy: "not raised in this release" },
+  STALE_SEQUENCE: {
+    meaning:
+      "The registry already holds this sequence or a later one, in the credential's own scope: (facility) for an exposure, (facility, trade commitment) for a hedge. Nothing was broadcast, and the signed envelope is left exactly as it is: a sequence is never bumped to make a submission fit.",
+    raisedBy: "credentials submit",
+  },
+  SIGNER_UNAVAILABLE: {
+    meaning:
+      "No signer could be opened: no keystore of that name, a password file that does not exist, a wrong password, or Foundry's cast missing from PATH. Nothing was simulated or broadcast.",
+    raisedBy: "credentials submit, covenant sync, covenant restore, draw send",
+  },
+  SIGNER_ROLE_MISMATCH: {
+    meaning: "The signer is not the role the operation requires, as with a draw sent by anyone but the facility's operator. Refused before anything is simulated or broadcast.",
+    raisedBy: "draw send",
+  },
+  ACTION_REFUSED: {
+    meaning:
+      "The action was refused before anything was broadcast, either by the preflight simulation or by the gas estimation that precedes a send. The decoded contract error is in the message. Nothing reached the chain and nothing was spent.",
+    raisedBy: "credentials submit, covenant sync, covenant restore, draw send",
+  },
+  TRANSACTION_REVERTED: {
+    meaning:
+      "The transaction was broadcast and mined with receipt status 0x0. The receipt decides this, not the signing tool, which exits 0 on a transaction whose receipt reverts. The hash is in the cta and the journal.",
+    raisedBy: "credentials submit, covenant sync, covenant restore, draw send",
+  },
+  TRANSACTION_PENDING: {
+    meaning:
+      "The transaction was broadcast but no receipt arrived before the timeout. It was not retried or replaced, and it may still be mined. Its hash is in the cta and the journal; reconcile it with `signa tx show`.",
+    raisedBy: "credentials submit, covenant sync, covenant restore, draw send",
+  },
 };
 
 export class SignaError extends Error {
