@@ -13,7 +13,7 @@ export const services:TxServices={
   receipt:async(row,receipt)=>{
     const updated:LedgerRow={...row,hash:receipt.transactionHash,status:row.status==='cancelled'?'cancelled':receipt.status==='success'?'confirmed':'reverted',block:receipt.blockNumber.toString(),gasUsed:receipt.gasUsed.toString(),feeNative:(receipt.gasUsed*receipt.effectiveGasPrice).toString()};
     try{const block=await rpc.getBlock({blockNumber:receipt.blockNumber});updated.blockTimestamp=new Date(Number(block.timestamp)*1000).toISOString();}catch{/* receipt status remains known */}
-    try{const tx=await rpc.getTransaction({hash:receipt.transactionHash});updated.nonce=tx.nonce;updated.input=tx.input;updated.target=tx.to??undefined;}catch{/* hash is sufficient for later reconciliation */}
+    try{const tx=await rpc.getTransaction({hash:receipt.transactionHash});updated.nonce=tx.nonce;updated.input=tx.input;if(tx.to)updated.target=tx.to;else delete updated.target;}catch{/* hash is sufficient for later reconciliation */}
     updated.events=parseEventLogs({abi:fullVaultAbi,logs:receipt.logs,strict:false}).map(log=>({event:log.eventName,args:log.args}));
     // Receipt-block reads are labelled and never borrowed from a later snapshot.
     try{

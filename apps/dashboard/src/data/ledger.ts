@@ -6,8 +6,8 @@ import { json } from './format';
 
 export const recordedRows:LedgerRow[]=acceptance.steps.map(step=>{
   const s=step as unknown as Record<string,unknown>;
-  const vault=s.vault as Record<string,string>|undefined;
-  const row:LedgerRow={id:`recorded:${s.transactionHash}`,source:'recorded',kind:'transaction',action:String(s.action),status:s.actualStatus==='0x1'?'confirmed':'reverted',timestamp:acceptance.generatedAt,hash:String(s.transactionHash) as Hex,block:String(s.blockNumber),actor:String(s.sender),chainId:5042002,facilityId:acceptance.deployment.facility.id,events:s.events as unknown[]};
+  const vault=s.vault as {balanceBefore:string;balanceAfter:string;principalBefore:string;principalAfter:string}|undefined;
+  const row:LedgerRow={id:`recorded:${s.transactionHash}`,source:'recorded',kind:'transaction',action:String(s.action),status:s.actualStatus==='0x1'?'confirmed':'reverted',timestamp:acceptance.generatedAt,hash:String(s.transactionHash) as Hex,block:String(s.blockNumber),actor:String(s.sender),chainId:5042002,facilityId:acceptance.deployment.facilityId,events:s.events as unknown[]};
   if(typeof s.coverageBps==='number')row.coverageBps=s.coverageBps;
   if(typeof s.reasonCode==='string')row.code=s.actualStatus==='0x0'?'DrawNotAllowed(CURE)':s.reasonCode;
   if(typeof s.calldata==='string')row.input=s.calldata;
@@ -16,7 +16,7 @@ export const recordedRows:LedgerRow[]=acceptance.steps.map(step=>{
   if(vault){row.before={balance:vault.balanceBefore,principal:vault.principalBefore};row.after={balance:vault.balanceAfter,principal:vault.principalAfter};}
   return row;
 });
-recordedRows.push({id:'recorded:waiver',source:'recorded',kind:'transaction',action:'createWaiver',status:'confirmed',timestamp:waiver.generatedAt,blockTimestamp:waiver.broadcast.blockTimestamp,hash:waiver.broadcast.transactionHash as Hex,block:waiver.broadcast.blockNumber,actor:waiver.broadcast.sender,target:waiver.broadcast.to,chainId:5042002,facilityId:acceptance.deployment.facility.id,coverageBps:waiver.readBack.coverage.coverageBps,code:'QUORUM_2_OF_2',events:waiver.events,gasUsed:waiver.broadcast.gasUsed});
+recordedRows.push({id:'recorded:waiver',source:'recorded',kind:'transaction',action:'createWaiver',status:'confirmed',timestamp:waiver.generatedAt,blockTimestamp:waiver.broadcast.blockTimestamp,hash:waiver.broadcast.transactionHash as Hex,block:waiver.broadcast.blockNumber,actor:waiver.broadcast.sender,target:waiver.broadcast.to,chainId:5042002,facilityId:acceptance.deployment.facilityId,coverageBps:waiver.readBack.coverage.coverageBps,code:'QUORUM_2_OF_2',events:waiver.events,gasUsed:waiver.broadcast.gasUsed});
 export const recordedAt=acceptance.generatedAt;
 export const waiverProof={hash:waiver.broadcast.transactionHash,at:waiver.broadcast.blockTimestamp,reason:waiver.proposal.reasonCommitment};
 export const JOURNAL_KEY='signa:operations:v1';

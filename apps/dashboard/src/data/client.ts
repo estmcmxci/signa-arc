@@ -93,7 +93,7 @@ export async function simulate(action:Action,amount:bigint,sender:Address,block?
   const base={amount,action,sender,block:at};
   try {
     const args=action==='draw'||action==='repay'?[amount]:action==='approve'?[m.contracts.covenantVault.address,amount]:[];
-    const {request}=await rpc.simulateContract({address:action==='approve'?m.settlementAsset.address:m.contracts.covenantVault.address,abi:action==='approve'?erc20Abi:fullVaultAbi,functionName:action,args,account:sender,blockNumber:at.number});
+    const {request}=await rpc.simulateContract({address:action==='approve'?m.settlementAsset.address:m.contracts.covenantVault.address,abi:(action==='approve'?erc20Abi:fullVaultAbi) as Abi,functionName:action,args,account:sender,blockNumber:at.number});
     return {...base,kind:'permitted',code:'PERMITTED',args:[],request};
   }catch(error){return {...base,...classifyError(error)};}
 }
