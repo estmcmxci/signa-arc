@@ -30,7 +30,15 @@ Every result carries these fields:
 
 ## Branch on error codes
 
-On failure, stdout carries `{ "code": "…", "message": "…" }` and the exit code is 1. Branch on `code`, never on the message.
+On failure the exit code is 1, and stdout carries one JSON object. Branch on `code`, never on the message.
+
+| Field | Present | Meaning |
+|---|---|---|
+| `code` | always | One of the codes below. |
+| `message` | always | Human-readable detail. It may change between releases. |
+| `retryable` | Signa's own codes | `true` when the same request may succeed later, as after an RPC outage. |
+| `cta` | `COMMAND_NOT_FOUND` | incur's suggested next commands, as `{ description, commands: [{ command, description }] }`. |
+| `fieldErrors` | `VALIDATION_ERROR` | incur's list of failing fields, each with `path`, `code` and `message`. |
 
 | Code | Raised when |
 |---|---|

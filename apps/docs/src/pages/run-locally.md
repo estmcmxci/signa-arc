@@ -48,6 +48,6 @@ A manifest named by an option or an environment variable must exist and validate
 
 ```bash
 pnpm docs:dev       # development server
-pnpm docs:build     # static build into apps/docs/dist
+pnpm docs:build     # static build into apps/docs/dist/public
 pnpm docs:preview   # serve the static build locally
 ```
