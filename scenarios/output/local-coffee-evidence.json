@@ -1,0 +1,227 @@
+{
+  "generatedAt": "2026-09-11T00:17:13.423Z",
+  "disclaimer": "Fictional Colombian coffee facility. Mock provider data. No real funds or counterparties.",
+  "providerDisclaimer": "Mock provider data — no Ebury connection or endorsement.",
+  "network": {
+    "name": "Local Anvil",
+    "chainId": 31337,
+    "rpcUrl": "http://127.0.0.1:8545"
+  },
+  "actors": {
+    "facilityAdmin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "originatorOperator": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "exposureIssuer": "0x3c012079B961D8Cc2eF060714411E64332458Bd3",
+    "hedgeIssuer": "0xe05fcC23807536bEe418f142D19fa0d21BB0cfF7"
+  },
+  "facilityId": "0x470e748bc9f7c36de730822cb62ebe2bdba31f20856e010df4ebabaef1bc8db1",
+  "contracts": {
+    "token": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+    "facilityRegistry": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+    "credentialRegistry": "0x0165878a594ca255338adfa4d48449f69242eb8f",
+    "engine": "0xa513e6e4b8f2a923d98304ec87f64353c4d5c853",
+    "vault": "0x2279b7a0a67db372996a5fab50d91eaa73d2ebe6"
+  },
+  "steps": [
+    {
+      "action": "deploy mock settlement token",
+      "transactionHash": "0x2372c3d1129975698db35ae1dc1d09e1edff97983af99a7ae585b81a61f8d890",
+      "blockNumber": "1",
+      "transactionStatus": "success"
+    },
+    {
+      "action": "deploy facility registry",
+      "transactionHash": "0x6d07522679aee91c0c11dac1160aac2cbd050e70e213c96e8412da2bad8330e6",
+      "blockNumber": "2",
+      "transactionStatus": "success"
+    },
+    {
+      "action": "deploy credential registry",
+      "transactionHash": "0xb6ca342d82f8d317aeef4bb2ecd23311d2add49fee9b43f9b27f9c9a02f7bf8e",
+      "blockNumber": "7",
+      "transactionStatus": "success"
+    },
+    {
+      "action": "deploy coverage engine",
+      "transactionHash": "0x15738c9f0939bb5d7790e3b537b8dd4cf606569dd08cd714e996526cf4c0e435",
+      "blockNumber": "8",
+      "transactionStatus": "success"
+    },
+    {
+      "action": "deploy covenant vault",
+      "transactionHash": "0x3ada65931a789b8d2931dcde397cfdbc9d31b655af29197b9dde3c7846596dc2",
+      "blockNumber": "9",
+      "transactionStatus": "success"
+    },
+    {
+      "action": "T-01 sync 5.0M exposure against 4.5M hedge",
+      "transactionHash": "0xa62346bfa98cc80fd804c16cd0e77b0aa1119c1d829a2bea0433e826c9a16d62",
+      "blockNumber": "15",
+      "transactionStatus": "success",
+      "covenant": {
+        "state": "COMPLIANT",
+        "assessed": true,
+        "compliant": true,
+        "outstandingValue": "5000000000000",
+        "grossEligible": "4500000000000",
+        "countedEligible": "4500000000000",
+        "coverageBps": 9000,
+        "requiredCoverageBps": 8000,
+        "principal": "0",
+        "cureDeadline": "0",
+        "vaultBalance": "10000000000000"
+      }
+    },
+    {
+      "action": "T-01 compliant draw",
+      "transactionHash": "0x3de38ea68cae2011a9a1d04bfdfda7a3ab681121130a15cbdd05e2aceb510649",
+      "blockNumber": "16",
+      "transactionStatus": "success",
+      "covenant": {
+        "state": "COMPLIANT",
+        "assessed": true,
+        "compliant": true,
+        "outstandingValue": "5000000000000",
+        "grossEligible": "4500000000000",
+        "countedEligible": "4500000000000",
+        "coverageBps": 9000,
+        "requiredCoverageBps": 8000,
+        "principal": "500000000000",
+        "cureDeadline": "0",
+        "vaultBalance": "9500000000000"
+      }
+    },
+    {
+      "action": "T-04 fresh draw blocked after exposure growth",
+      "transactionHash": "0x8dd4acc5f07d0538ac7def1c603c1f62afb439d12b0fec36ff27cc6919af04bc",
+      "blockNumber": "18",
+      "transactionStatus": "reverted",
+      "covenant": {
+        "state": "COMPLIANT",
+        "assessed": true,
+        "compliant": false,
+        "outstandingValue": "6000000000000",
+        "grossEligible": "4500000000000",
+        "countedEligible": "4500000000000",
+        "coverageBps": 7500,
+        "requiredCoverageBps": 8000,
+        "principal": "500000000000",
+        "cureDeadline": "0",
+        "vaultBalance": "9500000000000"
+      }
+    },
+    {
+      "action": "T-04 permissionless sync opens cure",
+      "transactionHash": "0xa1ed05c53cfa502a891ef2f5d9d198328dc3c3933f646a7ad7b28cc45da54af8",
+      "blockNumber": "19",
+      "transactionStatus": "success",
+      "covenant": {
+        "state": "CURE",
+        "assessed": true,
+        "compliant": false,
+        "outstandingValue": "6000000000000",
+        "grossEligible": "4500000000000",
+        "countedEligible": "4500000000000",
+        "coverageBps": 7500,
+        "requiredCoverageBps": 8000,
+        "principal": "500000000000",
+        "cureDeadline": "1800172801",
+        "vaultBalance": "9500000000000"
+      }
+    },
+    {
+      "action": "T-13 refreshed hedge restores compliance",
+      "transactionHash": "0xf1dd3c2e1d10e0b6d1649914cc3c445c8a87785d10b4dc8052726d21f5ab5720",
+      "blockNumber": "22",
+      "transactionStatus": "success",
+      "covenant": {
+        "state": "COMPLIANT",
+        "assessed": true,
+        "compliant": true,
+        "outstandingValue": "6000000000000",
+        "grossEligible": "5000000000000",
+        "countedEligible": "5000000000000",
+        "coverageBps": 8333,
+        "requiredCoverageBps": 8000,
+        "principal": "500000000000",
+        "cureDeadline": "0",
+        "vaultBalance": "9500000000000"
+      }
+    },
+    {
+      "action": "T-13 draw availability restored",
+      "transactionHash": "0xb5b8dec88d266b1c2bd4bd6f6f94bb01b8d54d5f62b3cdaa55ced2742b112a71",
+      "blockNumber": "23",
+      "transactionStatus": "success",
+      "covenant": {
+        "state": "COMPLIANT",
+        "assessed": true,
+        "compliant": true,
+        "outstandingValue": "6000000000000",
+        "grossEligible": "5000000000000",
+        "countedEligible": "5000000000000",
+        "coverageBps": 8333,
+        "requiredCoverageBps": 8000,
+        "principal": "600000000000",
+        "cureDeadline": "0",
+        "vaultBalance": "9400000000000"
+      }
+    },
+    {
+      "action": "T-03 cancellation returns facility to cure",
+      "transactionHash": "0x5becd1471e89af0628d8a2c53d13496c1a19b6b1c5816557a871bee0f463c79d",
+      "blockNumber": "26",
+      "transactionStatus": "success",
+      "covenant": {
+        "state": "CURE",
+        "assessed": true,
+        "compliant": false,
+        "outstandingValue": "6000000000000",
+        "grossEligible": "0",
+        "countedEligible": "0",
+        "coverageBps": 0,
+        "requiredCoverageBps": 8000,
+        "principal": "600000000000",
+        "cureDeadline": "1800180000",
+        "vaultBalance": "9400000000000"
+      }
+    },
+    {
+      "action": "T-14 cure deadline produces breach without liquidation",
+      "transactionHash": "0x337123588b98c5c5bee444709e9e1afa7e118ebe6768217bbe2eba10bc22fbd4",
+      "blockNumber": "28",
+      "transactionStatus": "success",
+      "covenant": {
+        "state": "BREACH",
+        "assessed": false,
+        "compliant": false,
+        "outstandingValue": "6000000000000",
+        "grossEligible": "0",
+        "countedEligible": "0",
+        "coverageBps": 0,
+        "requiredCoverageBps": 8000,
+        "principal": "600000000000",
+        "cureDeadline": "1800180000",
+        "vaultBalance": "9400000000000"
+      }
+    },
+    {
+      "action": "T-16 repayment succeeds during breach",
+      "transactionHash": "0xd748442c606f396ffa40edc93df21363e9a2017af82402b0bf0e6c79b1796003",
+      "blockNumber": "30",
+      "transactionStatus": "success",
+      "covenant": {
+        "state": "BREACH",
+        "assessed": false,
+        "compliant": false,
+        "outstandingValue": "6000000000000",
+        "grossEligible": "0",
+        "countedEligible": "0",
+        "coverageBps": 0,
+        "requiredCoverageBps": 8000,
+        "principal": "500000000000",
+        "cureDeadline": "1800180000",
+        "vaultBalance": "9500000000000"
+      }
+    }
+  ]
+}
