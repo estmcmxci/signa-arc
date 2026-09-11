@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { EVIDENCE_RECORDS, recordBytes, waiverSteps } from "../src/evidence/index.ts";
+import { EVIDENCE_RECORDS, commonContext, recordBytes, waiverSteps } from "../src/evidence/index.ts";
 import { REPO_ROOT, onlyJson, runSigna } from "./helpers.ts";
 
 const original = (source: string) => readFileSync(new URL(source, REPO_ROOT));
@@ -99,6 +99,26 @@ test("a waiver step carries the broadcast hash only when its trace names it; oth
     waiverSteps(synthetic, "https://testnet.arcscan.app").map((step) => step.transactionHash ?? null),
     [null, null, hash],
     "a hash in free text is never taken as the transaction",
+  );
+});
+
+test("the summary's chain and facility label every record only because they agree; a disagreement throws", () => {
+  const facility = "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2";
+  const arc = { chainId: 5_042_002, explorer: "https://testnet.arcscan.app" };
+  assert.deepEqual(
+    commonContext([
+      { id: "acceptance", network: arc, facilityId: facility },
+      { id: "waiver", network: arc, facilityId: facility.toUpperCase().replace("0X", "0x") },
+    ]),
+    { chainId: 5_042_002, facilityId: facility },
+  );
+  assert.throws(
+    () => commonContext([{ id: "acceptance", network: arc, facilityId: facility }, { id: "restore", network: arc, facilityId: `0x${"11".repeat(32)}` }]),
+    /disagree on chain or facility: acceptance .* vs restore \(chain 5042002, facility 0x1111/,
+  );
+  assert.throws(
+    () => commonContext([{ id: "acceptance", network: arc, facilityId: facility }, { id: "waiver", network: { ...arc, chainId: 1 }, facilityId: facility }]),
+    /disagree on chain or facility: .*waiver \(chain 1,/,
   );
 });
 

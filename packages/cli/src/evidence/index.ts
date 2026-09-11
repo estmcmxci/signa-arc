@@ -93,17 +93,33 @@ export type RecordDetail = RecordSummary & {
 
 const RECORDS_DIR = new URL("./records/", import.meta.url);
 
+/**
+ * The chain and facility every record shares. The summary is labelled with one pair only because
+ * the records agree on it; if they ever disagree, this throws rather than mislabel a record.
+ */
+export function commonContext(records: readonly Pick<RecordDetail, "id" | "network" | "facilityId">[]): { chainId: number; facilityId: string } {
+  const [first] = records;
+  if (!first) throw new Error("no evidence records are bundled");
+  const disagreeing = records.filter(
+    (record) => record.network.chainId !== first.network.chainId || record.facilityId.toLowerCase() !== first.facilityId.toLowerCase(),
+  );
+  if (disagreeing.length > 0) {
+    const describe = (record: (typeof records)[number]) => `${record.id} (chain ${record.network.chainId}, facility ${record.facilityId})`;
+    throw new Error(`bundled evidence records disagree on chain or facility: ${[first, ...disagreeing].map(describe).join(" vs ")}`);
+  }
+  return { chainId: first.network.chainId, facilityId: first.facilityId };
+}
+
 export function evidenceSummary() {
   const details = EVIDENCE_RECORDS.map(recordDetail);
-  const [first] = details;
-  if (!first) throw new Error("no evidence records are bundled");
+  const { chainId, facilityId } = commonContext(details);
   return {
     schemaVersion: 1 as const,
     kind: "report" as const,
     dataMode: "recorded" as const,
     notice: RECORDED_NOTICE,
-    chainId: first.network.chainId,
-    facilityId: first.facilityId,
+    chainId,
+    facilityId,
     records: details.map(({ network: _network, facilityId: _facility, steps: _steps, approvals: _approvals, disclaimers: _disclaimers, ...summary }) => summary),
   };
 }
