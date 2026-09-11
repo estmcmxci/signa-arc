@@ -15,7 +15,10 @@ import { executeAction, HeldAction, recoverRow } from '../data/transactions';
 
 function preference(key:string,fallback:string){try{return localStorage.getItem(key)??fallback;}catch{return fallback;}}
 const docsUrl=import.meta.env.VITE_DOCS_URL||'https://github.com/estmcmxci/signa-arc#readme';
-const isFixture=import.meta.env.DEV&&location.pathname.startsWith('/test-ui/');
+const testEntry=import.meta.env.DEV&&location.pathname.startsWith('/test-ui/');
+// ?chain= runs the live paths against the in-page chain and wallet of src/test/harness.ts; ?state= shows snapshot fixtures.
+const chainFixture=testEntry&&new URLSearchParams(location.search).has('chain');
+const isFixture=testEntry&&!chainFixture;
 export function Desk(){
   const queryClient=useQueryClient();
   const connection=useConnection();const connectors=useConnectors();const connect=useConnect();const disconnect=useDisconnect();const switchChain=useSwitchChain();const wallet=useWalletClient();
@@ -97,7 +100,7 @@ export function Desk(){
     <a href="#main" className="skip-link">Skip to operator desk</a>
     <header className="topbar"><a href="/" className="wordmark">Signa <span>Covenant</span></a><nav aria-label="Primary"><a href={docsUrl}>Docs ↗</a><a href="/security/">Trust boundary</a><button className="quiet" onClick={()=>setCommandOpen(true)} aria-keyshortcuts="Control+k Meta+k">Commands <kbd>⌘ K</kbd></button><button className="icon-button" aria-label={`Use ${theme==='dark'?'light':'dark'} theme`} onClick={()=>setTheme(theme==='dark'?'light':'dark')}>{theme==='dark'?'☼':'◐'}</button></nav></header>
     <main id="main" className="desk-main">
-      <div className={`truth-strip ${isFixture?'fixture-strip':''}`}>{isFixture?'UI FIXTURE · fabricated test state · signing disabled':'Arc Testnet · fictional facility · labelled mock issuer data · testnet USDC'}</div>
+      <div className={`truth-strip ${testEntry?'fixture-strip':''}`}>{isFixture?'UI FIXTURE · fabricated test state · signing disabled':chainFixture?'UI FIXTURE · simulated chain and wallet in this page · no network, no keys, no real transactions':'Arc Testnet · fictional facility · labelled mock issuer data · testnet USDC'}</div>
       {isFixture&&<label className="fixture-select">Test state <select value={fixture} onChange={e=>setFixture(e.target.value)}>{['compliant','reserve','cure','breach','waived','expired-waiver','stale','missing','revoked','maturity','partial','rpc-error','slow'].map(s=><option key={s}>{s}</option>)}</select></label>}
       <div className="facility-heading"><div><p className="eyebrow">Operator desk / 01</p><h1>EUR / USD facility</h1><p className="facility-id">{m?<Copy value={m.facility.id} label="facility ID"/>:'Deployment unavailable'}</p></div><div className="wallet-area">{connection.isConnected?<><Copy value={connection.address!} label="connected address"/><button className="quiet" onClick={()=>disconnect.mutate({})}>Disconnect</button>{connection.chainId!==5042002&&<button onClick={()=>switchChain.mutate({chainId:5042002})}>Switch to Arc Testnet</button>}{walletReady&&!operator&&<span className="caption">Connected account is not the facility operator.</span>}</>:<><button onClick={()=>{if(connectors[0])connect.mutate({connector:connectors[0]});else setNotice('No injected browser wallet was found. Read-only inspection and simulation remain available.');}}>Connect wallet</button>{connectors.length>1&&<select aria-label="Choose wallet" defaultValue="" onChange={e=>{const connector=connectors.find(c=>c.uid===e.target.value);if(connector)connect.mutate({connector});}}><option value="" disabled>Choose another wallet</option>{connectors.map(c=><option key={c.uid} value={c.uid}>{c.name}</option>)}</select>}</>}{connect.error&&<p role="alert">{connect.error.name==='UserRejectedRequestError'?'Wallet connection declined.':'Wallet connection did not complete. Retry in your wallet.'}</p>}</div></div>
       <section className="attention" aria-label="Facility condition"><Badge state={state}/><p>{agenda}</p><button className="quiet" onClick={()=>void snapshotQuery.refetch()} aria-label="Refresh facility">↻ Refresh</button></section>

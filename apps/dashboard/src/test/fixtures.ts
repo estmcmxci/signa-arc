@@ -45,7 +45,7 @@ const DAY = 86_400n;
 const ZERO_HASH = `0x${'0'.repeat(64)}` as Hex;
 const ZERO_ADDRESS = `0x${'0'.repeat(40)}` as Address;
 
-function label(text: string, bytes: 20 | 32): Hex {
+export function label(text: string, bytes: 20 | 32): Hex {
   const hex = [...text].map((c) => c.charCodeAt(0).toString(16).padStart(2, '0')).join('');
   return `0x${hex.padEnd(bytes * 2, '0').slice(0, bytes * 2)}` as Hex;
 }
@@ -217,6 +217,12 @@ function snapshotOf(spec: Spec, nowMs: number): Snapshot {
 function parseState(state: string): FixtureState {
   if ((FIXTURE_STATES as readonly string[]).includes(state)) return state as FixtureState;
   throw new Error(`Unknown UI fixture state "${state}".`);
+}
+
+/** The records behind a state, for the chain fixture (./chain.ts), which applies its own read failures and delays. */
+export function fixtureFacility(state: string, nowMs = Date.now()): Snapshot {
+  const fixture = parseState(state);
+  return snapshotOf(fixture === 'partial' || fixture === 'rpc-error' || fixture === 'slow' ? SPECS.compliant : SPECS[fixture], nowMs);
 }
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
