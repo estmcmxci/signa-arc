@@ -39,9 +39,15 @@ test('a declined wallet request is recorded as declined, not as an unresolved se
   await page.getByRole('dialog', { name: 'Review transaction' }).getByRole('button', { name: 'Continue to wallet' }).click();
   await decline(page);
   await expect(latestDecision(page)).toContainText('DECLINED');
+  const notice = page.locator('.notice').first();
+  await expect(notice, 'the operator reads the recorded sentence').toContainText('The wallet request was declined. No transaction was submitted.');
+  await expect(notice, 'not the library’s own message').not.toContainText('viem@');
   await dismissToasts(page);
   await latestDecision(page).getByRole('button', { name: 'Details for draw' }).click();
-  await expect(page.getByRole('dialog', { name: 'Decision detail' })).toContainText('The wallet request was declined. No transaction was submitted.');
+  const detail = page.getByRole('dialog', { name: 'Decision detail' });
+  await expect(detail).toContainText('The wallet request was declined. No transaction was submitted.');
+  await detail.getByText('Wallet and RPC detail').click();
+  await expect(detail, 'the raw text stays available in the detail').toContainText('Version: viem@');
 });
 
 test('a sped-up transaction confirms under its replacement hash', async ({ page }) => {

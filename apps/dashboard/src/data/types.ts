@@ -45,7 +45,7 @@ export type LedgerRow = {
   action: Action | string; amount?: string; actor?: string; target?: string;
   status: 'held' | 'confirmed' | 'pending' | 'reverted' | 'cancelled' | 'awaiting' | 'declined' | 'unknown';
   timestamp: string; hash?: Hex; originalHash?: Hex; block?: string; blockTimestamp?: string;
-  code?: string; message?: string; coverageBps?: number;
+  code?: string; message?: string; detail?: string; coverageBps?: number;
   before?: { balance?: string; principal?: string; coverageBps?: number; state?: number };
   after?: { balance?: string; principal?: string; coverageBps?: number; state?: number };
   gasUsed?: string; feeNative?: string; nonce?: number; input?: string;
