@@ -1,0 +1,197 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "facilityRegistry_",
+        "type": "address",
+        "internalType": "contract FacilityRegistry"
+      },
+      {
+        "name": "credentialRegistry_",
+        "type": "address",
+        "internalType": "contract CredentialRegistry"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "assess",
+    "inputs": [
+      {
+        "name": "facilityId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "allowed",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "reason",
+        "type": "uint8",
+        "internalType": "enum CoverageEngine.ResultReason"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "credentialRegistry",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract CredentialRegistry"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "evaluate",
+    "inputs": [
+      {
+        "name": "facilityId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "tuple",
+        "internalType": "struct CoverageEngine.CoverageResult",
+        "components": [
+          {
+            "name": "assessed",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "compliant",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "outstandingValue",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "grossEligible",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "countedEligible",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "coverageBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "requiredCoverageBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "eligibleHedgeCount",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "totalHedgeCount",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "exposureReason",
+            "type": "uint8",
+            "internalType": "enum CoverageEngine.ExposureReason"
+          },
+          {
+            "name": "resultReason",
+            "type": "uint8",
+            "internalType": "enum CoverageEngine.ResultReason"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "exposureEligibility",
+    "inputs": [
+      {
+        "name": "facilityId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "enum CoverageEngine.ExposureReason"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "facilityRegistry",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract FacilityRegistry"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "hedgeEligibility",
+    "inputs": [
+      {
+        "name": "facilityId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "tradeIdCommitment",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "reason",
+        "type": "uint8",
+        "internalType": "enum CoverageEngine.HedgeReason"
+      },
+      {
+        "name": "adjustedNotional",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  }
+]
