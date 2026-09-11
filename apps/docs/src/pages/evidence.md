@@ -11,7 +11,7 @@ Recorded evidence: what these Arc Testnet transactions did when each record was 
 
 Four records, in the order they were made, from one fictional facility on Arc Testnet (chain 5042002) with labelled mock provider data and testnet USDC. A signature authenticates who asserted what. It does not prove that a hedge legally exists.
 
-`pnpm signa evidence show` prints the same records, and `pnpm signa evidence show <record> --json` prints one of them.
+`pnpm signa evidence show` prints the same records, and `pnpm -s signa evidence show <record> --json` prints one of them as JSON.
 
 | Record | Recorded | Outcome | Transactions |
 |---|---|---|---|
