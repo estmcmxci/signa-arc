@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { EVIDENCE_RECORDS, recordBytes } from "../src/evidence/index.ts";
+import { EVIDENCE_RECORDS, recordBytes, waiverSteps } from "../src/evidence/index.ts";
 import { REPO_ROOT, onlyJson, runSigna } from "./helpers.ts";
 
 const original = (source: string) => readFileSync(new URL(source, REPO_ROOT));
@@ -74,6 +74,32 @@ test("the waiver record shows both quorum approvals and the broadcast, from the 
   assert.equal(record.steps[4].transactionHash, "0xf6f7d9ec90f0dc41eaf46c5b2acbdb7e7567eb279afa7690e4a957ab6c3cf34b");
   assert.equal(record.steps[4].explorer, "https://testnet.arcscan.app/tx/0xf6f7d9ec90f0dc41eaf46c5b2acbdb7e7567eb279afa7690e4a957ab6c3cf34b");
   assert.match(record.summary, /receipt 0x1 in block 61473309; covenant CURE to WAIVED/);
+});
+
+test("a waiver step carries the broadcast hash only when its trace names it; other steps carry none", () => {
+  const source = JSON.parse(original("packages/privy-waiver/evidence/arc-waiver-evidence.json").toString("utf8"));
+  const hash = source.broadcast.transactionHash;
+  const steps = waiverSteps(source, "https://testnet.arcscan.app");
+  assert.deepEqual(
+    steps.map((step) => step.transactionHash ?? null),
+    [null, null, null, null, hash, hash, null],
+    "only the broadcast (5) and its receipt check (6) name the transaction",
+  );
+
+  const unrelated = `0x${"ab".repeat(32)}`;
+  const synthetic = {
+    broadcast: { transactionHash: hash },
+    steps: [
+      { step: 1, what: "Approved", result: "ok", at: "2026-09-10T00:00:00.000Z", trace: `signed payload ${unrelated}` },
+      { step: 2, what: "Mentions it mid-sentence", result: "ok", at: "2026-09-10T00:00:01.000Z", trace: `see ${hash}` },
+      { step: 3, what: "Broadcast", result: "ok", at: "2026-09-10T00:00:02.000Z", trace: hash },
+    ],
+  };
+  assert.deepEqual(
+    waiverSteps(synthetic, "https://testnet.arcscan.app").map((step) => step.transactionHash ?? null),
+    [null, null, hash],
+    "a hash in free text is never taken as the transaction",
+  );
 });
 
 test("the hedge updates show the state before and after, as recorded", async () => {

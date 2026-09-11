@@ -179,15 +179,22 @@ function hedgeUpdateSteps(data: Json): RecordedStep[] {
   });
 }
 
-function waiverSteps(data: Json, explorer: string): RecordedStep[] {
+/**
+ * A waiver step carries a transaction only when its trace names the record's structured
+ * `broadcast.transactionHash`, alone or followed by a comma. The hash always comes from that field,
+ * never from free text.
+ */
+export function waiverSteps(data: Json, explorer: string): RecordedStep[] {
+  const broadcastHash = string(object(data, "broadcast"), "transactionHash");
   return array(data, "steps").map((step) => {
-    const hash = /0x[0-9a-fA-F]{64}/.exec(string(step, "trace"))?.[0];
+    const trace = string(step, "trace");
+    const namesBroadcast = trace === broadcastHash || trace.startsWith(`${broadcastHash},`);
     return {
       label: String(number(step, "step")),
       action: string(step, "what"),
       result: string(step, "result"),
       at: string(step, "at"),
-      ...(hash ? { transactionHash: hash, explorer: `${explorer}/tx/${hash}` } : {}),
+      ...(namesBroadcast ? { transactionHash: broadcastHash, explorer: `${explorer}/tx/${broadcastHash}` } : {}),
     };
   });
 }
@@ -210,7 +217,7 @@ function summarize(kind: RecordKind, data: Json, steps: RecordedStep[]): string 
   return `before: ${string(before, "covenantState")} at ${number(before, "coverageBps")} bps; after block ${string(after, "readAtBlock")}: ${string(after, "covenantState")} at ${number(after, "coverageBps")} bps`;
 }
 
-type Json = { [key: string]: unknown };
+export type Json = { [key: string]: unknown };
 
 function object(value: unknown, key: string): Json {
   const field = (value as Json | undefined)?.[key];
