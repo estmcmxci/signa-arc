@@ -1,4 +1,4 @@
-import { accessible, approve, connect, controls, decline, dismissToasts, expect, latestDecision, ledger, mine, press, test, walletRequest } from './support';
+import { accessible, approve, connect, controls, decline, dismissToasts, expect, latestDecision, ledger, mine, press, test, walletRequest, watchVerdict } from './support';
 
 // The state-matrix rows that need a wallet and a chain, exercised through the desk's
 // live paths on the development /test-ui/ entry: connection, chain and account changes,
@@ -208,4 +208,37 @@ test('the fixture desk passes the accessibility checks', async ({ page }) => {
   await page.goto('/test-ui/?state=cure');
   await expect(page.getByRole('heading', { name: 'The coverage covenant holds this draw' })).toBeVisible();
   await accessible(page, 'snapshot fixture, CURE');
+});
+
+test('a new block keeps the verdict on screen; a different request discards it', async ({ page }) => {
+  await page.goto('/test-ui/?chain=compliant');
+  await connect(page);
+  await expect(page.getByRole('heading', { name: permitted })).toBeVisible();
+  const draw = page.getByRole('button', { name: 'Draw USDC', exact: true });
+  await expect(draw).toHaveAttribute('aria-disabled', 'false');
+  const counts = await watchVerdict(page);
+
+  // The head advances twice, so the desk re-reads and re-simulates the same request across polls.
+  await mine(page);
+  await expect(page.getByText(/Snapshot: block 1,001/)).toBeVisible();
+  await mine(page);
+  await expect(page.getByText(/Snapshot: block 1,002/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: permitted })).toBeVisible();
+  await expect(draw).toHaveAttribute('aria-disabled', 'false');
+  expect(await counts(), 'a new block must not reset the verdict or the Draw control').toEqual({ evaluating: 0, disabled: 0 });
+
+  const evaluating = async () => (await counts()).evaluating;
+  const afterBlocks = await evaluating();
+  await page.getByLabel('Draw / repay amount').fill('3');
+  await expect(page.getByRole('heading', { name: 'The retained reserve holds this draw' })).toBeVisible();
+  await expect.poll(evaluating, { message: 'a new amount discards the verdict' }).toBeGreaterThan(afterBlocks);
+
+  const afterAmount = await evaluating();
+  await controls(page).getByRole('button', { name: 'Use the other account' }).click();
+  await expect(page.getByRole('heading', { name: 'This account does not hold the required role' })).toBeVisible();
+  await expect.poll(evaluating, { message: 'a new account discards the verdict' }).toBeGreaterThan(afterAmount);
+
+  const afterAccount = await evaluating();
+  await controls(page).getByRole('button', { name: 'Move wallet to Ethereum' }).click();
+  await expect.poll(evaluating, { message: 'a new chain discards the verdict' }).toBeGreaterThan(afterAccount);
 });

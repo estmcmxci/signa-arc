@@ -37,6 +37,27 @@ export async function accessible(page: Page, context?: string): Promise<void> {
 /** Refused controls keep aria-disabled with guarded handlers, so a gated click must still be delivered. */
 export const press = (page: Page, name: string): Promise<void> => page.getByRole('button', { name, exact: true }).click({ force: true });
 
+/** Counts every fallback of the verdict panel to "Evaluating the draw", and every time Draw goes aria-disabled. */
+export async function watchVerdict(page: Page): Promise<() => Promise<{ evaluating: number; disabled: number }>> {
+  await page.evaluate(() => {
+    const counts = { evaluating: 0, disabled: 0 };
+    (window as unknown as { __verdictWatch: typeof counts }).__verdictWatch = counts;
+    const evaluating = () => (document.querySelector('.verdict')?.textContent ?? '').includes('Evaluating the draw');
+    const disabled = () => [...document.querySelectorAll('button')].some((b) => b.textContent === 'Draw USDC' && b.getAttribute('aria-disabled') === 'true');
+    let wasEvaluating = evaluating();
+    let wasDisabled = disabled();
+    new MutationObserver(() => {
+      const isEvaluating = evaluating();
+      if (isEvaluating && !wasEvaluating) counts.evaluating += 1;
+      wasEvaluating = isEvaluating;
+      const isDisabled = disabled();
+      if (isDisabled && !wasDisabled) counts.disabled += 1;
+      wasDisabled = isDisabled;
+    }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['aria-disabled'] });
+  });
+  return () => page.evaluate(() => (window as unknown as { __verdictWatch: { evaluating: number; disabled: number } }).__verdictWatch);
+}
+
 export const controls = (page: Page): Locator => page.getByRole('complementary', { name: 'UI fixture controls' });
 export const walletRequest = (page: Page): Locator => page.getByRole('dialog', { name: 'Fixture wallet request' });
 export const ledger = (page: Page): Locator => page.getByRole('table', { name: 'Source-labelled decisions and receipts' });
