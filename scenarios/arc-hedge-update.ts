@@ -176,17 +176,27 @@ const evidence = {
   credential: { observedAtBlock: blockReference(block), fixture, ...signed },
   steps: [] as unknown[],
   after: undefined as unknown,
+  revert: undefined as unknown,
 };
 
 try {
   const { remaining_buy_amount, buy_currency, status } = fixture.trade;
-  await transact(
+  const submitted = await transact(
     `submit hedge seq ${sequence} (${remaining_buy_amount} ${buy_currency}, ${status})`,
     registry,
     credentialsAbi,
     "submitHedge",
     [credential, signed.signature],
   );
+  // restoreCompliance reverts unless the fresh evaluation is compliant, so the
+  // new credential must have taken before the call is made.
+  if (vaultCall === "restoreCompliance") {
+    assert.equal(
+      submitted.covenant.compliant,
+      true,
+      "the evaluation after the hedge update is not compliant; restoreCompliance would revert",
+    );
+  }
   const call = await transact(vaultCall, vault, vaultAbi, vaultCall);
   const after = await covenantAt();
   evidence.after = { atCallBlock: call.covenant, atLatest: after };
@@ -198,6 +208,12 @@ try {
   evidence.outcome = "complete";
 } catch (error) {
   evidence.outcome = `failed: ${error instanceof Error ? error.message : String(error)}`;
+  // A refused call is reported with its exact revert data, never retried.
+  const reverted =
+    error instanceof BaseError ? error.walk((cause) => cause instanceof ContractFunctionRevertedError) : null;
+  if (reverted instanceof ContractFunctionRevertedError) {
+    evidence.revert = { error: reverted.data?.errorName, args: reverted.data?.args, data: reverted.raw };
+  }
   throw error;
 } finally {
   await writeEvidence();
@@ -240,6 +256,7 @@ async function transact(
 
 async function covenantAt(blockNumber?: bigint) {
   const result = (await read(engine, engineAbi, "evaluate", [facilityId], blockNumber)) as {
+    compliant: boolean;
     coverageBps: number;
     resultReason: number;
   };
@@ -248,6 +265,7 @@ async function covenantAt(blockNumber?: bigint) {
   const cureDeadline = (await read(vault, vaultAbi, "cureDeadline", [], blockNumber)) as bigint;
   return {
     readAtBlock: blockNumber?.toString() ?? "latest",
+    compliant: result.compliant,
     coverageBps: Number(result.coverageBps),
     reasonCode: REASONS[result.resultReason] ?? String(result.resultReason),
     covenantState: STATES[state] ?? String(state),
