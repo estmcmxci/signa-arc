@@ -130,8 +130,8 @@ assert(latest.credential.sequence > 0n, "the trade has no hedge credential on th
 // Fail closed before spending gas: a stale exposure or a live waiver would
 // leave the update unable to move the covenant.
 assert.equal(await read(engine, engineAbi, "exposureEligibility", [facilityId]), 0, "the exposure credential is not eligible");
-assert.equal(await read(vault, vaultAbi, "activeWaiver"), false, "a waiver is active; the vault would not transition");
-const before = await covenantAt();
+const before = { ...(await covenantAt()), syncWouldMoveTo: await syncOutcome() };
+assert.equal(before.activeWaiver, false, "a waiver is active; the vault would not transition until it ends");
 
 // E-FIX-1: strictly above the latest sequence the registry holds for this trade.
 // E-FIX-2: observed at a block the chain has already produced, just before
@@ -176,27 +176,44 @@ const evidence = {
   credential: { observedAtBlock: blockReference(block), fixture, ...signed },
   steps: [] as unknown[],
   after: undefined as unknown,
+  revert: undefined as unknown,
 };
 
 try {
   const { remaining_buy_amount, buy_currency, status } = fixture.trade;
-  await transact(
+  const submitted = await transact(
     `submit hedge seq ${sequence} (${remaining_buy_amount} ${buy_currency}, ${status})`,
     registry,
     credentialsAbi,
     "submitHedge",
     [credential, signed.signature],
   );
+  // restoreCompliance reverts unless the fresh evaluation is compliant, so the
+  // new credential must have taken before the call is made.
+  if (vaultCall === "restoreCompliance") {
+    assert.equal(
+      submitted.covenant.compliant,
+      true,
+      "the evaluation after the hedge update is not compliant; restoreCompliance would revert",
+    );
+  }
   const call = await transact(vaultCall, vault, vaultAbi, vaultCall);
   const after = await covenantAt();
   evidence.after = { atCallBlock: call.covenant, atLatest: after };
   for (const reading of [call.covenant, after]) {
     assert.equal(reading.coverageBps, Number(expectedBps), "coverage read back from CoverageEngine.evaluate");
     assert.equal(reading.covenantState, expectedState, "covenant state read back from the vault");
+    assert.equal(reading.activeWaiver, expectedState === "WAIVED", "activeWaiver read back from the vault");
   }
   evidence.outcome = "complete";
 } catch (error) {
   evidence.outcome = `failed: ${error instanceof Error ? error.message : String(error)}`;
+  // A refused call is reported with its exact revert data, never retried.
+  const reverted =
+    error instanceof BaseError ? error.walk((cause) => cause instanceof ContractFunctionRevertedError) : null;
+  if (reverted instanceof ContractFunctionRevertedError) {
+    evidence.revert = { error: reverted.data?.errorName, args: reverted.data?.args, data: reverted.raw };
+  }
   throw error;
 } finally {
   await writeEvidence();
@@ -239,18 +256,33 @@ async function transact(
 
 async function covenantAt(blockNumber?: bigint) {
   const result = (await read(engine, engineAbi, "evaluate", [facilityId], blockNumber)) as {
+    compliant: boolean;
     coverageBps: number;
     resultReason: number;
   };
   const state = Number(await read(vault, vaultAbi, "covenantState", [], blockNumber));
+  const activeWaiver = (await read(vault, vaultAbi, "activeWaiver", [], blockNumber)) as boolean;
   const cureDeadline = (await read(vault, vaultAbi, "cureDeadline", [], blockNumber)) as bigint;
   return {
     readAtBlock: blockNumber?.toString() ?? "latest",
+    compliant: result.compliant,
     coverageBps: Number(result.coverageBps),
     reasonCode: REASONS[result.resultReason] ?? String(result.resultReason),
     covenantState: STATES[state] ?? String(state),
+    activeWaiver,
     cureDeadline: cureDeadline.toString(),
   };
+}
+
+/** The state a permissionless syncCovenant would move the vault to now, simulated, never sent. */
+async function syncOutcome() {
+  const { result } = (await publicClient.simulateContract({
+    account: operator.address,
+    address: vault,
+    abi: vaultAbi,
+    functionName: "syncCovenant",
+  } as never)) as { result: readonly [unknown, number] };
+  return STATES[result[1]] ?? String(result[1]);
 }
 
 async function read(
