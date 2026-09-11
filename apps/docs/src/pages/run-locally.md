@@ -5,6 +5,8 @@ description: signa and these docs run from a checkout of the repository. No pack
 
 # Run locally
 
+To put `signa` on your PATH instead of running it from here, see [Install](/install): the CLI builds into one self-contained package.
+
 `signa` is not published to a package registry, so there is no install command yet. Everything runs from a checkout of the repository.
 
 You need Node.js 24 and pnpm 10.17.1, the versions CI uses. Foundry is needed only for the repository's full check, not to run the CLI.

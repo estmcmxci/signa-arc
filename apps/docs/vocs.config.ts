@@ -10,6 +10,7 @@ export default defineConfig({
       text: "Start",
       items: [
         { text: "What Covenant does", link: "/" },
+        { text: "Install", link: "/install" },
         { text: "Run locally", link: "/run-locally" },
         { text: "Quickstart", link: "/quickstart" },
         { text: "For agents", link: "/agents" },

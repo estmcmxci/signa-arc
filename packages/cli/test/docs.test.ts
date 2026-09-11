@@ -4,6 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { PAGES as ALLOWED_PAGES } from "../../../apps/docs/scripts/pages.ts";
 import { REFERENCE_PAGES, commandManifest } from "../../../apps/docs/scripts/generate-reference.ts";
 import { EVIDENCE_PAGE, renderEvidencePage } from "../../../scripts/generate-docs-evidence.ts";
 import { REPO_ROOT, envelopeFile, runSigna } from "./helpers.ts";
@@ -96,8 +97,68 @@ test("a command whose output is parsed runs through `pnpm -s`, so pnpm's banner 
   }
 });
 
-test("the docs give no install command for a package that is not published", () => {
-  for (const { file, text } of pages()) {
-    assert.doesNotMatch(text, /npm (i|install)\b[^\n]*(@signa|signa)|pnpm (add|dlx)\b[^\n]*signa|npx signa|yarn (add|global)\b[^\n]*signa/, file);
+/** The lines inside fenced code blocks: what a reader actually copies and runs. */
+function commandLines(text: string): string[] {
+  const lines = text.split("\n");
+  const inside: string[] = [];
+  let fenced = false;
+  for (const line of lines) {
+    if (line.trimStart().startsWith("```")) {
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced) inside.push(line);
   }
+  return inside;
+}
+
+test("no code block installs signa from a registry, only from a local path", () => {
+  // Installing the tarball this repository builds is honest, and is documented. Installing a name
+  // from a registry is not: nothing is published, and a package by that name is not this one.
+  // Only fenced blocks are checked, because that is what a reader copies; prose is free to say
+  // that `npm install signa` does not exist, which is exactly what the Install page does say.
+  const REGISTRY_INSTALL = /(?:npm (?:i|install)|pnpm (?:add|dlx)|yarn (?:add|global add)|bunx|npx)\s+(?:--?\S+\s+)*(?:@signa\/\S+|signa\b)/;
+  for (const { file, text } of pages()) {
+    for (const line of commandLines(text)) {
+      if (/\.tgz|\.\//.test(line)) continue; // a path, not a registry name
+      assert.doesNotMatch(line, REGISTRY_INSTALL, `${file}: ${line.trim()}`);
+    }
+  }
+});
+
+test("the Install page shows the local tarball install, and says plainly that nothing is published", () => {
+  const install = pages().find((entry) => entry.file === "install.md");
+  assert.ok(install, "there is an Install page");
+  assert.match(install.text, /not published to any registry/i);
+  assert.ok(
+    commandLines(install.text).some((line) => /npm install --global \.\/dist\/signa-cli-/.test(line)),
+    "it shows installing the tarball this repository builds",
+  );
+});
+
+test("the site publishes exactly the allowlisted pages, and never ingests repository Markdown", () => {
+  // Vocs is pointed at src/pages only, so the site cannot pick up a README, an ERD or a private
+  // planning note by walking the repository. This asserts the set is the explicit one.
+  assert.deepEqual(
+    pages().map((page) => page.file).sort(),
+    ALLOWED_PAGES.map((page) => page.source).sort(),
+    "add the page to apps/docs/scripts/pages.ts, or remove it from src/pages",
+  );
+});
+
+test("the hosting configuration builds the workspace, publishes the real Vocs output, and holds no secrets", () => {
+  const hosting = JSON.parse(readFileSync(new URL("apps/docs/vercel.json", REPO_ROOT), "utf8"));
+  assert.equal(hosting.outputDirectory, "apps/docs/dist/public", "the directory `vocs build` actually writes");
+  assert.match(hosting.buildCommand, /@signa\/docs build/);
+  assert.match(hosting.installCommand, /--frozen-lockfile/, "a deploy must not resolve new versions");
+  // A static site has nothing to configure at run time, so any of these would be a mistake.
+  for (const key of ["env", "build", "functions", "crons"]) {
+    assert.equal(hosting[key], undefined, `${key} implies runtime configuration this site does not have`);
+  }
+  assert.equal(JSON.stringify(hosting).includes("${"), false, "no interpolated secret");
+
+  const docsPackage = JSON.parse(readFileSync(new URL("apps/docs/package.json", REPO_ROOT), "utf8"));
+  assert.match(docsPackage.scripts.build, /vocs build/);
+  assert.match(docsPackage.scripts.build, /agent-routes/, "the build must keep emitting the routes agents are told to fetch");
+  assert.match(docsPackage.scripts.build, /relativize-build/, "and must keep stripping local paths");
 });

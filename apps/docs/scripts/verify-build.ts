@@ -2,6 +2,8 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 
+import { AGENT_FILES, PAGES as ALLOWED_PAGES } from "./pages.ts";
+
 /**
  * Checks the static build after `vocs build` and `relativize-build.ts` (A-DOC-01, A-DOC-03):
  * - every page and its Markdown twin exist, and llms.txt indexes every page;
@@ -13,21 +15,7 @@ import { fileURLToPath } from "node:url";
 
 const OUT = new URL("../dist/public/", import.meta.url);
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url)).replace(/\/$/, "");
-const PAGES: [html: string, markdown: string, llms: string][] = [
-  ["index.html", "assets/md/index.md", "/index"],
-  ["run-locally/index.html", "assets/md/run-locally.md", "/run-locally"],
-  ["quickstart/index.html", "assets/md/quickstart.md", "/quickstart"],
-  ["agents/index.html", "assets/md/agents.md", "/agents"],
-  ["guides/inspect-a-facility/index.html", "assets/md/guides/inspect-a-facility.md", "/guides/inspect-a-facility"],
-  ["guides/explain-a-refused-draw/index.html", "assets/md/guides/explain-a-refused-draw.md", "/guides/explain-a-refused-draw"],
-  ["guides/submit-a-credential/index.html", "assets/md/guides/submit-a-credential.md", "/guides/submit-a-credential"],
-  ["guides/send-and-reconcile/index.html", "assets/md/guides/send-and-reconcile.md", "/guides/send-and-reconcile"],
-  ["reference/commands/index.html", "assets/md/reference/commands.md", "/reference/commands"],
-  ["reference/errors/index.html", "assets/md/reference/errors.md", "/reference/errors"],
-  ["reference/envelope/index.html", "assets/md/reference/envelope.md", "/reference/envelope"],
-  ["reference/deployment/index.html", "assets/md/reference/deployment.md", "/reference/deployment"],
-  ["evidence/index.html", "assets/md/evidence.md", "/evidence"],
-];
+const PAGES = ALLOWED_PAGES.map((entry) => [entry.html, entry.markdown, entry.route] as const);
 const TEXT = /\.(html|js|mjs|cjs|css|json|txt|md|xml|svg|map|webmanifest)$/;
 const LOCAL_PATHS: [needle: string, label: string][] = [
   [REPO_ROOT, "the repository root"],
@@ -53,16 +41,19 @@ const FORBIDDEN = [
 ];
 
 const problems: string[] = [];
-for (const [html, markdown] of PAGES) {
-  if (!existsSync(new URL(html, OUT))) problems.push(`missing page ${html}`);
-  if (!existsSync(new URL(markdown, OUT))) problems.push(`missing Markdown twin ${markdown}`);
+for (const page of ALLOWED_PAGES) {
+  if (!existsSync(new URL(page.html, OUT))) problems.push(`missing page ${page.html}`);
+  if (!existsSync(new URL(page.markdown, OUT))) problems.push(`missing Markdown twin ${page.markdown}`);
+  // The route agents are told to fetch must be a real file, on any static host.
+  const route = `${page.route.replace(/^\//, "")}.md`;
+  if (!existsSync(new URL(route, OUT))) problems.push(`missing agent route /${route}`);
 }
 const llms = existsSync(new URL("llms.txt", OUT)) ? readFileSync(new URL("llms.txt", OUT), "utf8") : "";
 if (!llms) problems.push("missing llms.txt");
 for (const [, , route] of PAGES) {
   if (llms && !llms.includes(`](${route})`)) problems.push(`llms.txt does not index ${route}`);
 }
-if (!existsSync(new URL("llms-full.txt", OUT))) problems.push("missing llms-full.txt");
+for (const file of AGENT_FILES) if (!existsSync(new URL(file, OUT))) problems.push(`missing ${file}`);
 
 let scanned = 0;
 const walk = (directory: URL, relative: string): void => {

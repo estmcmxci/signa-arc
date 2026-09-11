@@ -12,7 +12,7 @@ On failure the exit code is 1 and stdout carries one JSON object. Branch on `cod
 | `code` | always | One of the codes below. |
 | `message` | always | Human-readable detail. |
 | `retryable` | Signa's own codes | `true` when the same request may succeed later, as after an RPC outage. |
-| `cta` | `COMMAND_NOT_FOUND` | incur's suggested next commands. |
+| `cta` | `COMMAND_NOT_FOUND`, and any failure that left a transaction on the chain | incur's suggested next commands. For `TRANSACTION_PENDING` and `TRANSACTION_REVERTED` it carries the transaction hash, as `signa tx show <hash>`. |
 | `fieldErrors` | `VALIDATION_ERROR` | incur's failing fields, each with `path`, `code` and `message`. |
 
 ## Raised in this release
@@ -41,6 +41,46 @@ On failure the exit code is 1 and stdout carries one JSON object. Branch on `cod
 | `COMMAND_NOT_FOUND` | No such command. |
 | `UNKNOWN` | An unknown flag, or an unexpected failure. |
 | `UPDATE_FAILED` | `--update` cannot run: `signa` is not published. |
+
+## What an error looks like
+
+A read that cannot reach its RPC:
+
+```json
+{
+  "code": "RPC_UNAVAILABLE",
+  "message": "RPC request to https://rpc.testnet.arc.network failed: fetch failed",
+  "retryable": true
+}
+```
+
+A send refused before anything reached the chain:
+
+```json
+{
+  "code": "ACTION_REFUSED",
+  "message": "draw was refused: ReserveViolation, because it would leave the vault below its reserve. Balance 1.500000, requested 2.000000, reserve 0.500000 USDC. Nothing was broadcast.",
+  "retryable": false
+}
+```
+
+A send whose receipt never arrived. The hash is in the `cta`, and in the operation journal:
+
+```json
+{
+  "code": "TRANSACTION_PENDING",
+  "message": "syncCovenant was broadcast as 0xd4a5e4e7cac39d69d0c4a20ff9c2420592ebfe362fbed13579287d0f9517c86b but no receipt arrived within 120s. It was not retried or replaced, and it may still be mined.",
+  "retryable": true,
+  "cta": {
+    "description": "The transaction was broadcast and its hash is 0xd4a5e4e7cac39d69d0c4a20ff9c2420592ebfe362fbed13579287d0f9517c86b. It was not retried or replaced.",
+    "commands": [
+      {
+        "command": "signa tx show 0xd4a5e4e7cac39d69d0c4a20ff9c2420592ebfe362fbed13579287d0f9517c86b"
+      }
+    ]
+  }
+}
+```
 
 ## Was anything broadcast?
 

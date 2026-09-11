@@ -6,7 +6,7 @@
   "description": "Signa Covenant documentation, built with Vocs.",
   "scripts": {
     "dev": "vocs dev",
-    "build": "vocs build && node --import tsx scripts/relativize-build.ts",
+    "build": "vocs build && node --import tsx scripts/relativize-build.ts && node --import tsx scripts/agent-routes.ts",
     "preview": "vocs preview"
   },
   "dependencies": {
