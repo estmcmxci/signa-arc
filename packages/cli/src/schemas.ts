@@ -218,3 +218,112 @@ export const evidenceOutput = z.union([
   z.object({ ...recordedBase, chainId: z.number(), facilityId: z.string(), records: z.array(recordSummary) }),
   z.object({ ...recordedBase, record: recordDetail }),
 ]);
+
+// ---------------------------------------------------------------------------------------------
+// P1 operations. Every one of these broadcasts at most one transaction.
+
+const event = z.object({ name: z.string(), args: z.record(z.string(), z.string()) });
+
+/** A mined, successful transaction. A revert or a timeout is an error, not a result. */
+const minedTransaction = z.object({
+  hash: z.string(),
+  status: z.literal("success").describe("Receipt status 0x1. The receipt decides, not the signer subprocess exit code"),
+  block: block.describe("The receipt's own block, which postconditions are read at"),
+  from: z.string(),
+  to: z.string().nullable(),
+  nonce: z.number(),
+  gasUsed: z.string(),
+  effectiveGasPrice: z.string(),
+  events: z.array(event).describe("Logs decoded against the deployed contracts' events"),
+});
+
+const sendBase = {
+  schemaVersion: z.literal(1),
+  kind: z.literal("transaction"),
+  dataMode: z.literal("live"),
+  context: liveContext.describe("The preflight block, at which the action was simulated"),
+  account: z.object({ name: z.string().describe("The --account name"), address: z.string() }),
+  broadcast: z.literal(true).describe("A refused action never reaches this result: it exits nonzero as ACTION_REFUSED"),
+  transaction: minedTransaction,
+  journal: z.object({ path: z.string().describe("The operation journal, which lives outside the repository") }),
+  scope: z.string(),
+};
+
+export const credentialsSubmitOutput = z.object({
+  ...sendBase,
+  request: z.object({
+    function: z.enum(["submitExposure", "submitHedge"]),
+    registry: z.string(),
+    kind: z.enum(["exposure", "hedge"]),
+    sequence: z.string(),
+    digest: z.string(),
+    issuer: z.string(),
+    tradeIdCommitment: z.string().optional().describe("Hedge only: the sequence scope is (facility, trade commitment)"),
+  }),
+  accepted: z.object({
+    sequence: z.string(),
+    digest: z.string(),
+    issuer: z.string(),
+    acceptedAt: z.string().nullable(),
+    matchesSubmitted: z.boolean().describe("Whether the registry now holds exactly the envelope that was submitted"),
+  }).describe("What the registry holds at the receipt block"),
+  eligibility: z.object({
+    coverageBps: z.number(),
+    requiredCoverageBps: z.number(),
+    compliant: z.boolean(),
+    resultReason: z.string(),
+    credential: z.string().describe("The engine's eligibility verdict on this credential"),
+  }).describe("Read at the receipt block. Acceptance by the registry is not eligibility for coverage"),
+  note: z.string(),
+});
+
+const covenantTransition = z.object({
+  storedStateBefore: z.string().describe("At the preflight block"),
+  storedStateAfter: z.string().describe("At the receipt block"),
+  changed: z.boolean(),
+  activeWaiver: z.boolean(),
+  cureDeadline: z.string().nullable(),
+});
+
+export const covenantSyncOutput = z.object({
+  ...sendBase,
+  request: z.object({ function: z.literal("syncCovenant"), vault: z.string() }),
+  covenant: covenantTransition,
+  evaluation: z.object({ compliant: z.boolean(), coverageBps: z.number(), requiredCoverageBps: z.number(), resultReason: z.string() }).describe("At the receipt block"),
+});
+
+export const covenantRestoreOutput = z.object({
+  ...sendBase,
+  request: z.object({ function: z.literal("restoreCompliance"), vault: z.string() }),
+  covenant: covenantTransition,
+  evaluation: z.object({ compliant: z.boolean(), coverageBps: z.number(), requiredCoverageBps: z.number(), resultReason: z.string() }),
+});
+
+export const drawSendOutput = z.object({
+  ...sendBase,
+  request: z.object({ function: z.literal("draw"), amount, vault: z.string(), sender: z.string() }),
+  vault: z.object({ balance: amount, principal: amount, availableToDraw: amount }).describe("At the receipt block"),
+  covenant: z.object({ storedState: z.string(), activeWaiver: z.boolean() }).describe("At the receipt block; draw syncs the covenant before it proceeds"),
+});
+
+export const txShowOutput = z.object({
+  schemaVersion: z.literal(1),
+  kind: z.literal("report"),
+  dataMode: z.literal("live"),
+  context: z.object({
+    chainId: z.number(),
+    rpc: z.object({ url: z.string(), source: z.enum(["option", "environment", "manifest"]) }),
+    block: block.describe("The chain head when the transaction was looked up"),
+  }),
+  hash: z.string(),
+  state: z.enum(["mined", "pending", "unknown"]),
+  status: z.enum(["success", "reverted"]).nullable().describe("Null while pending or unknown"),
+  transaction: minedTransaction.partial().nullable(),
+  pending: z.object({ nonce: z.number().nullable(), from: z.string().nullable() }).nullable(),
+  revert: z
+    .object({ error: z.string(), args: z.record(z.string(), z.string()), data: z.string(), explanation: z.string() })
+    .nullable()
+    .describe("Recovered by replaying the call at the receipt block. Null when it succeeded, or when no reason is disclosed"),
+  undecodableRevert: z.string().nullable().describe("Revert data no known contract error decodes. Never guessed at"),
+  scope: z.string(),
+});

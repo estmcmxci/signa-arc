@@ -43,19 +43,20 @@ test("help lists the implemented commands, and nothing that is only specified", 
   assert.equal(root.exitCode, 0);
   assert.match(root.stdout, /status\s+Check the manifest and live connectivity/);
   assert.match(root.stdout, /evidence\s+Recorded evidence from Arc Testnet: past transactions, not current state/);
-  for (const group of ["facility", "coverage", "credentials", "draw"]) {
+  for (const group of ["facility", "coverage", "credentials", "draw", "covenant", "tx"]) {
     assert.match(root.stdout, new RegExp(`^\\s+${group}\\s`, "m"), group);
   }
-  for (const unimplemented of ["covenant", "tx"]) {
-    assert.doesNotMatch(root.stdout, new RegExp(`^\\s+${unimplemented}\\s`, "m"), `${unimplemented} is P1`);
+  // Repayment and deposit approval orchestration are later work, and must not appear.
+  for (const unimplemented of ["repay", "deposit"]) {
+    assert.doesNotMatch(root.stdout, new RegExp(`^\\s+${unimplemented}\\s`, "m"), `${unimplemented} is later work`);
   }
   const credentialsHelp = await runSigna(["credentials", "--help"]);
   assert.match(credentialsHelp.stdout, /^\s+inspect\s/m);
   assert.match(credentialsHelp.stdout, /^\s+list\s/m);
-  assert.doesNotMatch(credentialsHelp.stdout, /^\s+submit\s/m, "submit is P1");
+  assert.match(credentialsHelp.stdout, /^\s+submit\s/m);
   const drawHelp = await runSigna(["draw", "--help"]);
   assert.match(drawHelp.stdout, /^\s+simulate\s/m);
-  assert.doesNotMatch(drawHelp.stdout, /^\s+send\s/m, "send is P1");
+  assert.match(drawHelp.stdout, /^\s+send\s/m);
   const status = await runSigna(["status", "--help"]);
   assert.match(status.stdout, /--manifest <string>/);
   assert.match(status.stdout, /--rpc-url <string>/);
@@ -162,20 +163,25 @@ test("incur 0.5.1: the envelope flag is --full-output, --verbose is refused, and
   assert.equal(verbose.exitCode, 1);
   assert.deepEqual(onlyJson(verbose), { code: "UNKNOWN", message: "Unknown flag: --verbose" });
 
-  const unknown = await runSigna(["covenant", "sync", "--json"]);
+  const unknown = await runSigna(["repay", "send", "--json"]);
   assert.equal(unknown.exitCode, 1);
-  assert.equal(onlyJson(unknown).code, "COMMAND_NOT_FOUND", "covenant sync is P1 and does not exist yet");
+  assert.equal(onlyJson(unknown).code, "COMMAND_NOT_FOUND", "repayment orchestration is later work and does not exist yet");
 
   const manifest = onlyJson(await runSigna(["--llms", "--format", "json"]));
   assert.equal(manifest.version, "incur.v1");
   assert.deepEqual(manifest.commands.map((command: { name: string }) => command.name).sort(), [
+    "covenant restore",
+    "covenant sync",
     "coverage show",
     "credentials inspect",
     "credentials list",
+    "credentials submit",
+    "draw send",
     "draw simulate",
     "evidence show",
     "facility show",
     "status",
+    "tx show",
   ]);
   const schema = onlyJson(await runSigna(["status", "--schema", "--format", "json"]));
   assert.deepEqual(Object.keys(schema.options.properties).sort(), ["manifest", "rpcUrl"]);

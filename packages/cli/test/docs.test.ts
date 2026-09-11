@@ -39,6 +39,12 @@ function documentedCommands(): { file: string; command: string }[] {
 const PARSED_OUTPUT = /--json\b|--format(?:\s+|=)(?:json|jsonl|yaml)\b|--llms|--schema\b/;
 /** `<file>` and `[record]` in a usage synopsis: a shape to fill in, not a runnable example. */
 const PLACEHOLDER = /^[<[].*[>\]]$/;
+/**
+ * A documented command that names a signer. These are never executed here: running one would
+ * unlock a real keystore on whoever's machine this runs on and broadcast a transaction. Their
+ * behaviour is covered against a local Anvil chain, with disposable accounts, in anvil.test.ts.
+ */
+const NAMES_A_SIGNER = /(^|\s)--account(\s|=)/;
 /** A flag that already selects the output, so the test must not append `--json`. */
 const SELECTS_OUTPUT = /^--(json|llms|llms-full|schema|help|version|format)$/;
 
@@ -73,6 +79,7 @@ test("every signa command the docs show, in a block or a sentence, is one signa 
       );
     }
     if (words.length === 0 || words.some((word) => PLACEHOLDER.test(word)) || ran.has(command)) continue;
+    if (NAMES_A_SIGNER.test(command)) continue;
     ran.add(command);
     const args = words.map((word) => (word.endsWith(".json") && !existsSync(join(fileURLToPath(REPO_ROOT), word)) ? envelope : word));
     const run = await runSigna(args.some((arg) => SELECTS_OUTPUT.test(arg)) ? args : [...args, "--json"]);

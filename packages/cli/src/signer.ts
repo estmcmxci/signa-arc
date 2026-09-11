@@ -5,7 +5,7 @@ import { join, resolve, sep } from "node:path";
 
 import { getAddress, type Address, type Hex } from "viem";
 
-import { SignaError, redactRpcUrl } from "@signa/client";
+import { SignaError, decodeContractError, redactRpcUrl } from "@signa/client";
 
 /**
  * The narrow signer adapter (ERD §6): address lookup and one broadcast, over Foundry's `cast`.
@@ -96,6 +96,26 @@ function castFailed(what: string, result: { stdout: string; stderr: string }, rp
 }
 
 /**
+ * `cast` estimates gas before it broadcasts, so a call that would revert is refused there and
+ * nothing reaches the chain. That is a refused action, not a signer failure, and it is the last
+ * line of defence when the chain moves between our own simulation and the broadcast.
+ */
+function sendFailed(result: { stdout: string; stderr: string }, rpcUrl: string): SignaError {
+  const text = `${result.stderr}\n${result.stdout}`;
+  if (/Failed to estimate gas|execution reverted/i.test(text)) {
+    const match = /data:\s*"?(0x[0-9a-fA-F]*)"?/.exec(text);
+    const decoded = match?.[1] ? decodeContractError(match[1] as Hex) : null;
+    return decoded
+      ? new SignaError("ACTION_REFUSED", `the transaction was refused before it was broadcast: ${decoded.error}, because ${decoded.explanation}. Nothing was broadcast.`, false, {
+          error: decoded.error,
+          data: decoded.data,
+        })
+      : new SignaError("ACTION_REFUSED", `the transaction was refused by gas estimation before it was broadcast: ${(text.split("\n").find(Boolean) ?? "").trim()}. Nothing was broadcast.`);
+  }
+  return castFailed("the transaction was not broadcast", result, rpcUrl);
+}
+
+/**
  * Opens a signer: resolves the keystore, unlocks it far enough to read its address, and returns
  * an adapter that can broadcast exactly one transaction at a time. Opening does not send anything.
  */
@@ -121,7 +141,7 @@ export async function openSigner(options: OpenSignerOptions): Promise<Signer> {
     async send(request) {
       // No --gas-limit: gas estimation stays as a last-line refusal before anything is broadcast.
       const sent = await run(["send", "--keystore", keystore, ...password, "--rpc-url", options.rpcUrl, "--async", request.to, request.data]);
-      if (sent.exitCode !== 0) throw castFailed("the transaction was not broadcast", sent, options.rpcUrl);
+      if (sent.exitCode !== 0) throw sendFailed(sent, options.rpcUrl);
       const hash = sent.stdout.trim();
       if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) throw castFailed("cast did not return a transaction hash", sent, options.rpcUrl);
       return hash as Hex;
