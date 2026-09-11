@@ -47,16 +47,7 @@ export function invocationDirectory(env: NodeJS.ProcessEnv = process.env): strin
  * that cannot be read or does not validate is an error.
  */
 export function resolveConfig(input: ConfigInput): ResolvedConfig {
-  const fromEnv = nonEmpty(input.env.SIGNA_MANIFEST);
-  if (input.manifestOption !== undefined && !input.manifestOption.trim()) {
-    throw new SignaError("INVALID_INPUT", "--manifest needs a file path");
-  }
-  const named = input.manifestOption ?? fromEnv;
-  const { manifest, manifestProvenance } =
-    named === undefined
-      ? { manifest: bundledManifest(), manifestProvenance: { source: "bundled", copyOf: BUNDLED_MANIFEST_COPY_OF } as const }
-      : readManifest(resolve(input.cwd, named), input.manifestOption !== undefined ? "option" : "environment", input.readFile);
-
+  const { manifest, manifestProvenance } = resolveManifest(input);
   const rpcFromEnv = nonEmpty(input.env.SIGNA_RPC_URL);
   const rpcUrl = input.rpcUrlOption ?? rpcFromEnv ?? manifest.rpcUrl;
   const rpcSource = input.rpcUrlOption !== undefined ? "option" : rpcFromEnv !== undefined ? "environment" : "manifest";
@@ -64,6 +55,19 @@ export function resolveConfig(input: ConfigInput): ResolvedConfig {
     throw new SignaError("INVALID_INPUT", `the RPC URL from ${rpcSource} must be an http(s) URL, received ${redactRpcUrl(rpcUrl)}`);
   }
   return { manifest, manifestProvenance, rpcUrl, rpc: { url: redactRpcUrl(rpcUrl), source: rpcSource } };
+}
+
+/** The manifest alone: `--manifest`, then SIGNA_MANIFEST, then the bundled copy. Offline commands need no RPC. */
+export function resolveManifest(
+  input: Pick<ConfigInput, "manifestOption" | "env" | "readFile" | "cwd">,
+): Pick<ResolvedConfig, "manifest" | "manifestProvenance"> {
+  if (input.manifestOption !== undefined && !input.manifestOption.trim()) {
+    throw new SignaError("INVALID_INPUT", "--manifest needs a file path");
+  }
+  const named = input.manifestOption ?? nonEmpty(input.env.SIGNA_MANIFEST);
+  return named === undefined
+    ? { manifest: bundledManifest(), manifestProvenance: { source: "bundled", copyOf: BUNDLED_MANIFEST_COPY_OF } }
+    : readManifest(resolve(input.cwd, named), input.manifestOption !== undefined ? "option" : "environment", input.readFile);
 }
 
 function readManifest(

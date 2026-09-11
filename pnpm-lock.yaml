@@ -70,9 +70,19 @@ importers:
       viem:
         specifier: ^2.56.3
         version: 2.56.3(typescript@5.9.3)(zod@4.4.3)
+    devDependencies:
+      '@fx-coverage/credentials':
+        specifier: workspace:*
+        version: link:../credentials
 
   packages/client:
     dependencies:
+      '@fx-coverage/credentials':
+        specifier: workspace:*
+        version: link:../credentials
+      '@fx-coverage/provider-adapter':
+        specifier: workspace:*
+        version: link:../provider-adapter
       viem:
         specifier: ^2.56.3
         version: 2.56.3(typescript@5.9.3)(zod@4.4.3)
