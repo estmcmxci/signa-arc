@@ -6,7 +6,7 @@ import { arcTestnet } from "viem/chains";
 
 import { SignaError, readDeploymentStatus, type StatusClient } from "@signa/client";
 
-import { resolveConfig } from "./config.ts";
+import { invocationDirectory, resolveConfig } from "./config.ts";
 import { EVIDENCE_RECORD_IDS, RECORDED_NOTICE, evidenceRecord, evidenceSummary } from "./evidence/index.ts";
 
 /**
@@ -108,7 +108,7 @@ const evidenceOutput = z.union([
 export function createSignaCli(dependencies: SignaCliDependencies = {}) {
   const publicClient = dependencies.publicClient ?? arcPublicClient;
   const readFile = dependencies.readFile ?? ((path: string) => readFileSync(path));
-  const cwd = dependencies.cwd ?? (() => process.cwd());
+  const cwd = dependencies.cwd ?? (() => invocationDirectory());
 
   const cli = Cli.create("signa", {
     version: SIGNA_CLI_VERSION,

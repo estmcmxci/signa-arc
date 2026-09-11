@@ -32,6 +32,16 @@ export type ConfigInput = {
 };
 
 /**
+ * The directory the user ran the command from. `pnpm signa` runs the script from the repository
+ * root and records the invoking directory in INIT_CWD, so a relative `--manifest` resolves
+ * against that, falling back to the process's own directory.
+ */
+export function invocationDirectory(env: NodeJS.ProcessEnv = process.env): string {
+  const initCwd = env["INIT_CWD"]?.trim();
+  return initCwd ? initCwd : process.cwd();
+}
+
+/**
  * Resolves the manifest and RPC URL: the option, then its environment variable, then the bundled
  * public manifest and its `rpcUrl` (ERD C-02). There is no fixture fallback: a named manifest
  * that cannot be read or does not validate is an error.
