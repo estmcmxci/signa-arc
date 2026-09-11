@@ -68,6 +68,13 @@ export class SignaError extends Error {
     message: string,
     /** Whether the same request might succeed later, such as after an RPC outage. */
     readonly retryable = false,
+    /**
+     * Structured facts a consumer needs when the failure still leaves work behind, above all the
+     * hash of a transaction that was broadcast but has no receipt yet. incur 0.5.1 fixes the error
+     * document to `{ code, message, retryable }` plus a `cta`, so the CLI surfaces these through
+     * the cta rather than inventing a field incur would drop.
+     */
+    readonly details?: Readonly<Record<string, string>> | undefined,
   ) {
     super(message);
   }

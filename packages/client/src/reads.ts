@@ -1,21 +1,11 @@
-import {
-  BaseError,
-  ExecutionRevertedError,
-  decodeErrorResult,
-  encodeFunctionData,
-  erc20Abi,
-  hexToString,
-  isAddressEqual,
-  type Abi,
-  type Address,
-  type Hex,
-} from "viem";
+import { encodeFunctionData, erc20Abi, hexToString, isAddressEqual, type Address, type Hex } from "viem";
 
 import { coverageEngineAbi, covenantVaultAbi, credentialRegistryAbi, facilityRegistryAbi } from "./abis.ts";
 import { formatAmount, type Amount } from "./amounts.ts";
 import type { DeploymentManifest } from "./deployment.ts";
 import { COVENANT_STATES, EXPOSURE_REASONS, HEDGE_REASONS, HEDGE_STATUSES, RESULT_REASONS, enumName } from "./enums.ts";
 import { SignaError } from "./errors.ts";
+import { decodeContractError, isRevert, revertData } from "./revert.ts";
 import { isoTime, openSession, reason, type BlockContext, type ReadClient, type Session } from "./rpc.ts";
 import { requireVaultBinding } from "./status.ts";
 
@@ -267,10 +257,6 @@ export async function readCredentials(client: ReadClient, manifest: DeploymentMa
 // ---------------------------------------------------------------------------------------------
 // draw simulate
 
-const KNOWN_ERRORS = [...covenantVaultAbi, ...coverageEngineAbi, ...facilityRegistryAbi, ...credentialRegistryAbi].filter(
-  (item) => item.type === "error",
-) as Abi;
-
 export type DecodedRefusal = { error: string; args: Record<string, string>; data: Hex; explanation: string };
 
 /**
@@ -332,60 +318,15 @@ function decodeRefusal(
   rpcUrl: string,
 ): DecodedRefusal {
   const data = revertData(error);
-  const reverted = data !== undefined || (error instanceof BaseError && error.walk((cause) => cause instanceof ExecutionRevertedError) !== null);
-  if (!reverted) {
+  if (!isRevert(error)) {
     const message = `RPC request to ${session.rpc} failed during the draw simulation: ${reason(error)}`;
     throw new SignaError("RPC_UNAVAILABLE", rpcUrl ? message.split(rpcUrl).join(session.rpc) : message, true);
   }
   if (!data || data === "0x") {
     throw new SignaError("SIMULATION_FAILED", "the simulated draw reverted without revert data, so its reason cannot be decoded");
   }
-  let decoded: { errorName: string; args: readonly unknown[] | undefined };
-  try {
-    decoded = decodeErrorResult({ abi: KNOWN_ERRORS, data }) as { errorName: string; args: readonly unknown[] | undefined };
-  } catch {
-    throw new SignaError("SIMULATION_FAILED", `the simulated draw reverted with data no known contract error decodes: ${data}`);
-  }
-  const args = decoded.args ?? [];
+  const decoded = decodeContractError(data);
+  if (!decoded) throw new SignaError("SIMULATION_FAILED", `the simulated draw reverted with data no known contract error decodes: ${data}`);
   const coverage = `Current evaluation at this block: ${evaluation.coverageBps} of ${evaluation.requiredCoverageBps} bps, ${evaluation.compliant ? "compliant" : `not compliant (${evaluation.resultReason})`}${evaluation.activeWaiver ? ", waiver active" : ""}.`;
-  switch (decoded.errorName) {
-    case "DrawNotAllowed": {
-      const state = enumName(COVENANT_STATES, args[0] as number);
-      return {
-        error: "DrawNotAllowed",
-        args: { state },
-        data,
-        explanation: `The vault refused the draw: after its own covenant sync the facility is ${state}, and a draw needs compliant coverage or an active waiver. ${coverage}`,
-      };
-    }
-    case "ReserveViolation": {
-      const [balance, requested, reserve] = args as [bigint, bigint, bigint];
-      return {
-        error: "ReserveViolation",
-        args: { balance: formatAmount(balance).usdc, requested: formatAmount(requested).usdc, reserve: formatAmount(reserve).usdc },
-        data,
-        explanation: `The vault refused the draw: it would leave the vault below its reserve. Balance ${formatAmount(balance).usdc}, requested ${formatAmount(requested).usdc}, reserve ${formatAmount(reserve).usdc} USDC. ${coverage}`,
-      };
-    }
-    default:
-      return {
-        error: decoded.errorName,
-        args: Object.fromEntries(args.map((value, index) => [String(index), typeof value === "bigint" ? value.toString() : String(value)])),
-        data,
-        explanation: `The vault refused the draw with ${decoded.errorName}. ${coverage}`,
-      };
-  }
-}
-
-/** The revert data carried anywhere in a viem error's cause chain, if any. */
-function revertData(error: unknown): Hex | undefined {
-  if (!(error instanceof BaseError)) return undefined;
-  let found: Hex | undefined;
-  error.walk((cause) => {
-    const value = (cause as { data?: unknown }).data;
-    const candidate = typeof value === "object" && value !== null ? (value as { data?: unknown }).data : value;
-    if (typeof candidate === "string" && /^0x[0-9a-fA-F]*$/.test(candidate)) found = candidate as Hex;
-    return false;
-  });
-  return found;
+  return { ...decoded, explanation: `The vault refused the draw: ${decoded.explanation}. ${coverage}` };
 }
