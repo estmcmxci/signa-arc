@@ -222,7 +222,15 @@ Verified 2026-09-10 by probing eight chains with the identical `eth_sendTransact
 
 Check order is **chain authorization → signature → gas/balance**. Arc fails at the first gate, before our request is examined at all.
 
-**What is measured, and what is not.** The behaviour above is measured. The *mechanism* is not. The error says "**App** is not authorized", which reads more like per-app provisioning than a global allowlist, and we could not establish which it is:
+**ANSWERED by Privy support, 2026-09-10.** It is **app-level authorization**, not a global allowlist, and Arc can be enabled on request:
+
+> *"The 401 error for Arc specifically suggests the chain isn't authorized for `eth_sendTransaction` at the app level. Continuing with `eth_signTransaction` + external broadcast is the correct workaround for custom RPCs — this is documented behavior. If you'd like Arc added as a supported chain for direct `eth_sendTransaction`, reach out to your account team or support@privy.io with your app ID and the Arc chain details."*
+
+Two things follow. **Our architecture is confirmed by Privy, not merely tolerated** — sign with Privy, broadcast ourselves, which is the documented path for a custom RPC. And **the limitation is removable**: an email to support@privy.io with the app ID and Arc's chain details gets `eth_sendTransaction` enabled. That has lead time, so request it early if a deployment needs Privy to broadcast.
+
+The investigation below is kept because the probing method is reusable and the contrast it drew is still true.
+
+**What was measured, and what was inferred.** The behaviour above is measured. The *mechanism* was not, and the first version of this note asserted a global allowlist as fact, which was wrong. The error says "**App** is not authorized", which reads more like per-app provisioning than a global allowlist, and we could not establish which it is:
 
 - No chain configuration appears on the app object (`GET /v1/apps/{id}` returns auth and branding fields only).
 - `/v1/chains`, `/v1/networks`, `/v1/apps/{id}/chains` and `/v1/apps/{id}/settings` all 404.

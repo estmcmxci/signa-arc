@@ -197,7 +197,7 @@ Say: "m-of-n approval without putting approvers on chain, and an allow-list on w
 - **One proposal at a time.** Each pins the admin wallet's next nonce.
 - **An approval must reach Privy within 300 s of its payload being fetched.** The console fetches the payload when the approver clicks, so this only bites if a request stalls.
 
-## Asked of Privy, not yet answered
+## Asked of Privy — answered 2026-09-10
 
 Drafted 2026-09-10 for privy.io/slack. Sending it is a two-minute job; the answer may simplify a mainnet deploy.
 
@@ -208,3 +208,11 @@ Drafted 2026-09-10 for privy.io/slack. Sending it is a two-minute job; the answe
 > Separately, a docs gap: `POST /v1/intents/{id}/authorize` requires `intent_id` and `timestamp` in the signed payload. Both appear in your `js-sdk-core` types but not the API reference.
 
 Record the answer here when it arrives.
+
+**Their answer:**
+
+> The 401 error for Arc specifically suggests the chain isn't authorized for `eth_sendTransaction` at the app level. Continuing with `eth_signTransaction` + external broadcast is the correct workaround for custom RPCs — this is documented behavior. If you'd like Arc added as a supported chain for direct `eth_sendTransaction`, reach out to your account team or support@privy.io with your app ID and the Arc chain details.
+
+So sign-then-broadcast is confirmed correct rather than a hack, and the limitation is removable by request. If a future deployment wants Privy to broadcast — Arc mainnet, for instance — email support@privy.io with the app ID and the chain details, and allow lead time.
+
+They did not comment on the `intent_id` / `timestamp` documentation gap.
