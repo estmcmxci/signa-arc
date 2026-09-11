@@ -1,0 +1,16 @@
+{
+  "name": "@signa/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "signa: inspect a Signa Covenant facility on Arc Testnet.",
+  "exports": {
+    ".": "./src/cli.ts",
+    "./evidence": "./src/evidence/index.ts"
+  },
+  "dependencies": {
+    "@signa/client": "workspace:*",
+    "incur": "0.5.1",
+    "viem": "^2.56.3"
+  }
+}

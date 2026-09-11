@@ -1,0 +1,13 @@
+{
+  "name": "@signa/client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Signa Covenant client: deployment manifest validation, generated ABIs and read-only deployment checks.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "viem": "^2.56.3"
+  }
+}

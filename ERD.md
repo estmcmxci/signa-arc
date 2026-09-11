@@ -18,7 +18,7 @@ The [ENSv2 plugin site](https://mm-ensv2.estmcmxci.co/) is the information-archi
 
 Use TypeScript and [incur](https://github.com/wevm/incur) for typed commands, structured output, and command discovery. Use [Vocs](https://github.com/wevm/vocs) for the documentation app. Vocs is the framework, not the hosting account. Proposed deployment: a separate Vercel project serving the Vocs app; final provider and custom domain can change without affecting CLI implementation. Do not invent a live URL.
 
-Pin dependency versions during implementation and check their installed APIs. The local incur skill and current upstream README differ on envelope flags (`--verbose` versus `--full-output`); generated help and tests for the pinned release must settle this. Do not copy an outdated scaffold blindly.
+Pin dependency versions during implementation and check their installed APIs. The first P0 slice settled the envelope flag: incur 0.5.1 uses `--full-output`, and rejects `--verbose` as an unknown flag. `packages/cli/SPIKES.md` records incur's pinned behaviour and the tests that hold it; `apps/docs/SPIKES.md` records Vocs 2.9.0's. Do not copy an outdated scaffold blindly.
 
 Default binary: `signa`. Working package names: `@signa/client`, `@signa/cli`, `@signa/docs`, private workspace packages initially. Registry ownership is not established. A later npm release may use the owner's available scope without changing the binary name.
 
@@ -90,6 +90,8 @@ These are proposed commands, not instructions runnable in today's repository. Du
 | `signa draw send --amount <USDC> --account <name>` | P1 | Require operator identity; fresh simulation followed by one explicitly requested draw |
 | `signa tx show <hash>` | P1 | Report pending, mined success or mined revert; decode available events and errors |
 
+**Shipped in the first P0 slice (branch `cli/p0`):** `signa status` and `signa evidence show [record]`. Every other row is still proposed.
+
 Keep command argument schemas, descriptions, examples, outputs, errors and read/write classification together. Generate reference tables from that definition; do not maintain a second handwritten flag inventory. Export the incur CLI definition without executing it on import.
 
 ### Simulation and refusal semantics
@@ -107,6 +109,13 @@ A completed simulation with `allowed: false` is a successful inquiry (exit 0). A
 Signa result fields distinguish `kind: report | simulation | transaction`, `dataMode`, context, outcome and optional transaction details. A refused simulation carries `allowed: false`, decoded contract error/arguments, engine reason where available, and an actionable explanation; raw revert data remains available for diagnostics. Never fabricate a decoded reason.
 
 Error codes include `INVALID_INPUT`, `INVALID_MANIFEST`, `CHAIN_MISMATCH`, `DEPLOYMENT_MISMATCH`, `RPC_UNAVAILABLE`, `INVALID_SIGNATURE`, `STALE_SEQUENCE`, `SIGNER_UNAVAILABLE`, `SIGNER_ROLE_MISMATCH`, `ACTION_REFUSED`, `TRANSACTION_REVERTED`, and `TRANSACTION_PENDING`. Pin and test actual exit semantics: exit 0 for completed reports/simulations and mined-success actions; nonzero for validation/transport/signing errors, refused actions, reverts and receipt timeouts. Consumers branch on codes, not error prose.
+
+Pinned behaviour, incur 0.5.1:
+- An error prints `{ code, message, retryable }` to stdout, which is one JSON document under `--json`, and exits 1.
+- incur's own codes, `COMMAND_NOT_FOUND`, `VALIDATION_ERROR` and `UNKNOWN`, appear alongside Signa's.
+- Help for a command group prints text even with `--json`. Help is not a command result.
+- `--full-output` wraps data as `{ ok, data, meta }`, and `meta.duration` varies between runs, so consumers read `data`.
+- `pnpm signa` prints pnpm's banner on stdout, so machine consumers run `pnpm -s signa … --json`.
 
 ## 7. Credential and signing boundaries
 
@@ -161,6 +170,13 @@ Expose workspace scripts for CLI development/build, focused tests, docs developm
 For hosting, prepare a separate project rooted at `apps/docs`, with workspace-aware install/build commands, an output path confirmed from the pinned Vocs build, no runtime secrets, preview behavior, and a custom-domain placeholder. Avoid guessing a Vocs output directory or assuming the ENSv2 site's provider. Build and preview first; only then is an actual deployment ready to review.
 
 P2 package checks: bin has executable entrypoint; runtime assets resolve relative to the installed package; help and offline commands work outside the checkout; package contents include only built code, required public assets and metadata; no Foundry artifacts or private documents. README and docs must distinguish workspace use from published install instructions. Resolve package ownership, version, license and intended hosting/domain before public release. The current repository has no selected license; do not manufacture one.
+
+Limitations demonstrated in the first P0 slice, each with a bounded decision:
+
+- **incur's `--update` installs globally.** incur 0.5.1 honours `--update` even when automatic updates are disabled. It installs whichever package declares the `signa` bin, with `npm|pnpm|bun add --global`. Until P2, no package declares that bin, so `--update` fails with `UPDATE_FAILED`, and a test fails if a bin appears. P2 must configure incur's `update` with the owned package name, or a refusing installer, before adding the bin.
+- **incur's MCP and skill built-ins cannot be removed.** `--mcp`, `mcp add` and `skills add` are always present. Read-only P0 commands may be exposed through them. Every P1 write command sets `mcp: false` until an MCP write policy is designed.
+- **Static hosts need a Markdown rewrite.** Vocs 2.9.0 serves `/<page>.md` from its own server, and a static build writes the Markdown to `/assets/md/<page>.md`. A static host must rewrite `/<page>.md` to that path, or the site must use Vocs's server adapter. Decide with the hosting provider in P2.
+- **incur's type declarations fail the lib check.** incur 0.5.1's published declarations fail TypeScript's lib check, so `skipLibCheck` is set in `packages/cli/tsconfig.json` alone.
 
 This draft/handoff does not publish npm packages, modify DNS, deploy a site or submit transactions. Those are subsequent execution steps against a concrete reviewed build, with authorization assessed from the session at that time.
 

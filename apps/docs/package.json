@@ -1,0 +1,19 @@
+{
+  "name": "@signa/docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Signa Covenant documentation, built with Vocs.",
+  "scripts": {
+    "dev": "vocs dev",
+    "build": "vocs build",
+    "preview": "vocs preview"
+  },
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "vite": "8.3.0",
+    "vocs": "2.9.0",
+    "waku": "1.0.0-rc.0"
+  }
+}

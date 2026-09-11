@@ -1,0 +1,349 @@
+{
+  "title": "Signa Covenant: a waiver approved by a 2-of-2 Privy quorum, on Arc Testnet",
+  "generatedAt": "2026-09-10T23:19:50.466Z",
+  "outcome": "waiver created and verified",
+  "network": {
+    "chainId": 5042002,
+    "explorer": "https://testnet.arcscan.app"
+  },
+  "deployment": {
+    "sourceCommit": "5fefd2322f148cdbd713fa9b266c74b6f044b940",
+    "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+    "covenantVault": {
+      "address": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+      "explorer": "https://testnet.arcscan.app/address/0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51"
+    },
+    "facilityRegistry": "0xB54fe913C4a7dE73Bc285338dCbb384AEec5e448",
+    "coverageEngine": "0x3341B76fEFF4CE691781fEAa4C76EA95479b9b6b",
+    "credentialRegistry": "0xD921734C9314442a74Cd3FEBAB8028b2Bb9A7624"
+  },
+  "admin": {
+    "address": "0x55C4DD3770A44695735717CB7b7005AC7dE9edA1",
+    "explorer": "https://testnet.arcscan.app/address/0x55C4DD3770A44695735717CB7b7005AC7dE9edA1",
+    "privyWalletId": "zc9i4be5osru1qyzfci337mi",
+    "keyQuorumId": "pbf1jtt1knpsl30eyp0z163t",
+    "threshold": 2,
+    "policyId": "y5x9g8gglndai2hosm47zvxf",
+    "policyAttached": true
+  },
+  "steps": [
+    {
+      "step": 1,
+      "what": "Pre-validation against the chain",
+      "result": "passed: the contract would accept a waiver",
+      "at": "2026-09-10T23:19:34.418Z",
+      "trace": "block 61473290"
+    },
+    {
+      "step": 2,
+      "what": "Intent proposed to Privy",
+      "result": "intent gpai6xsundibqomhtkgv8i0i: createWaiver(3600, \"0x8b30d2e621581e8c20089a3602b4250bb0055e33c706efeb57b0379b763d4adc\")",
+      "intentStatus": "pending",
+      "approvals": "0 of 2",
+      "at": "2026-09-10T23:19:35.164Z",
+      "trace": "Privy intent gpai6xsundibqomhtkgv8i0i"
+    },
+    {
+      "step": 3,
+      "what": "Risk officer authorized",
+      "result": "signature checked against the quorum member key, then accepted by POST /v1/intents/{id}/authorize",
+      "intentStatus": "pending",
+      "approvals": "1 of 2",
+      "at": "2026-09-10T23:19:36.418Z",
+      "trace": "signed payload sha256 51e86d3fc1e1eb8318fd3f6828c1b6a046f4be75c87424cc2bcf927e72920619"
+    },
+    {
+      "step": 4,
+      "what": "Treasury lead authorized",
+      "result": "signature checked against the quorum member key, then accepted by POST /v1/intents/{id}/authorize",
+      "intentStatus": "executed",
+      "approvals": "2 of 2",
+      "at": "2026-09-10T23:19:39.484Z",
+      "trace": "signed payload sha256 3b0fcf2c42e0f1c7117b51705ffd27070796d1742b7c15df997dfdf075706ca0"
+    },
+    {
+      "step": 5,
+      "what": "Signed transaction broadcast to Arc with viem",
+      "result": "eth_sendRawTransaction of action_result.response_body.data.signed_transaction; Privy cannot send on Arc",
+      "at": "2026-09-10T23:19:46.448Z",
+      "trace": "0xf6f7d9ec90f0dc41eaf46c5b2acbdb7e7567eb279afa7690e4a957ab6c3cf34b"
+    },
+    {
+      "step": 6,
+      "what": "Receipt and WaiverCreated asserted",
+      "result": "receipt status 0x1; exactly one WaiverCreated, naming this facility and committing to keccak256 of the stated reason",
+      "at": "2026-09-10T23:19:42.000Z",
+      "trace": "0xf6f7d9ec90f0dc41eaf46c5b2acbdb7e7567eb279afa7690e4a957ab6c3cf34b, block 61473309"
+    },
+    {
+      "step": 7,
+      "what": "Read back from the chain",
+      "result": "activeWaiver() = true, covenantState() = WAIVED, waiver ends 2026-09-11T00:19:42.000Z",
+      "at": "2026-09-10T23:19:46.000Z",
+      "trace": "block 61473317"
+    }
+  ],
+  "preValidation": {
+    "passed": true,
+    "statement": "Passed at block 61473290: the facility was CURE and not compliant (6840 of 10000 bps, BELOW_THRESHOLD), no waiver was active, the vault is this facility's and its admin is this wallet, so the contract would accept a waiver and it was proposed.",
+    "block": "61473290",
+    "blockTimestamp": "2026-09-10T23:19:32.000Z",
+    "covenantState": "CURE",
+    "activeWaiver": false,
+    "waiverEndsAt": null,
+    "coverage": {
+      "assessed": true,
+      "compliant": false,
+      "coverageBps": 6840,
+      "requiredCoverageBps": 10000,
+      "eligibleHedgeCount": 1,
+      "totalHedgeCount": 1,
+      "exposureReason": "ELIGIBLE",
+      "resultReason": "BELOW_THRESHOLD"
+    },
+    "refusals": [],
+    "maxWaiverDurationSeconds": 259200,
+    "searchedBlocks": "61465638..61473290",
+    "stateSetBy": {
+      "event": "CovenantSynchronized",
+      "transactionHash": "0x9cb2636d23fa7b44d5d5ac45fac37a6632563ac77645772c5c560d061109f3fb",
+      "explorer": "https://testnet.arcscan.app/tx/0x9cb2636d23fa7b44d5d5ac45fac37a6632563ac77645772c5c560d061109f3fb",
+      "blockNumber": "61472429",
+      "args": {
+        "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+        "previousState": "COMPLIANT",
+        "newState": "CURE",
+        "coverageBps": 6840,
+        "requiredCoverageBps": 10000,
+        "outstandingValue": "1000000",
+        "grossEligible": "684000",
+        "countedEligible": "684000",
+        "reason": "BELOW_THRESHOLD",
+        "cureDeadline": "1789513928 (2026-09-15T23:12:08.000Z)"
+      }
+    },
+    "credentialUpdates": [
+      {
+        "event": "HedgeCredentialAccepted",
+        "transactionHash": "0x0bc3d814570bf18fd317c8dd4794841ba838ba988741bd9a3e21c0eb4c42b04a",
+        "explorer": "https://testnet.arcscan.app/tx/0x0bc3d814570bf18fd317c8dd4794841ba838ba988741bd9a3e21c0eb4c42b04a",
+        "blockNumber": "61472419",
+        "args": {
+          "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+          "tradeIdCommitment": "0xea65d291768b8a3968f0b3fc5d79bdfa39d68d1f4fa11eff157b909b94dde664",
+          "issuer": "0xAD515A2BE433e78B6b570064797626012e272e0a",
+          "digest": "0x6d46e4947322d679add970120715c9189eb0704454e61e0ade9363714f0d559c",
+          "sequence": "5",
+          "status": 0,
+          "remainingNotional": "720000",
+          "acceptedAt": "1789081923 (2026-09-10T23:12:03.000Z)"
+        }
+      }
+    ]
+  },
+  "earlierRefusal": {
+    "block": "61465637",
+    "blockTimestamp": "2026-09-10T22:14:12.000Z",
+    "covenantState": "COMPLIANT",
+    "activeWaiver": false,
+    "waiverEndsAt": null,
+    "coverage": {
+      "assessed": true,
+      "compliant": true,
+      "coverageBps": 10000,
+      "requiredCoverageBps": 10000,
+      "eligibleHedgeCount": 1,
+      "totalHedgeCount": 1,
+      "exposureReason": "ELIGIBLE",
+      "resultReason": "NONE"
+    },
+    "refusals": [
+      "the facility is compliant (coverage 10000 bps, 10000 required), and createWaiver refuses a compliant facility"
+    ],
+    "statement": "The same guard refused a waiver at this block, while the facility was compliant. scripts/run-waiver.ts --check and the console's POST /api/waivers (HTTP 409) both answered with the refusal below, and nothing was proposed to Privy. It is re-derived here from the chain's state at that block."
+  },
+  "proposal": {
+    "intentId": "gpai6xsundibqomhtkgv8i0i",
+    "createdAt": "2026-09-10T23:19:35.164Z",
+    "statedReason": "Hedge roll on ARC-EUR-USD-001: the maturing EUR/USD forward has been rolled and the replacement leg is booked, but the counterparty's trade confirmation is still pending, so only the partially funded leg counts and coverage reads 68.4% against 100% required. One-hour waiver while treasury chases the confirmation; if it is not received and evidenced before expiry the facility returns to cure. Credit ref CR-0911-07.",
+    "reasonCommitment": "0x8b30d2e621581e8c20089a3602b4250bb0055e33c706efeb57b0379b763d4adc",
+    "call": {
+      "to": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+      "functionName": "createWaiver",
+      "args": [
+        "3600",
+        "\"0x8b30d2e621581e8c20089a3602b4250bb0055e33c706efeb57b0379b763d4adc\""
+      ],
+      "data": "0x6738bca70000000000000000000000000000000000000000000000000000000000000e108b30d2e621581e8c20089a3602b4250bb0055e33c706efeb57b0379b763d4adc"
+    },
+    "pinned": {
+      "chainId": 5042002,
+      "nonce": 4,
+      "gasLimit": "207398",
+      "maxFeePerGasWei": "50500000000"
+    }
+  },
+  "approvals": [
+    {
+      "role": "Risk officer",
+      "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEdTLnqVlKlu7pil38bXDIoTeFbbTWO2ILftJpmdIFKHejmkOrh+ssVfpBkr5mNkHLrSRlkC4eIA7FhSOPAIy+0A==",
+      "signedAt": "2026-09-10T23:19:36.418Z",
+      "signedPayloadTimestamp": "2026-09-10T23:19:36.418Z",
+      "signedPayloadSha256": "51e86d3fc1e1eb8318fd3f6828c1b6a046f4be75c87424cc2bcf927e72920619",
+      "signature": "MEQCIDpdDJ1wh8V/n3UsKr/4REb5tqLMW64dXsLZw+t99QpiAiBWNMioi6ezKhJqsqmSZslsEnpzN2za48wlvgHj7bngcQ==",
+      "signatureVerifies": true
+    },
+    {
+      "role": "Treasury lead",
+      "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAED4DCLEErSAdbIY64mQIcK4ZZHKfpvGP3T+UfA3YXFQsmSPpiQVDmwyoVkU5QsxnSgKjDleBwex40ODQtoZqPvA==",
+      "signedAt": "2026-09-10T23:19:39.484Z",
+      "signedPayloadTimestamp": "2026-09-10T23:19:39.484Z",
+      "signedPayloadSha256": "3b0fcf2c42e0f1c7117b51705ffd27070796d1742b7c15df997dfdf075706ca0",
+      "signature": "MEUCIQChvxqYd3d4EdT4iLAblfbMX1oGmUZRR0ykErmlJ776PQIgWwS7OCRd8QnkF1rbZ58Bz0YNHPHdVGVEK8lLEElpDw0=",
+      "signatureVerifies": true
+    }
+  ],
+  "privySigned": {
+    "intentStatus": "executed",
+    "executedAt": "2026-09-10T23:19:40.977Z",
+    "signedTransaction": "0x02f8b4834cef5204844a817c80850bc208d90083032a2694a68fb25ba98d522ce8326471a6b6bf3732e3bf5180b8446738bca70000000000000000000000000000000000000000000000000000000000000e108b30d2e621581e8c20089a3602b4250bb0055e33c706efeb57b0379b763d4adcc080a0922b2217c70e771204f869ec7d40b788cfed4ba8a0a1a098fad3cf2015bac870a058eaf671c35c96c3e58e77910ecd817973305968a4a23b445cb472083eb15796",
+    "decoded": {
+      "type": "eip1559",
+      "chainId": 5042002,
+      "nonce": 4,
+      "to": "0xa68fb25ba98d522ce8326471a6b6bf3732e3bf51",
+      "value": "0",
+      "gas": "207398",
+      "maxFeePerGas": "50500000000",
+      "maxPriorityFeePerGas": "1250000000",
+      "data": "0x6738bca70000000000000000000000000000000000000000000000000000000000000e108b30d2e621581e8c20089a3602b4250bb0055e33c706efeb57b0379b763d4adc"
+    },
+    "recoveredSigner": "0x55C4DD3770A44695735717CB7b7005AC7dE9edA1"
+  },
+  "broadcast": {
+    "transactionHash": "0xf6f7d9ec90f0dc41eaf46c5b2acbdb7e7567eb279afa7690e4a957ab6c3cf34b",
+    "explorer": "https://testnet.arcscan.app/tx/0xf6f7d9ec90f0dc41eaf46c5b2acbdb7e7567eb279afa7690e4a957ab6c3cf34b",
+    "blockNumber": "61473309",
+    "blockExplorer": "https://testnet.arcscan.app/block/61473309",
+    "blockTimestamp": "2026-09-10T23:19:42.000Z",
+    "sender": "0x55c4dd3770a44695735717cb7b7005ac7de9eda1",
+    "to": "0xa68fb25ba98d522ce8326471a6b6bf3732e3bf51",
+    "expectedStatus": "0x1",
+    "actualStatus": "0x1",
+    "gasUsed": "170313",
+    "effectiveGasPrice": "21250000000"
+  },
+  "events": [
+    {
+      "contract": "CovenantVault",
+      "event": "CovenantSynchronized",
+      "logIndex": 15,
+      "args": {
+        "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+        "previousState": "CURE",
+        "newState": "CURE",
+        "coverageBps": 6840,
+        "requiredCoverageBps": 10000,
+        "outstandingValue": "1000000",
+        "grossEligible": "684000",
+        "countedEligible": "684000",
+        "reason": "BELOW_THRESHOLD",
+        "cureDeadline": "1789513928 (2026-09-15T23:12:08.000Z)"
+      }
+    },
+    {
+      "contract": "CovenantVault",
+      "event": "WaiverCreated",
+      "logIndex": 16,
+      "args": {
+        "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+        "reasonCommitment": "0x8b30d2e621581e8c20089a3602b4250bb0055e33c706efeb57b0379b763d4adc",
+        "startsAt": "1789082382 (2026-09-10T23:19:42.000Z)",
+        "endsAt": "1789085982 (2026-09-11T00:19:42.000Z)"
+      }
+    }
+  ],
+  "readBack": {
+    "block": "61473317",
+    "blockTimestamp": "2026-09-10T23:19:46.000Z",
+    "covenantState": "WAIVED",
+    "activeWaiver": true,
+    "waiverEndsAt": "2026-09-11T00:19:42.000Z",
+    "coverage": {
+      "assessed": true,
+      "compliant": false,
+      "coverageBps": 6840,
+      "requiredCoverageBps": 10000,
+      "eligibleHedgeCount": 1,
+      "totalHedgeCount": 1,
+      "exposureReason": "ELIGIBLE",
+      "resultReason": "BELOW_THRESHOLD"
+    },
+    "refusals": [
+      "a waiver is already active, until 2026-09-11T00:19:42.000Z"
+    ]
+  },
+  "covenantState": {
+    "before": "CURE",
+    "after": "WAIVED",
+    "waiverEndsAt": "2026-09-11T00:19:42.000Z"
+  },
+  "assertions": {
+    "preValidationPassed": true,
+    "bothApproversSigned": true,
+    "everyRecordedSignatureVerifies": true,
+    "signedByTheAdminWallet": true,
+    "signedTransactionIsTheApprovedOne": true,
+    "broadcastHashIsTheSignedTransaction": true,
+    "receiptStatusIs0x1": true,
+    "exactlyOneWaiverCreated": true,
+    "waiverCreatedNamesThisFacility": true,
+    "waiverCreatedCommitsToTheStatedReason": true,
+    "activeWaiverReadBackTrue": true,
+    "covenantStateReadBackWaived": true,
+    "serviceAssertionsPassed": true
+  },
+  "assertionError": null,
+  "policy": {
+    "evidence": "arc-policy-evidence.json",
+    "checkedAt": "2026-09-10T22:13:56.817Z",
+    "controls": [
+      {
+        "name": "createWaiver on the facility vault",
+        "expected": "allowed",
+        "actual": "allowed"
+      },
+      {
+        "name": "revokeWaiver on the facility vault",
+        "expected": "denied",
+        "actual": "denied"
+      },
+      {
+        "name": "createWaiver on the FacilityRegistry",
+        "expected": "denied",
+        "actual": "denied"
+      },
+      {
+        "name": "createWaiver on the vault, chain 1",
+        "expected": "denied",
+        "actual": "denied"
+      },
+      {
+        "name": "createWaiver above maxWaiverDuration",
+        "expected": "allowed",
+        "actual": "allowed"
+      }
+    ],
+    "governance": [
+      {
+        "name": "Change the wallet's policies with one approver's signature",
+        "refused": true
+      },
+      {
+        "name": "Change the policy with the app secret alone",
+        "refused": true
+      }
+    ]
+  },
+  "disclaimer": "Arc Testnet only: testnet USDC, a fictional facility, no real counterparties. The two approvers signed from their persisted P-256 keys through the same QuorumAdminService the browser console uses."
+}
