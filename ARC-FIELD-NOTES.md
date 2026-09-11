@@ -222,7 +222,18 @@ Verified 2026-09-10 by probing eight chains with the identical `eth_sendTransact
 
 Check order is **chain authorization → signature → gas/balance**. Arc fails at the first gate, before our request is examined at all.
 
-**Why:** "supported" means Privy operates RPC infrastructure for that chain — a per-chain integration on their side, not generic EVM compatibility. Broadcasting means holding a connection, estimating gas and tracking nonces on a network they have onboarded. Arc's public testnet is recent and is not on that list. There is no dashboard toggle; it is their infrastructure boundary, not our configuration. No public endpoint lists the allowlist either — `/v1/chains` and `/v1/networks` both 404 — so it is discoverable only by probing.
+**What is measured, and what is not.** The behaviour above is measured. The *mechanism* is not. The error says "**App** is not authorized", which reads more like per-app provisioning than a global allowlist, and we could not establish which it is:
+
+- No chain configuration appears on the app object (`GET /v1/apps/{id}` returns auth and branding fields only).
+- `/v1/chains`, `/v1/networks`, `/v1/apps/{id}/chains` and `/v1/apps/{id}/settings` all 404.
+- The OpenAPI spec contains six `eip155:` literals and they are examples, not an enum.
+- There is no public repository where server-side chain support is defined — `privy-io` publishes SDKs, examples and starters, so there is nothing to send a patch to.
+
+**A contrast worth knowing.** Privy's *client-side embedded* wallets explicitly support any EVM chain, via `supportedChains` on `PrivyProvider` and `defineChain` for chains viem does not ship. That is a different architecture: your app holds the RPC and broadcasts. Server wallets over REST have Privy broadcast, which needs an RPC connection on their side — a plausible explanation for the difference, but still inference.
+
+**The architecture is documented, not a workaround.** Privy's own docs describe signing without broadcasting for exactly this case: *"To sign without broadcasting — for example when using a custom RPC or gas sponsor — use `…_signTransaction` instead."* So "Privy signs, we broadcast" is a supported path, not a hack around a limitation.
+
+**If this needs resolving:** ask Privy directly (privy.io/slack) whether Arc can be enabled for an app. It is not a code change on our side and not something a pull request can fix.
 
 **Signing needs none of that.** `eth_signTransaction` is a pure key operation inside the enclave over RLP bytes, and `chain_id` is just a field in the payload. So the architecture is forced and correct: **Privy signs, we broadcast.**
 
