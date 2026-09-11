@@ -8,6 +8,8 @@
 
 **Format:** record at 1920×1080. The track requires 720p or better. Zoom the browser until hashes and log values read cleanly at that size.
 
+**Recording aids:** [publication and recording checklist](./RECORDING-CHECKLIST.md) · [narration only](./VIDEO-NARRATION.md). The live-shot cutoff below is **Friday September 11, 5:47:22 pm EDT**. This script presents recorded transactions; it does not require connecting a wallet or sending a new draw.
+
 **Source rule:** every number spoken or shown comes from `scenarios/output/arc-facility-evidence.json` or `.md` (the live run on 2026-09-10), or from a read of the deployed contracts. Each one is traced in [Sources](#sources) at the end. If a figure isn't in that table, don't say it.
 
 ---
