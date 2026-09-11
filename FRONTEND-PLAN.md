@@ -1,6 +1,6 @@
 # Signa Covenant frontend implementation plan
 
-Status: planned; implementation has not begun under this plan. Created 2026-09-11.
+Status: in progress on `frontend/desk`. Checkpoint 1 (build green, fixtures isolated) complete 2026-09-11; later stages await its review. Created 2026-09-11.
 
 ## Objective and sources
 
@@ -61,7 +61,7 @@ Sources: research §§2, 4.2–4.3, 6.1–6.9, 7.1.
 - [ ] Encode reusable Signa UI rules as the design skill proposed in research §7.1, following the installed skill-creation workflow when creating it.
 - [ ] Evaluate the research's Tailwind, Base UI, Sonner and NumberFlow choices explicitly. Record compatible selections or equivalent implementations; do not silently drop their required behavior.
 - [ ] Separate reads, derived presentation, preflight, wallet state and transaction state. Keep component identity stable across polling and input changes.
-- [ ] Isolate UI test fixtures from the shipped live route. A mocked preview must carry an unmistakable label and cannot submit a live transaction.
+- [x] Isolate UI test fixtures from the shipped live route. A mocked preview must carry an unmistakable label and cannot submit a live transaction. — `apps/dashboard/src/test/fixtures.ts`, `test/fixtures.test.ts`; evidence in the work log, 2026-09-11 checkpoint 1.
 
 Suggested structure, to finalize after the client handshake:
 
@@ -245,3 +245,4 @@ This order avoids a dashboard that is visually finished but behaviorally incompl
 | Date | Change | Evidence / next action |
 |---|---|---|
 | 2026-09-11 | Six-stage plan written; partial existing implementation recorded | Next: reason through ownership, scope decisions and first implementation slice with the user |
+| 2026-09-11 | Checkpoint 1 on `frontend/desk` (`7192c5c`, `2dc8b63`, `a63e015`): fixtures module for `/test-ui/`; the 26 dashboard type errors resolved; React, React DOM and @types/react pinned to 19.2.8, @types/react-dom to 19.2.7 (no 19.2.8 release exists); lockfile regenerated | Dashboard typecheck 0 errors (was 26); dashboard `check` green: ABI check, typecheck, 6 fixture tests, build. Root `pnpm check`: 64 TypeScript + 31 Solidity tests, unchanged; dashboard builds. Production `dist/` contains no fixture code and no `test-ui` entry. Browser on `127.0.0.1:5174`: `/`, `/security/`, `/app/` (live Arc snapshot, reserve-held verdict, recorded ledger) and `/test-ui/?state=cure` (fixture label, CURE 68.40%, held verdict, no signing) render. Open: state-matrix rows that need injected EIP-1193/RPC fixtures (wallet, transaction lifecycle, repay approval); root `pnpm check` does not typecheck the dashboard's `.tsx`; dependency declarations are skipped (wagmi 3.7.7 and TanStack query-core generics disagree; optional connector peers are absent) |
