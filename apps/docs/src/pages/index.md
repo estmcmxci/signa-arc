@@ -20,7 +20,7 @@ Each of these happened on chain, with receipts. See [Recorded on Arc Testnet](/e
 
 ## What is real, and what is not
 
-The deployment is on Arc Testnet, chain 5042002. The facility is fictional, the provider data is a labelled mock, and the money is testnet USDC. A signature authenticates who asserted what; it does not prove that a hedge legally exists. EURC is named as the exposure's denominating asset and is never moved.
+The deployment is on Arc Testnet, chain 5042002. The facility is fictional, the provider data is a labelled mock, and the money is testnet USDC. A signature authenticates who asserted what; it does not prove that a hedge legally exists. In this deployment both issuers are test keys held by the project: no bank or hedge provider has signed anything, and the exposure and hedge data are labelled mocks. EURC is named as the exposure's denominating asset and is never moved.
 
 ## The signa CLI today
 
