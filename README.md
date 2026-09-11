@@ -100,9 +100,11 @@ Arc is Circle's EVM-compatible L1 where **USDC is the native gas token**. Canoni
 | `FacilityRegistry` | [`0xB54fe913C4a7dE73Bc285338dCbb384AEec5e448`](https://testnet.arcscan.app/address/0xB54fe913C4a7dE73Bc285338dCbb384AEec5e448) | [`0x6616528d…`](https://testnet.arcscan.app/tx/0x6616528d287af73044bf69fe22126cce92df818b9ac01fe4f0ec01851cc51b62) |
 | `CredentialRegistry` | [`0xD921734C9314442a74Cd3FEBAB8028b2Bb9A7624`](https://testnet.arcscan.app/address/0xD921734C9314442a74Cd3FEBAB8028b2Bb9A7624) | [`0x065e74b6…`](https://testnet.arcscan.app/tx/0x065e74b65246258c403f97d5e36ae61b03f5748a39fec49b5fda2cb96149a5e0) |
 | `CoverageEngine` | [`0x3341B76fEFF4CE691781fEAa4C76EA95479b9b6b`](https://testnet.arcscan.app/address/0x3341B76fEFF4CE691781fEAa4C76EA95479b9b6b) | [`0x47ff2820…`](https://testnet.arcscan.app/tx/0x47ff28200b800f3576a8bac4acf5c35b8ee2febe11d6d188caa8a3e8a4e85606) |
-| `CovenantVault` | [`0x1970feb699BCd4dd268a3A8c2590929fc8fd67c2`](https://testnet.arcscan.app/address/0x1970feb699BCd4dd268a3A8c2590929fc8fd67c2) | [`0xa6ee1d47…`](https://testnet.arcscan.app/tx/0xa6ee1d47676d80e9dc032cdb6816c6e5f90cc22f2c67cbd32c19b333280977d0) |
+| `CovenantVault` | [`0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51`](https://testnet.arcscan.app/address/0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51) | [`0xb1b66ee3…`](https://testnet.arcscan.app/tx/0xb1b66ee3b3494ec9878c0808269dd82beef2f523e823408a358fe75d2fe6da52) |
 
 Deployed from source commit `7d66394654fa2147da495027af6d64cac38d2cf8`. Facility policy: minimum coverage 100.00%, default haircut 5.00%, 24-hour credential freshness, 7-day maturity tolerance, 5-day cure window, 3-day maximum waiver.
+
+**The facility admin is a Privy 2-of-2 key quorum** at [`0x55C4DD3770A44695735717CB7b7005AC7dE9edA1`](https://testnet.arcscan.app/address/0x55C4DD3770A44695735717CB7b7005AC7dE9edA1) — two named approvers, neither sufficient alone. `FacilityRegistry` writes `admin` once and has no setter, so that is permanent. Creating a waiver — the one action that overrides the covenant — therefore requires both. See `packages/privy-waiver/`.
 
 ### EURC is referenced, never moved
 
