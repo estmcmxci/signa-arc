@@ -1,6 +1,6 @@
 # Signa Covenant frontend implementation plan
 
-Status: in progress on `frontend/desk`. Checkpoint 1 (build green, fixtures isolated) complete 2026-09-11; later stages await its review. Created 2026-09-11.
+Status: in progress on `frontend/desk`. Checkpoint 1 (build green, fixtures isolated) accepted 2026-09-11. Checkpoint 2 (injected wallet and chain fixtures, browser tests, the zero-exposure correction) complete 2026-09-11, and **stage 1 is complete** with it. Stages 3–6 remain. Created 2026-09-11.
 
 ## Objective and sources
 
@@ -37,13 +37,13 @@ Local development currently runs at `http://127.0.0.1:5173/`. A server response 
 
 Sources: research §§0–1, 2–7; especially §7.6.
 
-- [ ] Read the complete research and expand the traceability table below to cover all actionable recommendations.
-- [ ] Audit existing components against those requirements; mark reuse, adaptation or replacement with file references.
-- [ ] Record behavior corrections: a signed credential is not legal proof; registry acceptance is not eligibility; stored state is not necessarily the current verdict; repayment does not automatically reduce independently asserted exposure.
-- [ ] Document the component tree and screen hierarchy before changing the app entrypoint.
-- [ ] Agree shared-client/manifest ownership with the CLI/docs implementer, including root configuration and lockfile edits.
-- [ ] Establish deterministic browser fixtures for each required state, explicitly isolated from the live product.
-- [ ] Resolve dependency compatibility from current official documentation and installed APIs; record pinned versions rather than trusting the research's historical version list.
+- [x] Read the complete research and expand the traceability table below to cover all actionable recommendations. — All 1,561 lines read 2026-09-11; "Research traceability" now carries every actionable §0–§7.7 recommendation with a destination, a state and a verification, plus two corrections to the research itself.
+- [x] Audit existing components against those requirements; mark reuse, adaptation or replacement with file references. — "Component audit": fifteen areas with file references, four marked adapt, one marked replace (`src/main.ts`, orphaned), and the open items named.
+- [x] Record behavior corrections: a signed credential is not legal proof; registry acceptance is not eligibility; stored state is not necessarily the current verdict; repayment does not automatically reduce independently asserted exposure. — "Behaviour corrections": each names where the code enforces it and the fixture or commit that proves it; three further corrections were found and fixed in checkpoint 2.
+- [x] Document the component tree and screen hierarchy before changing the app entrypoint. — "Component tree and screens" records the four screens and what `src/app/Desk.tsx` actually renders, with the divergence from the contract's named tree stated rather than glossed.
+- [x] Agree shared-client/manifest ownership with the CLI/docs implementer, including root configuration and lockfile edits. — `output/FRONTEND-CONTRACT.md` (ownership, the `manifest.ts` handoff, the per-branch lockfile rule) plus the note under "Ownership while CLI/docs work proceeds"; checkpoints 1 and 2 stayed inside that boundary.
+- [x] Establish deterministic browser fixtures for each required state, explicitly isolated from the live product. — "Fixture matrix": every state-matrix row has a fixture and a named test; isolation is proven by the build-bundle scan, the storage assertion and the off-network guard. One gap is recorded rather than hidden (`pair-mismatch`).
+- [x] Resolve dependency compatibility from current official documentation and installed APIs; record pinned versions rather than trusting the research's historical version list. — "Dependency decisions": sixteen rows of installed pins, including three divergences from the research and the wallet-kit rejection re-verified against the installed connector.
 
 Deliverables: this tracker with full traceability, ownership agreement, component/data contracts, fixture matrix, dependency decisions.
 
@@ -155,27 +155,169 @@ Sources: research §7.6 and the contract/claims constraints in repository author
 
 Exit: the checklist is accounted for and the built app has passed meaningful browser and transaction-state validation. Remaining product decisions are explicitly named, not disguised as completed features.
 
-## Initial research traceability
+## Research traceability
 
-Expand this during Stage 1; this is a topic index, not a claim that every individual recommendation is already enumerated.
+The complete research (1,561 lines) was read on 2026-09-11. Every actionable recommendation is listed below with a destination and a verification. Background examples, competitor inventories and source lists are inputs, not requirements, and are not enumerated.
 
-| Research | Requirement area | Stage | Verification |
+| Research | Actionable recommendation | Destination | State | Verification |
+|---|---|---|---|---|
+| §0.1, §6.2 | React for the dashboard; keep the landing framework-free | `src/app/**`; `index.html` + `src/landing/main.ts` | done | Both entries build and render; browser tests drive the desk |
+| §0.2, §5.4, §6.4 | Simulate before every write; decode the custom error; render the verdict before signing | `src/data/client.ts` (`simulate`, `classifyError`), `src/data/transactions.ts` | done | `test/chain.test.ts` draw refusals; `e2e` held-draw test |
+| §0.3, §2.1, §2.5 | Replace the DeFi visual language with a warm sand ramp and one accent | `src/design/tokens.css` | done | Checkpoint 1 browser review |
+| §0.4, §4.2 | Tabular figures, one decimal discipline per column, pinned locale, U+2212 | `tokens.css` `.num`; `src/data/format.ts` | done | `money`/`percent` floor and pin `en-US`; `−` in `money` |
+| §0.5, §5.1–§5.10 | A refusal is a verdict, not an error | `src/app/Desk.tsx` verdict panel; `src/data/reasons.ts` | done | Browser tests: covenant hold, authorization verdict |
+| §1 | The 48-hour cut and its ordering | — | done | Checkpoints 1 and 2 |
+| §2.2 | Named easings, UI under 300ms, frequency gate, never-ship list, reduced motion | `tokens.css`, `src/app/styles.css` | partly | `prefers-reduced-motion` honoured; hover motion is not yet gated behind `@media (hover: hover)` — stage 5 |
+| §2.3 | Almost nothing animates; `:active scale(.97)`; hierarchy by weight and colour | `tokens.css`, `styles.css` | done | Source review |
+| §2.4, §7.1 | Encode the UI rules as a skill before generating components | `.claude/skills/signa-ui/` | exists, uncommitted | Present in the worktree; `.claude/` is excluded from this branch's commits |
+| §2.5 | No imported delight; not his brand yellow | — | done | No clip-path, spring or `#fad657` in the dashboard |
+| §3.1, §3.4, §3.6 | Hero in credit language with zero crypto vocabulary; every crypto term spent on a consequence | `index.html` hero | done | "Make FX coverage a condition of drawdown." |
+| §3.2 | Trust devices in order; say what the product is not, above the fold | `index.html`, `security/index.html` | partly | Boundary statement is above the fold; the legal-entity block waits on D-02 |
+| §3.3 | The amateurism list | `index.html` | done | No stock imagery, rocket, TVL ticker or `Launch App` CTA |
+| §3.5 | The nine bands | `index.html` | done | hero, problem, mechanism, enforcement, evidence, audience, trust, contact, footer |
+| §4.1 | Provenance per figure; never `0` for a failed read; floor the ratio | `Desk.tsx` metrics; `format.ts` | done | `partial` fixture renders `—` and names the unavailable fields |
+| §4.2 | `ch` width on the ratio; 6+6 truncation | `styles.css`; `format.ts` `short()` | open (stage 5) | No `min-width` in `ch`; `short()` is 8+6, not 6+6 |
+| §4.3 | Word + shape + colour; magenta BREACH; `role="status"`; hatched surplus | `components/ui.tsx` `Badge`; `tokens.css`; `.surplus` | done | Badge glyphs; `--breach` is magenta; red is reserved for READ FAILED |
+| §4.4 | Gross and counted separately, cap visible, fixed threshold marker, signed bp delta | `Desk.tsx` `CoverageBar`, metrics | done | Browser: counted and gross both shown; `delta()` in bp |
+| §4.5 | Freshness from the credential's own window; demote the ratio; relative and absolute | `format.ts` `freshness`; `Desk.tsx` | done | `stale` fixture; the zero-exposure correction below |
+| §4.6 | Never optimistically update risk figures; pending row only; scope the disable | `Desk.tsx`, `transactions.ts` | done | Browser: available draw stays confirmed with a pending caption |
+| §4.7 | Skeleton for 1–10s; spinner only when the layout is unknown; escape hatch past 10s | — | open (stage 5) | No skeletons yet; the `slow` fixture exists to test them |
+| §4.8 | Receipt field set, before → after, full hash on detail, copy live region, "reverted ≠ not executed", what happens next | `Desk.tsx` `ReceiptDetail`; `transactions.ts` `receipt` | done | Browser: declined and reverted details |
+| §4.9 | Density modes, 5–7 KPIs, action-first line, colour only ever means state | `tokens.css` density vars; `Desk.tsx` | done | Density control; four metrics under a condition line |
+| §5.1 | Three outcome classes; error styling only for "could not evaluate" | `data/types.ts` `Verdict.kind`; `classifyError` | done | Five-way kind; only `system` renders as an error |
+| §5.2 | Statement-of-fact framing; icon matches text | `reasons.ts` | done | Copy review |
+| §5.3 | `aria-disabled` with the reason adjacent, never in a tooltip | `Desk.tsx` action row | done | Browser tests click the gated control and read the notice |
+| §5.4 | Always-on preflight, debounced, re-simulated before sending | `Desk.tsx` preflight query; `transactions.ts` `sendOne` | done | 250ms debounce; every step re-simulates |
+| §5.5 | One reason table: class, headline, explanation, remedy, actor | `data/reasons.ts` | partly | Headline, explanation, remedy and actor present; no explicit class column |
+| §5.6 | The waiver as a governed, dated override | `Desk.tsx` waiver panel | done | Quorum approval and the underlying evaluation shown together |
+| §5.7 | Control as actor; banned verbs; two remedies; results before action | `reasons.ts` | done | Copy review |
+| §5.8 | No X, no warning triangle; red only for system failure | `ui.tsx` glyphs | done | ▣ hold, ⬡ breach, ■ error |
+| §5.9 | The same motion for permit and refuse; no shake, flash or modal | `styles.css` | done | The verdict panel resolves in place |
+| §5.10 | One ledger, identical treatment | `Desk.tsx` ledger | done | Held, declined, reverted and confirmed share one table |
+| §6.1, §6.10 | One Vite project, two entries, no router; no keyed RPC in a `VITE_` var | `vite.config.ts`; `client.ts` | done | Build emits `/`, `/app/`, `/security/`; direct refresh tested |
+| §6.3 | `arcTestnet` from viem; Multicall3; the 6-decimal ERC-20 view | `client.ts` | done | `validateDeployment` checks decimals; multicall at a pinned block |
+| §6.5 | `injected()` only; no wallet kit; wagmi v3 names | `app/main.tsx` | done | Browser: connect, chain switch, account change |
+| §6.6 | One multicall read set; `allowFailure`; no `watchContractEvent`; local receipt log | `client.ts`, `ledger.ts` | done | `partial` fixture degrades one field only |
+| §6.7 | Tailwind 4, Base UI, Sonner, NumberFlow, plain SVG chart, no motion library | `package.json`, `ui.tsx`, `Desk.tsx` | done, one divergence | The coverage meter is a hand-rolled `role="meter"`, not Base UI's `Meter` |
+| §6.8 | `bigint` end to end; format only at the render boundary | `format.ts` | done | No `Number()` on a money path |
+| §6.9 | Inter Variable and Geist Mono through Fontsource | `app/main.tsx` imports | done | The build emits both families |
+| §6.11 | The pinned dependency list | `apps/dashboard/package.json` | done, with corrections | "Dependency decisions" below |
+| §7.2 | A filterable, exportable verdict ledger | `Desk.tsx`, `ledger.ts` | done | CSV and JSON export, bounded to 500 local rows |
+| §7.3 | Multi-facility work queue | — | deferred, D-03 | Needs real discovery and a data scope |
+| §7.4 | Density, keyboard, command palette | `Desk.tsx` | done | ⌘K, `d`, `s`, `j`/`k`; preferences persist |
+| §7.5 | Point-of-use mock labels | `Desk.tsx` mock tags | done | Issuer and hedge rows carry their own labels |
+| §7.6 | The pre-ship checklist | — | open (stages 5–6) | Numbers, state, refusal and receipt items partly verified; run item by item |
+| §7.7 | Exclusion drill-down, counterfactual amount, waiver artefact | `Desk.tsx` `CredentialDetail`, `maximumDraw`, waiver panel | done | All three present; the trace is the engine's own reason, not a reconstruction |
+
+**Corrections to the research, from the installed APIs.** §4.8 cites "44×44px per WCAG 2.5.8"; 2.5.8 (AA) is 24×24 CSS pixels and 44×44 is 2.5.5 (AAA), so the 32px copy targets meet AA. §6.11 pins React 19.3.0, which does not exist on the registry; see "Dependency decisions".
+
+## Component audit
+
+Against the requirements above, as of checkpoint 2.
+
+| Area | Files | Verdict | Note |
 |---|---|---|---|
-| §§0–1 | Full scope, ordering and explicit cuts/decisions | 1 | Complete requirement inventory |
-| §§2.1–2.5 | Tokens, hierarchy, focus, motion and craft | 2, 5 | Component/browser review |
-| §§3.1–3.6 | Landing structure, vocabulary and claim discipline | 4 | Page and source/link review |
-| §§4.1–4.2 | Provenance, precision and numeric typography | 3 | Boundary tests and browser inspection |
-| §§4.3–4.5 | State, gross/count cap and freshness | 3 | Controlled-state browser tests |
-| §§4.6–4.9 | Pending state, loading, receipts and density | 3, 5 | Lifecycle and responsive tests |
-| §§5.1–5.10 | Outcome model, preflight, remedies and unified ledger | 3, 5 | Refusal/race/receipt scenarios |
-| §§6.1–6.12 | Frameworks, wallet, reads, formatting, build/deploy | 1–3, 6 | API checks, builds and local integration |
-| §7.1 | Reusable design skill | 2 | Skill and component consistency |
-| §7.2 | Filterable/exportable verdict ledger | 3, 5 | Source-labelled export; bounded history |
-| §7.3 | Multi-facility work queue | Decision D-03 | Real discovery/data contract required |
-| §7.4 | Density, keyboard and command palette | 5 / D-04 | Keyboard and preference persistence |
-| §7.5 | Inline mock/provenance boundaries | 3–5 | Point-of-use labels in every relevant view |
-| §7.6 | Pre-ship checklist | 5–6 | Item-by-item verification |
-| §7.7 | Exclusion details, amount exploration, dated waiver | 3, 5 / D-05 | Authoritative reasons and bounded simulation |
+| Landing page | `index.html`, `src/landing/main.ts`, `src/landing/styles.css` | reuse | All nine bands present. The entry creates no wallet or RPC client and reads only checked-in records; the contact form composes a mail draft and says so. |
+| Trust boundary page | `security/index.html` | reuse | Shares the landing entry script and tokens. |
+| Operator desk | `src/app/Desk.tsx` (~39 KB, one component plus six local ones) | adapt | Renders the whole desk from a single file. The contract's named tree is not yet extracted; see below. |
+| Shared primitives | `src/components/ui.tsx` — `Badge`, `Help`, `Copy`, `Modal`, `Panel` | reuse | Base UI tooltip and dialog; copy feedback goes to a live region with `role="alert"` on failure. |
+| Tokens | `src/design/tokens.css` | reuse | Sand ramp, status hues, density variables, focus ring, reduced motion. |
+| Desk styles | `src/app/styles.css` | adapt | Open: no `ch` width on the ratio; hover motion is not gated behind `@media (hover: hover)`. |
+| Browser adapter | `src/data/client.ts` | reuse | One multicall at a pinned block; `classifyError` keeps the ABI-drift alarm. |
+| Transaction lifecycle | `src/data/transactions.ts` | reuse, two corrections | Declined and non-repricing replacements were misclassified; corrected in checkpoint 2. |
+| Journal and recorded evidence | `src/data/ledger.ts` | reuse | Local rows bounded at 500; recorded evidence is separately labelled. |
+| Formatting | `src/data/format.ts` | reuse | Open: `short()` truncates 8+6 where the research asks for 6+6. |
+| Reason registry | `src/data/reasons.ts` | adapt | Carries headline, explanation, remedy and actor; the outcome class (§5.5) is still implicit in `Verdict.kind`. |
+| Manifest | `src/manifest.ts` | reuse | Frontend-owned under the contract; the CLI copies its validator. |
+| Fixtures | `src/test/fixtures.ts`, `chain.ts`, `wallet.ts`, `harness.ts`, `entry.ts` | reuse | Development entry only; see the fixture matrix. |
+| Pre-React dashboard | `src/main.ts` (47 KB) | replace — delete | No HTML entry, import or build input references it; it is the vanilla implementation React replaced. Left in place for now: deleting another owner's file is outside this checkpoint's targeted-change rule. |
+| Generated ABI subset | `src/data/abi/*.json`, `scripts/generate-abi.mjs` | reuse | `abi:check` guards drift; `test/chain.test.ts` now checks the fixture node against the same ABIs. |
+
+## Behaviour corrections
+
+Each correction names where the code enforces it, so a later change cannot quietly undo it.
+
+| Correction | Enforced in | Evidence |
+|---|---|---|
+| A signed credential is not legal proof | `Desk.tsx` credentials caption; `security/index.html` | "A signature authenticates who asserted these fields. It does not prove a hedge legally exists." |
+| Registry acceptance is not eligibility | `client.ts` reads `hedgeEligibility` per hedge; `CredentialDetail` | `revoked` and `maturity` fixtures: accepted credentials, excluded by the engine |
+| Stored state is not necessarily the current verdict | `Desk.tsx` shows stored `covenantState` separately from the evaluation; every action re-simulates | `stale` and `expired-waiver` fixtures: storage reads COMPLIANT or WAIVED while a draw's own sync moves to CURE |
+| Repayment does not reduce independently asserted exposure | `Desk.tsx` policy fact and confirmation copy; the chain fixture moves principal only | "Repayment reduces this principal, not the signed exposure obligation." |
+| An all-zero exposure record means none was accepted, not stale evidence | `Desk.tsx` `exposure` / `noExposure` | Commit `271551a`; browser test "an all-zero exposure record reads as no exposure, in both fixtures" |
+| A declined wallet request is not an unresolved send | `transactions.ts` `declined()` | Commit `0e1720a`; browser test "a declined wallet request is recorded as declined" |
+| A replacement that is not a repricing did not execute the requested action | `transactions.ts` `services.wait` | Commit `0e1720a`; browser test "a replacement that is a different transaction is not reported as a completed draw" |
+
+## Component tree and screens
+
+What the app actually renders today. The contract's named tree is the extraction target, not a description of the present code.
+
+```text
+/                      index.html + src/landing/main.ts          no React, no wallet, no RPC client
+/security/             security/index.html                       same entry script and tokens
+/app/                  app/index.html → src/app/main.tsx
+  WagmiProvider → QueryClientProvider → Tooltip.Provider
+    Desk                                                          src/app/Desk.tsx
+      topbar · truth strip · facility heading + wallet area
+      attention line (Badge, agenda, refresh) · read context
+      metrics ×4                                                  Metric; NumberFlow on counted coverage
+      operator grid
+        Coverage gate          amount field · verdict · action row · explore a smaller draw
+        Frozen facility policy Fact ×8
+        How cover is counted   CoverageBar · Sparkline
+      notices · Independent assertions (exposure strip, hedge table)
+      Governed exceptions (waiver artefact) · Decision & transaction ledger
+      footer
+      Modal ×4               review transaction · decision detail · assertion admissibility · command palette
+      Toaster                transaction lifecycle only; never a refusal
+/test-ui/              test-ui/index.html → src/test/entry.ts, then src/app/main.tsx   development only
+```
+
+The desk is one file. Splitting it into the contract's tree (FacilityHeader / ActionQueue / Metrics / CoverageDetails / ActionComposer / Credentials / Waiver / DecisionLedger) is the first item of the remaining stage-2 work; it was not done in checkpoint 2 because the brief required targeted changes to the existing structure.
+
+## Fixture matrix
+
+Every state-matrix row, the fixture that produces it, and the test that proves it. Snapshot fixtures answer at the snapshot boundary; chain fixtures answer at the RPC and wallet boundary, so the desk's live code path runs unchanged.
+
+| State-matrix row | Snapshot fixture | Chain fixture | Proven by |
+|---|---|---|---|
+| Compliant, sufficient liquidity | `?state=compliant` | `?chain=compliant` | `test/fixtures.test.ts`; browser "the chain fixture is labelled, and the desk reads it through its live path" |
+| Compliant, retained reserve prevents the draw | `?state=reserve` | `?chain=reserve` | `fixtures.test.ts` ReserveViolation; `chain.test.ts` per-state refusals |
+| Below threshold / CURE | `?state=cure` | `?chain=cure` | browser "a held draw is recorded as a local simulation with no transaction" |
+| BREACH / cure expiry | `?state=breach` | `?chain=breach` | `chain.test.ts` `DrawNotAllowed(3)` |
+| Active / expired waiver | `?state=waived`, `?state=expired-waiver` | same | `chain.test.ts`: waived permits, a lapsed waiver falls back to CURE |
+| Stale / missing / revoked / mismatched credential | `?state=stale`, `missing`, `revoked`, `maturity` | same | `chain.test.ts`; browser "an all-zero exposure record reads as no exposure" |
+| RPC slow / failed / partially failed | `?state=slow`, `rpc-error`, `partial` | `?chain=slow`, `rpc-error`, `partial` | browser "failed and partial reads stay distinct from fabricated zeros" |
+| Disconnected / wrong account / wrong chain | — | `&wallet=wrong-chain`, `&wallet=other-account`, panel controls | browser "a wallet on another chain, and an account that is not the operator, cannot draw" |
+| Invalid / tiny / excessive / rapidly edited amount | any | any | `parseAmount` guards and the desk's input state; open: focused unit tests, stage 6 |
+| Wallet rejected / submitted / pending / replaced / reverted / confirmed | — | panel: approve, decline, mine, speed up, cancel, replace, revert next | six browser tests plus `chain.test.ts` lifecycle and replacement reasons |
+| Repay approval succeeds, repayment fails | — | `?chain=compliant` with the revert toggle | browser "repayment approves first, and a failed repayment leaves the approval standing" |
+| Historical evidence alongside live state | recorded rows from the acceptance evidence | same | ledger source labels; browser tests select on "This browser" |
+| Pair mismatch (exposure reason 4) | not modelled | not modelled | open: add a `pair-mismatch` fixture in stage 3 |
+
+**Isolation from the live product.** The fixtures load only from the development `/test-ui/` entry, which no build input includes; `src/test/fixtures.ts` refuses any other browser context, and the harness fails closed by removing `#app`. In the test entry the fixture wallet replaces `window.ethereum`, EIP-6963 announcements are dropped, `localStorage` is routed to the tab's `sessionStorage`, and fetch and WebSocket cannot leave the page's origin except to the fixture node. Verified by `e2e/desk.build.spec.ts` (the built bundle contains no fixture string and `/test-ui/` is not served), by the storage assertion in the draw test, and by the `offNetwork` guard that fails any test whose page attempts a request off this machine.
+
+## Dependency decisions
+
+Versions as installed and verified, not as the research listed them.
+
+| Dependency | Research | Installed | Decision and what was verified |
+|---|---|---|---|
+| `react`, `react-dom` | 19.3.0 | 19.2.8 | 19.3.0 is not published; 19.2.8 matches the docs worktree |
+| `@types/react`, `@types/react-dom` | — | 19.2.8, 19.2.7 | No 19.2.8 of the DOM types exists; 19.2.7 accepts `@types/react ^19.2.0` |
+| `wagmi` | 3.7.7 | 3.7.7 | `injected()` only. Verified against the installed connector: `wallet_requestPermissions` → `eth_accounts`, and `wallet_switchEthereumChain` resolving only once `chainChanged` arrives |
+| `viem` | 2.56.3 | ^2.56.3 | `arcTestnet` (Multicall3 at `blockCreated: 0`), `ContractFunctionRevertedError` decoding, and `waitForTransactionReceipt`'s repriced / cancelled / replaced detection, all exercised by the fixture node |
+| `@tanstack/react-query` | 5.102.8 | 5.102.8 | Poll at 4s; obsolete preflights discarded by key |
+| `@base-ui/react` | 1.8.0 | 1.8.0 | Tooltip and Dialog adopted. **Divergence:** the coverage bar is a hand-rolled `role="meter"`, not Base UI's `Meter` |
+| `sonner` | 2.0.8 | 2.0.8 | Single-id transaction lifecycle; a refusal never becomes a toast |
+| `@number-flow/react` | 0.6.2 | 0.6.2 | Counted coverage only; respects reduced motion |
+| `tailwindcss`, `@tailwindcss/vite` | 4.3.3 | 4.3.3 | Dashboard only; the landing page is plain CSS |
+| `@vitejs/plugin-react` | 6.1.1 | 5.2.0 | Installed pin kept; the whole check suite is green on it. Upgrading is a stage-6 integration decision |
+| `vite` | ^7.2.2 | ^7.2.2 | Stay on 7; Rolldown is not adopted mid-build |
+| `typescript` | 5.9.3 | ^5.9.3 (root) | wagmi v3's floor |
+| `@playwright/test`, `@axe-core/playwright` | anticipated by §7.6 | 1.58.2, 4.11.1 | Chromium 1208 installed to match 1.58.2 |
+| Wallet kits | rejected | none | RainbowKit, ConnectKit and Dynamic remain wagmi-v2 or React-18 bound |
+| `declare module 'wagmi'` Register | recommended | not adopted | The desk compares `connection.chainId` with `arcTestnet.id` explicitly; adopting the augmentation is a stage-3 option |
+| Chart, motion and money libraries | rejected | none | Plain SVG sparkline, CSS transitions, `bigint` arithmetic |
 
 ## State matrix
 
@@ -205,6 +347,8 @@ Expand this during Stage 1; this is a topic index, not a claim that every indivi
 | Root scripts, TypeScript config, lockfile, CI | One integration owner per change; coordinate before concurrent dependency installs |
 | Solidity, deployment/evidence JSON, signature vectors | Preserve; not frontend work |
 | Recording materials | Preserve and update routes/captures only when UI changes require it |
+
+**Agreed and in force since checkpoint 1.** `output/FRONTEND-CONTRACT.md` records the settled version: the frontend owns `apps/dashboard/**` including `src/manifest.ts`, with the CLI copying its validator rather than sharing the file; each branch generates its own lockfile and the second integrator reruns installation instead of hand-merging; root integration changes stay with one owner. Checkpoints 1 and 2 were implemented inside that boundary — every commit touches `apps/dashboard/**` plus, by explicit authorization, that contract's React line. Nothing in `packages/`, the CLI, `apps/docs/`, contracts, deployments or evidence was modified.
 
 Prefer separate worktrees/checkouts for independent implementation when available. With a shared checkout, use file ownership and serialized integration. Do not discard another agent's changes or regenerate its lockfile blindly.
 
@@ -245,4 +389,5 @@ This order avoids a dashboard that is visually finished but behaviorally incompl
 | Date | Change | Evidence / next action |
 |---|---|---|
 | 2026-09-11 | Six-stage plan written; partial existing implementation recorded | Next: reason through ownership, scope decisions and first implementation slice with the user |
+| 2026-09-11 | Checkpoint 2 on `frontend/desk` (`271551a`, `f01497a`, `0e1720a`, `f9ba995`, `09e7417`): zero-exposure correction; injected EIP-1193 wallet and in-memory Arc node fixtures behind `/test-ui/?chain=`; declined and replaced outcomes corrected; Playwright suite behind `test:browser`; the contract's React line. Stage 1 completed and ticked | Dashboard `check` green: ABI check, typecheck (now including `e2e/**`), 17 unit tests (was 6), build. Browser: 15 dev-entry tests on `127.0.0.1:5174` and 4 built-preview tests on `127.0.0.1:5175`, all passing, including axe on the landing, security, desk and both fixture entries. Root `pnpm check`: 64 TypeScript + 31 Solidity, unchanged. Built bundle scanned: no fixture string, no `test-ui` entry. Open: stage 2's component extraction, skeletons, `ch` width, hover-motion gating, a `pair-mismatch` fixture |
 | 2026-09-11 | Checkpoint 1 on `frontend/desk` (`7192c5c`, `2dc8b63`, `a63e015`): fixtures module for `/test-ui/`; the 26 dashboard type errors resolved; React, React DOM and @types/react pinned to 19.2.8, @types/react-dom to 19.2.7 (no 19.2.8 release exists); lockfile regenerated | Dashboard typecheck 0 errors (was 26); dashboard `check` green: ABI check, typecheck, 6 fixture tests, build. Root `pnpm check`: 64 TypeScript + 31 Solidity tests, unchanged; dashboard builds. Production `dist/` contains no fixture code and no `test-ui` entry. Browser on `127.0.0.1:5174`: `/`, `/security/`, `/app/` (live Arc snapshot, reserve-held verdict, recorded ledger) and `/test-ui/?state=cure` (fixture label, CURE 68.40%, held verdict, no signing) render. Open: state-matrix rows that need injected EIP-1193/RPC fixtures (wallet, transaction lifecycle, repay approval); root `pnpm check` does not typecheck the dashboard's `.tsx`; dependency declarations are skipped (wagmi 3.7.7 and TanStack query-core generics disagree; optional connector peers are absent) |
