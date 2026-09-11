@@ -1,19 +1,39 @@
 {
   "name": "@signa/cli",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "signa: inspect a Signa Covenant facility on Arc Testnet.",
-  "exports": {
-    ".": "./src/cli.ts",
-    "./evidence": "./src/evidence/index.ts"
+  "description": "signa: inspect and operate a Signa Covenant facility on Arc Testnet.",
+  "license": "MIT",
+  "keywords": [
+    "signa",
+    "covenant",
+    "arc",
+    "usdc",
+    "fx",
+    "cli"
+  ],
+  "engines": {
+    "node": ">=22"
   },
-  "dependencies": {
+  "bin": {
+    "signa": "./dist/bin.js"
+  },
+  "exports": {
+    ".": "./dist/bin.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node --import tsx scripts/build.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@fx-coverage/credentials": "workspace:*",
     "@signa/client": "workspace:*",
+    "esbuild": "0.28.2",
     "incur": "0.5.1",
     "viem": "^2.56.3"
-  },
-  "devDependencies": {
-    "@fx-coverage/credentials": "workspace:*"
   }
 }

@@ -8,7 +8,7 @@ import test from "node:test";
 
 import { Cli, z } from "incur";
 
-import { createSignaCli } from "../src/cli.ts";
+import { SIGNA_CLI_VERSION, SIGNA_PACKAGE_NAME, createSignaCli } from "../src/cli.ts";
 import { REPO_ROOT, onlyJson, runSigna } from "./helpers.ts";
 
 const deployedBytes = readFileSync(new URL("deployments/arc-testnet.json", REPO_ROOT));
@@ -187,16 +187,26 @@ test("incur 0.5.1: the envelope flag is --full-output, --verbose is refused, and
   assert.deepEqual(Object.keys(schema.options.properties).sort(), ["manifest", "rpcUrl"]);
 });
 
-test("--update cannot install anything: the workspace package declares no signa bin", async () => {
+test("--update contacts no registry and installs nothing, because the package is not published", async () => {
   const cliPackage = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-  // incur 0.5.1 honours --update even with `update: false`, and installs whichever package declares
-  // the `signa` bin. Until P2 configures an owned package name, none may declare it.
-  assert.equal(cliPackage.bin, undefined, "configure incur's `update` before adding a bin; see SPIKES.md");
+  assert.deepEqual(cliPackage.bin, { signa: "./dist/bin.js" }, "P2 declares the bin");
+  assert.equal(cliPackage.version, SIGNA_CLI_VERSION, "the package version and the CLI's own version must not drift");
+
+  // incur 0.5.1 honours --update even with updates disabled, and with a bin declared it would
+  // otherwise infer a package name and run `npm install --global <name>@latest`. Against a name
+  // nobody owns that installs whatever someone else registered. Supplying both check and install
+  // makes incur use ours instead, so nothing is fetched and no package manager is executed.
+  const source = readFileSync(new URL("../src/cli.ts", import.meta.url), "utf8");
+  const configuration = source.slice(source.indexOf("update: {"), source.indexOf("});", source.indexOf("update: {")));
+  assert.match(configuration, /check: \(\) =>/, "a custom check keeps --update off the registry");
+  assert.match(configuration, /install: \(\) =>/, "a custom install keeps --update away from any package manager");
+
   const run = await runSigna(["--update", "--json"]);
   assert.equal(run.exitCode, 1);
   const error = onlyJson(run);
   assert.equal(error.code, "UPDATE_FAILED");
-  assert.match(error.message, /No update installer is configured for 'signa'/);
+  // Our own message, which proves our installer ran rather than incur's global install.
+  assert.match(error.message, new RegExp(`^${SIGNA_PACKAGE_NAME.replace("/", "\\/")} is not published`));
 });
 
 test("every command that signs is marked destructive and hidden from MCP clients", () => {
