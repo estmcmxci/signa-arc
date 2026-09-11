@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    // incur 0.5.1 publishes a dist/Cli.d.ts that fails TS2304 at line 360 (`_args`, `_options`).
+    // Skipping declaration-file checks is scoped to this package; its own sources stay strict.
+    // See SPIKES.md.
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["**/node_modules/**"]
+}

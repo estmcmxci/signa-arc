@@ -10,10 +10,19 @@
   "scripts": {
     "build:contracts": "forge build",
     "test:contracts": "forge test --offline",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p packages/cli/tsconfig.json",
     "test:ts": "node --import tsx --test packages/*/test/*.test.ts scripts/test/*.test.ts",
     "dashboard:build": "pnpm --filter @fx-coverage/dashboard build",
-    "check": "pnpm build:contracts && pnpm typecheck && pnpm test:ts && pnpm test:contracts && pnpm dashboard:build"
+    "signa": "node --import tsx packages/cli/src/bin.ts",
+    "generate:abis": "node --import tsx scripts/generate-abis.ts",
+    "generate:docs": "pnpm generate:evidence-page && pnpm generate:reference",
+    "generate:evidence-page": "node --import tsx scripts/generate-docs-evidence.ts",
+    "generate:reference": "node --import tsx apps/docs/scripts/generate-reference.ts",
+    "docs:dev": "pnpm --filter @signa/docs dev",
+    "docs:build": "pnpm --filter @signa/docs build",
+    "docs:preview": "pnpm --filter @signa/docs preview",
+    "docs:check": "tsc --noEmit -p apps/docs/tsconfig.json && pnpm docs:build && node --import tsx apps/docs/scripts/verify-build.ts",
+    "check": "pnpm build:contracts && pnpm typecheck && pnpm test:ts && pnpm test:contracts && pnpm dashboard:build && pnpm docs:check"
   },
   "dependencies": {
     "@fx-coverage/credentials": "workspace:*",

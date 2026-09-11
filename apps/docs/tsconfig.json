@@ -3,20 +3,16 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
     "noEmit": true,
     "types": ["node"]
   },
-  "include": [
-    "packages/**/*.ts",
-    "scenarios/**/*.ts",
-    "apps/**/*.ts",
-    "scripts/**/*.ts"
-  ],
-  "exclude": ["apps/docs/**", "packages/cli/**", "**/node_modules/**", "**/dist/**"]
+  "include": ["vocs.config.ts", "scripts/**/*.ts", "src/**/*.ts", "src/**/*.tsx"]
 }

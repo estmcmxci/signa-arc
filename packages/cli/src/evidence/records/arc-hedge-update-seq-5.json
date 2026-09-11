@@ -1,0 +1,162 @@
+{
+  "title": "Hedge update: refreshed at sequence 5, then syncCovenant",
+  "rehearsal": false,
+  "outcome": "complete",
+  "providerDisclaimer": "Mock provider data — no Ebury connection or endorsement.",
+  "generatedAt": "2026-09-10T23:12:02.566Z",
+  "network": {
+    "chainId": 5042002,
+    "rpcUrl": "https://rpc.testnet.arc.network",
+    "explorer": "https://testnet.arcscan.app"
+  },
+  "script": {
+    "path": "scenarios/arc-hedge-update.ts",
+    "commit": "919aa971984bba5381f9b2d3e885afe640357351",
+    "dirty": false
+  },
+  "deployment": {
+    "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+    "credentialRegistry": "0xD921734C9314442a74Cd3FEBAB8028b2Bb9A7624",
+    "coverageEngine": "0x3341B76fEFF4CE691781fEAa4C76EA95479b9b6b",
+    "covenantVault": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51"
+  },
+  "before": {
+    "hedgeSequence": "4",
+    "readAtBlock": "latest",
+    "coverageBps": 10000,
+    "reasonCode": "NONE",
+    "covenantState": "COMPLIANT",
+    "cureDeadline": "0"
+  },
+  "expected": {
+    "coverageBps": 6840,
+    "covenantState": "CURE"
+  },
+  "credential": {
+    "observedAtBlock": {
+      "number": "61472417",
+      "hash": "0x499e464b76c870489a9c569ebdd64c7da6774498efbb9b588ff1c75e285e42c2",
+      "timestamp": "1789081922"
+    },
+    "fixture": {
+      "mock": true,
+      "disclaimer": "Mock provider data — no Ebury connection or endorsement.",
+      "provider_name": "Fictional Treasury Desk",
+      "trade": {
+        "id": "ARC-EUR-USD-001",
+        "buy_currency": "USD",
+        "sell_currency": "EUR",
+        "remaining_buy_amount": "0.720000",
+        "maturity_date": "2027-03-15T21:47:22.000Z",
+        "status": "partially_funded",
+        "updated_at": "2026-09-10T23:12:02.000Z",
+        "credential_valid_until": "2026-09-11T23:12:02.000Z",
+        "sequence": 5,
+        "receipt_reference": "FICTIONAL-ARC-RECEIPT-005"
+      }
+    },
+    "disclaimer": "Mock provider data — no Ebury connection or endorsement.",
+    "issuer": "0xAD515A2BE433e78B6b570064797626012e272e0a",
+    "digest": "0x6d46e4947322d679add970120715c9189eb0704454e61e0ade9363714f0d559c",
+    "credential": {
+      "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+      "tradeIdCommitment": "0xea65d291768b8a3968f0b3fc5d79bdfa39d68d1f4fa11eff157b909b94dde664",
+      "baseCurrency": "0x555344",
+      "quoteCurrency": "0x455552",
+      "remainingNotional": "720000",
+      "maturity": "1805147242",
+      "status": 0,
+      "observedAt": "1789081922",
+      "validUntil": "1789168322",
+      "sequence": "5",
+      "sourceCommitment": "0x1148cbdc844d9c5d42f252a27a6e62912e047d7525fdc1d73a7643dbe64a5cb2"
+    },
+    "signature": "0xf1839adea36bc231f5d87d6a0275e40a05bd24c6ea32f4eaf08f901ed060ef9c3d38eb2643b5788f83ba7f28169e0002797fd38f41c2a4fa659d6d0db38ffb411b"
+  },
+  "steps": [
+    {
+      "action": "submit hedge seq 5 (0.720000 USD, partially_funded)",
+      "transactionHash": "0x0bc3d814570bf18fd317c8dd4794841ba838ba988741bd9a3e21c0eb4c42b04a",
+      "explorer": "https://testnet.arcscan.app/tx/0x0bc3d814570bf18fd317c8dd4794841ba838ba988741bd9a3e21c0eb4c42b04a",
+      "blockNumber": "61472419",
+      "sender": "0x7e09657321f1818825a9a15cedd9d95308130ed4",
+      "expectedStatus": "0x1",
+      "actualStatus": "0x1",
+      "gasUsed": "104605",
+      "covenant": {
+        "readAtBlock": "61472419",
+        "coverageBps": 6840,
+        "reasonCode": "BELOW_THRESHOLD",
+        "covenantState": "COMPLIANT",
+        "cureDeadline": "0"
+      },
+      "events": [
+        {
+          "contract": "0xd921734c9314442a74cd3febab8028b2bb9a7624",
+          "event": "HedgeCredentialAccepted",
+          "args": {
+            "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+            "tradeIdCommitment": "0xea65d291768b8a3968f0b3fc5d79bdfa39d68d1f4fa11eff157b909b94dde664",
+            "issuer": "0xAD515A2BE433e78B6b570064797626012e272e0a",
+            "digest": "0x6d46e4947322d679add970120715c9189eb0704454e61e0ade9363714f0d559c",
+            "sequence": "5",
+            "status": 0,
+            "remainingNotional": "720000",
+            "acceptedAt": "1789081923"
+          }
+        }
+      ]
+    },
+    {
+      "action": "syncCovenant",
+      "transactionHash": "0x9cb2636d23fa7b44d5d5ac45fac37a6632563ac77645772c5c560d061109f3fb",
+      "explorer": "https://testnet.arcscan.app/tx/0x9cb2636d23fa7b44d5d5ac45fac37a6632563ac77645772c5c560d061109f3fb",
+      "blockNumber": "61472429",
+      "sender": "0x7e09657321f1818825a9a15cedd9d95308130ed4",
+      "expectedStatus": "0x1",
+      "actualStatus": "0x1",
+      "gasUsed": "156842",
+      "covenant": {
+        "readAtBlock": "61472429",
+        "coverageBps": 6840,
+        "reasonCode": "BELOW_THRESHOLD",
+        "covenantState": "CURE",
+        "cureDeadline": "1789513928"
+      },
+      "events": [
+        {
+          "contract": "0xa68fb25ba98d522ce8326471a6b6bf3732e3bf51",
+          "event": "CovenantSynchronized",
+          "args": {
+            "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+            "previousState": 1,
+            "newState": 2,
+            "coverageBps": 6840,
+            "requiredCoverageBps": 10000,
+            "outstandingValue": "1000000",
+            "grossEligible": "684000",
+            "countedEligible": "684000",
+            "reason": 3,
+            "cureDeadline": "1789513928"
+          }
+        }
+      ]
+    }
+  ],
+  "after": {
+    "atCallBlock": {
+      "readAtBlock": "61472429",
+      "coverageBps": 6840,
+      "reasonCode": "BELOW_THRESHOLD",
+      "covenantState": "CURE",
+      "cureDeadline": "1789513928"
+    },
+    "atLatest": {
+      "readAtBlock": "latest",
+      "coverageBps": 6840,
+      "reasonCode": "BELOW_THRESHOLD",
+      "covenantState": "CURE",
+      "cureDeadline": "1789513928"
+    }
+  }
+}

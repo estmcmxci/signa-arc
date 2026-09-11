@@ -1,0 +1,82 @@
+{
+  "chainId": 5042002,
+  "rpcUrl": "https://rpc.testnet.arc.network",
+  "explorer": "https://testnet.arcscan.app",
+  "sourceCommit": "5fefd2322f148cdbd713fa9b266c74b6f044b940",
+  "deployedAt": "2026-09-10T20:52:58.000Z",
+  "contracts": {
+    "facilityRegistry": {
+      "address": "0xB54fe913C4a7dE73Bc285338dCbb384AEec5e448",
+      "deployTx": "0x6616528d287af73044bf69fe22126cce92df818b9ac01fe4f0ec01851cc51b62",
+      "block": 61422394
+    },
+    "credentialRegistry": {
+      "address": "0xD921734C9314442a74Cd3FEBAB8028b2Bb9A7624",
+      "deployTx": "0x065e74b65246258c403f97d5e36ae61b03f5748a39fec49b5fda2cb96149a5e0",
+      "block": 61422413
+    },
+    "coverageEngine": {
+      "address": "0x3341B76fEFF4CE691781fEAa4C76EA95479b9b6b",
+      "deployTx": "0x47ff28200b800f3576a8bac4acf5c35b8ee2febe11d6d188caa8a3e8a4e85606",
+      "block": 61422417
+    },
+    "covenantVault": {
+      "address": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+      "deployTx": "0xb1b66ee3b3494ec9878c0808269dd82beef2f523e823408a358fe75d2fe6da52",
+      "block": 61456107
+    }
+  },
+  "settlementAsset": {
+    "address": "0x3600000000000000000000000000000000000000",
+    "decimals": 6,
+    "symbol": "USDC"
+  },
+  "exposureDenomination": {
+    "currency": "EUR",
+    "referenceAsset": {
+      "address": "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a",
+      "decimals": 6,
+      "symbol": "EURC"
+    },
+    "note": "Denominating asset of the exposure, referenced only (E-DEC-2). No EURC is transferred, held or approved. The exposure is a EUR-denominated loan book asserted by ExposureCredential; the facility is funded, drawn and repaid in USDC."
+  },
+  "roles": {
+    "facilityAdmin": "0x55C4DD3770A44695735717CB7b7005AC7dE9edA1",
+    "operator": "0x7e09657321F1818825a9A15cedd9D95308130ED4",
+    "exposureIssuer": "0x4317497399f27d52007d7f2012EAd27f148B6662",
+    "hedgeIssuer": "0xAD515A2BE433e78B6b570064797626012e272e0a"
+  },
+  "facilityAdminQuorum": {
+    "provider": "privy",
+    "note": "The facility admin is a Privy server wallet owned by a 2-of-2 key quorum. Every admin call, including this facility's creation and freeze, needs both approvers. Privy signs; the transaction is broadcast to Arc separately. Since 2026-09-10 a Privy policy owned by the quorum (policyId) lets the wallet sign only createWaiver on covenantVault, on this chain, moving no value.",
+    "keyQuorumId": "pbf1jtt1knpsl30eyp0z163t",
+    "walletId": "zc9i4be5osru1qyzfci337mi",
+    "threshold": 2,
+    "approvers": [
+      {
+        "role": "Risk officer",
+        "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEdTLnqVlKlu7pil38bXDIoTeFbbTWO2ILftJpmdIFKHejmkOrh+ssVfpBkr5mNkHLrSRlkC4eIA7FhSOPAIy+0A=="
+      },
+      {
+        "role": "Treasury lead",
+        "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAED4DCLEErSAdbIY64mQIcK4ZZHKfpvGP3T+UfA3YXFQsmSPpiQVDmwyoVkU5QsxnSgKjDleBwex40ODQtoZqPvA=="
+      }
+    ],
+    "policyId": "y5x9g8gglndai2hosm47zvxf"
+  },
+  "facility": {
+    "id": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+    "policy": {
+      "minCoverageBps": 10000,
+      "defaultHaircutBps": 500,
+      "credentialMaxAgeSeconds": 86400,
+      "maturityToleranceSeconds": 604800,
+      "reserveAmount": "500000",
+      "cureWindowSeconds": 432000,
+      "maxWaiverDurationSeconds": 259200,
+      "settlementCurrency": "USD",
+      "exposureCurrency": "EUR",
+      "maxActiveHedges": 8
+    }
+  }
+}

@@ -18,7 +18,7 @@ The [ENSv2 plugin site](https://mm-ensv2.estmcmxci.co/) is the information-archi
 
 Use TypeScript and [incur](https://github.com/wevm/incur) for typed commands, structured output, and command discovery. Use [Vocs](https://github.com/wevm/vocs) for the documentation app. Vocs is the framework, not the hosting account. Proposed deployment: a separate Vercel project serving the Vocs app; final provider and custom domain can change without affecting CLI implementation. Do not invent a live URL.
 
-Pin dependency versions during implementation and check their installed APIs. The local incur skill and current upstream README differ on envelope flags (`--verbose` versus `--full-output`); generated help and tests for the pinned release must settle this. Do not copy an outdated scaffold blindly.
+Pin dependency versions during implementation and check their installed APIs. The first P0 slice settled the envelope flag: incur 0.5.1 uses `--full-output`, and rejects `--verbose` as an unknown flag. `packages/cli/SPIKES.md` records incur's pinned behaviour and the tests that hold it; `apps/docs/SPIKES.md` records Vocs 2.9.0's. Do not copy an outdated scaffold blindly.
 
 Default binary: `signa`. Working package names: `@signa/client`, `@signa/cli`, `@signa/docs`, private workspace packages initially. Registry ownership is not established. A later npm release may use the owner's available scope without changing the binary name.
 
@@ -90,6 +90,8 @@ These are proposed commands, not instructions runnable in today's repository. Du
 | `signa draw send --amount <USDC> --account <name>` | P1 | Require operator identity; fresh simulation followed by one explicitly requested draw |
 | `signa tx show <hash>` | P1 | Report pending, mined success or mined revert; decode available events and errors |
 
+**Shipped in P0 (branch `cli/p0`):** `signa status`, `signa facility show`, `signa coverage show`, `signa credentials list`, `signa credentials inspect <file>`, `signa draw simulate --amount <USDC>` and `signa evidence show [record]`. Every P1 row is still proposed.
+
 Keep command argument schemas, descriptions, examples, outputs, errors and read/write classification together. Generate reference tables from that definition; do not maintain a second handwritten flag inventory. Export the incur CLI definition without executing it on import.
 
 ### Simulation and refusal semantics
@@ -106,7 +108,18 @@ A completed simulation with `allowed: false` is a successful inquiry (exit 0). A
 
 Signa result fields distinguish `kind: report | simulation | transaction`, `dataMode`, context, outcome and optional transaction details. A refused simulation carries `allowed: false`, decoded contract error/arguments, engine reason where available, and an actionable explanation; raw revert data remains available for diagnostics. Never fabricate a decoded reason.
 
-Error codes include `INVALID_INPUT`, `INVALID_MANIFEST`, `CHAIN_MISMATCH`, `DEPLOYMENT_MISMATCH`, `RPC_UNAVAILABLE`, `INVALID_SIGNATURE`, `STALE_SEQUENCE`, `SIGNER_UNAVAILABLE`, `SIGNER_ROLE_MISMATCH`, `ACTION_REFUSED`, `TRANSACTION_REVERTED`, and `TRANSACTION_PENDING`. Pin and test actual exit semantics: exit 0 for completed reports/simulations and mined-success actions; nonzero for validation/transport/signing errors, refused actions, reverts and receipt timeouts. Consumers branch on codes, not error prose.
+Demonstrated limitation, incur 0.5.1: an error result is exactly `{ code, message, retryable }` plus an optional `cta`, and a handler cannot both return data and exit nonzero. A refused send therefore cannot carry a `broadcast: false` field of its own. Bounded decision: the code itself states whether anything was broadcast, `ACTION_REFUSED` and every preflight code meaning nothing reached the chain, while `TRANSACTION_REVERTED` and `TRANSACTION_PENDING` mean it did and carry the hash through the `cta` as `signa tx show <hash>`. The operation journal records the same hash as structured JSON, written before any receipt wait. The mapping is published in the generated error reference and in the agent guide.
+
+A send records its hash before waiting: `cast send --async` returns the hash without waiting for a receipt, and the receipt is reconciled separately. Success is decided by the receipt status, never by the signer subprocess exit code, because a broadcast that reverts leaves `cast` exiting 0 with a `status 0x0` receipt. No `--gas-limit` is passed, so gas estimation refuses a would-revert send before broadcast, which is the `broadcast: false` refusal path.
+
+Error codes include `INVALID_INPUT`, `INVALID_MANIFEST`, `CHAIN_MISMATCH`, `DEPLOYMENT_MISMATCH`, `RPC_UNAVAILABLE`, `INVALID_SIGNATURE`, `SIMULATION_FAILED`, `STALE_SEQUENCE`, `SIGNER_UNAVAILABLE`, `SIGNER_ROLE_MISMATCH`, `ACTION_REFUSED`, `TRANSACTION_REVERTED`, and `TRANSACTION_PENDING`. `SIMULATION_FAILED` was added in P0: a simulation that reverts without data, or with data no known contract error decodes, is a failed inquiry, unlike a decoded refusal. Pin and test actual exit semantics: exit 0 for completed reports/simulations and mined-success actions; nonzero for validation/transport/signing errors, refused actions, reverts and receipt timeouts. Consumers branch on codes, not error prose.
+
+Pinned behaviour, incur 0.5.1:
+- An error prints `{ code, message, retryable }` to stdout, which is one JSON document under `--json`, and exits 1.
+- incur's own codes, `COMMAND_NOT_FOUND`, `VALIDATION_ERROR` and `UNKNOWN`, appear alongside Signa's.
+- Help for a command group prints text even with `--json`. Help is not a command result.
+- `--full-output` wraps data as `{ ok, data, meta }`, and `meta.duration` varies between runs, so consumers read `data`.
+- `pnpm signa` prints pnpm's banner on stdout, so machine consumers run `pnpm -s signa … --json`.
 
 ## 7. Credential and signing boundaries
 
@@ -116,9 +129,9 @@ Domain must match the selected chain and registry; facility must match the selec
 
 Offline inspection proves formatting, domain consistency and signature recovery only. Submit checks live issuer authorization, revocation context and current sequence, then relies on contract simulation/receipt. Eligibility is separately read from CoverageEngine. A higher sequence does not by itself make an assertion fresh or sufficient.
 
-P1 signing uses a narrow adapter with `getAddress`, `signTypedData` when needed later, and `sendTransaction`. Initial implementation should support an existing named Foundry keystore through supported tools/libraries, not copy the scenario's bespoke keystore decryption. Public read commands never initialize a signer. No raw-key command-line option; do not print keys, passwords, or signed raw transactions. Never make a user's local keystores part of tests.
+P1 signing uses a narrow adapter with `getAddress`, `signTypedData` when needed later, and `sendTransaction`. Initial implementation should support an existing named Foundry keystore through supported tools/libraries, not copy the scenario's bespoke keystore decryption. Public read commands never initialize a signer. No raw-key command-line option; do not print keys, passwords, or signed raw transactions. Never make a user's local keystores part of tests. Settled by the keystore spike (`packages/cli/SPIKES.md`, Foundry `cast` 1.5.0): `cast`'s own `--account` resolves only `~/.foundry/keystores` and no environment variable redirects it, so the CLI resolves `--account <name>` itself against a keystore directory, overridable for tests, and passes `--keystore <path>` to `cast`. A keystore file carries no address, so `getAddress` requires the password: the order is unlock, then address, then chain/facility/role verification, then simulation, then send.
 
-TTY may prompt for keystore unlock; unattended use requires an explicitly configured protected password-file mechanism. Do not prompt forever in a pipe. Invoking a specific send command authorizes that operation; avoid a redundant confirmation for every step. Validate the sender and show its address and target before submission. One send command performs at most one chain mutation.
+TTY may prompt for keystore unlock; unattended use requires an explicitly configured protected password-file mechanism. Do not prompt forever in a pipe: the spike showed `cast` exits 1 immediately when there is no terminal, rather than blocking. Interactive cancellation could not be exercised headlessly, so no Signa contract depends on prompting. Invoking a specific send command authorizes that operation; avoid a redundant confirmation for every step. Validate the sender and show its address and target before submission. One send command performs at most one chain mutation.
 
 Privy remains the facility-admin authority. The CLI must not impersonate the immutable quorum admin or expose a generic admin-key bypass. A future waiver client may create and inspect intents through the existing service, but approval remains two separate people using the existing console. Keep the app secret and browser-held approver keys out of CLI distribution and docs bundles. Preserve WIRE-UP's actual limitations and use current repository notes for the latest Arc transport status.
 
@@ -161,6 +174,14 @@ Expose workspace scripts for CLI development/build, focused tests, docs developm
 For hosting, prepare a separate project rooted at `apps/docs`, with workspace-aware install/build commands, an output path confirmed from the pinned Vocs build, no runtime secrets, preview behavior, and a custom-domain placeholder. Avoid guessing a Vocs output directory or assuming the ENSv2 site's provider. Build and preview first; only then is an actual deployment ready to review.
 
 P2 package checks: bin has executable entrypoint; runtime assets resolve relative to the installed package; help and offline commands work outside the checkout; package contents include only built code, required public assets and metadata; no Foundry artifacts or private documents. README and docs must distinguish workspace use from published install instructions. Resolve package ownership, version, license and intended hosting/domain before public release. The current repository has no selected license; do not manufacture one.
+
+Limitations demonstrated in the first P0 slice, each with a bounded decision:
+
+- **incur's `--update` installs globally.** incur 0.5.1 honours `--update` even when automatic updates are disabled. It installs whichever package declares the `signa` bin, with `npm|pnpm|bun add --global`. Until P2, no package declares that bin, so `--update` fails with `UPDATE_FAILED`, and a test fails if a bin appears. P2 must configure incur's `update` with the owned package name, or a refusing installer, before adding the bin.
+- **incur's MCP and skill built-ins cannot be removed.** `--mcp`, `mcp add` and `skills add` are always present. Read-only P0 commands may be exposed through them. Every P1 write command sets `mcp: false` until an MCP write policy is designed.
+- **Static hosts need a Markdown rewrite.** Vocs 2.9.0 serves `/<page>.md` from its own server, and a static build writes the Markdown to `/assets/md/<page>.md`. A static host must rewrite `/<page>.md` to that path, or the site must use Vocs's server adapter. Decide with the hosting provider in P2.
+- **Vocs writes build-machine paths into the output.** Vocs 2.9.0 puts absolute paths in the search index and the serialized client config, and no option controls either. The docs build rewrites them relative to the repository root, and the docs check fails if any local path remains (A-DOC-03).
+- **incur's type declarations fail the lib check.** incur 0.5.1's published declarations fail TypeScript's lib check, so `skipLibCheck` is set in `packages/cli/tsconfig.json` alone.
 
 This draft/handoff does not publish npm packages, modify DNS, deploy a site or submit transactions. Those are subsequent execution steps against a concrete reviewed build, with authorization assessed from the session at that time.
 
