@@ -44,4 +44,8 @@ export function freshness(observed: bigint, validUntil: bigint, maxAge: number, 
   const remaining=expires-now;
   return {state:remaining<0n?'STALE':remaining<=BigInt(Math.floor(maxAge/4))?'AGEING':'FRESH',expires,remaining,age:now-observed} as const;
 }
+export function blockNumber(value: bigint | string | number | null | undefined): string {
+  if (value===null || value===undefined || value==='') return '—';
+  try { return BigInt(value).toLocaleString('en-US'); } catch { return String(value); }
+}
 export function json(value: unknown): string {return JSON.stringify(value,(_k,v)=>typeof v==='bigint'?v.toString():v,2);}

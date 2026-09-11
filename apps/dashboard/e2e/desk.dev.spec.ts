@@ -26,7 +26,8 @@ test('a draw confirms once a block is mined, and stays out of the live desk’s 
   await expect(latestDecision(page)).toContainText('PENDING');
   await mine(page);
   await expect(latestDecision(page)).toContainText('CONFIRMED');
-  await expect(latestDecision(page)).toContainText('Block 1001');
+  await expect(latestDecision(page)).toContainText('Block 1,001');
+  await expect(page.getByText(/Snapshot: block 1,001/), 'the ledger and the read context format a block the same way').toBeVisible();
   await expect(page.locator('article.metric').filter({ hasText: 'Available to draw' })).toContainText('1.50');
   const stored = await context.storageState();
   expect(JSON.stringify(stored.origins), 'fixture decisions never reach the live desk’s journal').not.toContain('signa:operations');
