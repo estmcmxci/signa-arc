@@ -5,6 +5,7 @@ Read this first. It is the only file that knows *where we are*. Everything else 
 | Document | Owns |
 |---|---|
 | **START-HERE.md** | Where we are. Build state, the queue, the rules. |
+| `HANDOVER.md` | Session close, 2026-09-10. What is proven on chain, what is left, and the two things only a human can do. |
 | `ARC-DELIVERY-PLAN.md` | How we get there. Five staged deliveries with exit conditions, and the strategy decisions behind them. |
 | `EED.md` | What the pieces are, exactly. Interfaces, schemas, file ownership, handoff seams. Read before writing code another agent will call. |
 | `PRD.md` | What must be true. Requirements with IDs, acceptance criteria, risks. The contract. |

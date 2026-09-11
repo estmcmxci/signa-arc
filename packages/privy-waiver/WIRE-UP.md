@@ -196,3 +196,15 @@ Say: "m-of-n approval without putting approvers on chain, and an allow-list on w
 - **The policy cannot cap `duration`,** and it denies `revokeWaiver` (see above).
 - **One proposal at a time.** Each pins the admin wallet's next nonce.
 - **An approval must reach Privy within 300 s of its payload being fetched.** The console fetches the payload when the approver clicks, so this only bites if a request stalls.
+
+## Asked of Privy, not yet answered
+
+Drafted 2026-09-10 for privy.io/slack. Sending it is a two-minute job; the answer may simplify a mainnet deploy.
+
+> Hi — we're building on Circle's Arc (EVM, chain `5042002`) using server wallets with a 2-of-2 key quorum.
+>
+> `eth_signTransaction` works on Arc. `eth_sendTransaction` returns `401 App is not authorized to transact on chain eip155:5042002` — other chains pass that gate. We sign and broadcast ourselves, which your docs suggest for a custom RPC. Is that the intended path, or can Arc be enabled per-app?
+>
+> Separately, a docs gap: `POST /v1/intents/{id}/authorize` requires `intent_id` and `timestamp` in the signed payload. Both appear in your `js-sdk-core` types but not the API reference.
+
+Record the answer here when it arrives.
