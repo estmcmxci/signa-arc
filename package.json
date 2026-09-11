@@ -22,7 +22,7 @@
     "docs:build": "pnpm --filter @signa/docs build",
     "docs:preview": "pnpm --filter @signa/docs preview",
     "docs:check": "tsc --noEmit -p apps/docs/tsconfig.json && pnpm docs:build && node --import tsx apps/docs/scripts/verify-build.ts",
-    "check": "pnpm build:contracts && pnpm typecheck && pnpm test:ts && pnpm test:contracts && pnpm dashboard:build && pnpm docs:check"
+    "check": "pnpm build:contracts && pnpm typecheck && pnpm test:ts && pnpm test:contracts && pnpm dashboard:build && pnpm docs:check && pnpm --filter @fx-coverage/dashboard typecheck"
   },
   "dependencies": {
     "@fx-coverage/credentials": "workspace:*",
