@@ -302,6 +302,35 @@ h1 {
   vertical-align: middle;
 }
 
+.freshness {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.freshness-fresh {
+  color: var(--compliant-text);
+}
+
+.freshness-ageing {
+  color: var(--cure-text);
+}
+
+.freshness-stale {
+  color: var(--breach-text);
+}
+
+.freshness-detail {
+  display: block;
+  margin-top: 4px;
+  color: var(--sand-1000);
+  font-size: 11px;
+}
+
 .two-column {
   grid-template-columns: 1.15fr 0.85fr;
 }
@@ -318,6 +347,12 @@ h1 {
   gap: 16px;
   align-items: center;
   margin-bottom: 20px;
+}
+
+.panel-head-actions {
+  display: flex;
+  gap: 16px;
+  align-items: center;
 }
 
 .panel h2 {
@@ -570,7 +605,9 @@ h1 {
 }
 
 .action:disabled,
-.controls button:disabled {
+.controls button:disabled,
+.action[aria-disabled="true"],
+.controls button[aria-disabled="true"] {
   cursor: not-allowed;
   opacity: 0.42;
   transform: none;

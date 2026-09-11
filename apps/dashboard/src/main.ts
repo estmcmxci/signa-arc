@@ -5,7 +5,6 @@ import {
   createPublicClient,
   createWalletClient,
   custom,
-  decodeEventLog,
   formatUnits,
   http,
   type Abi,
@@ -91,12 +90,6 @@ type CoverageResult = {
   resultReason: number;
 };
 type HedgeView = StoredHedge & { eligibilityReason: number; adjustedNotional: bigint };
-type HistoryItem = {
-  eventName: string;
-  transactionHash: Hex;
-  blockNumber: bigint;
-  summary: string;
-};
 type ArcEvidenceStep = {
   action?: unknown;
   transactionHash?: unknown;
@@ -116,7 +109,7 @@ type LiveState = {
   cureDeadline: bigint;
   availableToDraw: bigint;
   hedges: HedgeView[];
-  history: HistoryItem[];
+  tokenSymbol: string;
 };
 
 // The three outcomes a write can settle into (research §5.1). Only the last one is an
@@ -264,7 +257,7 @@ async function refreshLive() {
   errorMessage = "";
   render();
   try {
-    const [policy, exposure, coverage, state, principal, cureDeadline, available, tradeIds] =
+    const [policy, exposure, coverage, state, principal, cureDeadline, available, tradeIds, tokenSymbol] =
       await Promise.all([
         read(addresses.facilityRegistry, facilityRegistryAbi, "getFacility", [facilityId]),
         read(addresses.credentialRegistry, credentialRegistryAbi, "currentExposure", [
@@ -278,6 +271,10 @@ async function refreshLive() {
         read(addresses.credentialRegistry, credentialRegistryAbi, "hedgeTradeIds", [
           facilityId,
         ]),
+        // Never hardcode the settlement asset's symbol — on Arc it is the real USDC
+        // predeploy, not a mock, and a stale hardcoded label is a claims-discipline bug
+        // as well as a cosmetic one. Ask the contract itself, every time.
+        read(addresses.token, mockTokenAbi, "symbol"),
       ]);
     const hedges = await Promise.all(
       (tradeIds as Hex[]).map(async (tradeId) => {
@@ -308,7 +305,7 @@ async function refreshLive() {
       cureDeadline: cureDeadline as bigint,
       availableToDraw: available as bigint,
       hedges,
-      history: await loadHistory(),
+      tokenSymbol: tokenSymbol as string,
     };
     lastRefreshedAt = Date.now();
     stale = false;
@@ -458,14 +455,14 @@ function render() {
           <div class="panel-head"><div><div class="section-kicker">Actions</div><h2>Coverage gate</h2></div><button id="connect" class="action">${walletAddress ? short(walletAddress) : "Connect wallet"}</button></div>
           <div id="draw-gate" class="gate gate-${gate.status}">${gateMarkup()}</div>
           <div class="controls">
-            <input id="amount" inputmode="decimal" value="${escapeHtml(amountValue)}" aria-label="Amount in mock USD" class="num" />
-            <button id="sync" class="action-primary" ${disabled()}>Sync covenant</button>
-            <button id="restore" ${disabled()}>Restore</button>
-            <button id="draw" ${disabled()}>Draw mUSD</button>
-            <button id="repay" ${disabled()}>Repay mUSD</button>
+            <input id="amount" inputmode="decimal" value="${escapeHtml(amountValue)}" aria-label="Amount in ${escapeHtml(tokenLabel())}" class="num" />
+            <button id="sync" class="action-primary" ${actionsAriaDisabled()}>Sync covenant</button>
+            <button id="restore" ${actionsAriaDisabled()}>Restore</button>
+            <button id="draw" ${actionsAriaDisabled()}>Draw ${escapeHtml(tokenLabel())}</button>
+            <button id="repay" ${actionsAriaDisabled()}>Repay ${escapeHtml(tokenLabel())}</button>
           </div>
           ${actionOutcomeMarkup()}
-          <p class="footer-note">Every write is simulated first via <span class="mono">simulateContract</span>; a refusal is decoded from the vault's own custom error and shown before anything is signed. The Draw button stays enabled when held — a refusal is the gate working, not a reason to hide the control.</p>
+          <p class="footer-note">${actionsFooterNote()}</p>
           <p class="footer-note mono">${escapeHtml(message)}</p>
         </article>
       </section>
@@ -478,6 +475,7 @@ function render() {
             ${datum("Outstanding", live ? formatUsd(live.exposure.credential.outstandingValue) : "—")}
             ${datum("Sequence", live ? live.exposure.credential.sequence.toString() : "—")}
             ${datum("Observed", live ? formatTimestamp(live.exposure.credential.observedAt) : "—")}
+            ${datum("Freshness", live ? freshnessBadge(live.exposure.credential.observedAt, live.policy.credentialMaxAge) : "—")}
             ${datum("Expires", live ? formatTimestamp(live.exposure.credential.validUntil) : "—")}
             ${datum("Source commitment", live ? hashSpan(live.exposure.credential.sourceCommitment) : "—")}
             ${datum(`Denominating asset (${exposureAsset.symbol}, referenced only)`, eurcLink())}
@@ -506,19 +504,20 @@ function render() {
         <div class="panel-head"><div><div class="section-kicker">Independent source B</div><h2>Active hedge credentials</h2></div><span class="mono">${live?.hedges.length ?? 0} active IDs</span></div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Committed trade ID</th><th>Issuer</th><th class="num">Remaining</th><th>Status</th><th>Maturity</th><th>Expires</th><th>Eligibility</th></tr></thead>
+            <thead><tr><th>Committed trade ID</th><th>Issuer</th><th class="num">Remaining</th><th>Status</th><th>Freshness</th><th>Maturity</th><th>Expires</th><th>Eligibility</th></tr></thead>
             <tbody>${hedgeRows()}</tbody>
           </table>
         </div>
       </section>
 
       <section class="panel">
-        <div class="panel-head"><div><div class="section-kicker">Arc receipts</div><h2>Current deployment event history</h2></div>${configured && explorerUrl && addresses ? `<a href="${explorerUrl}/address/${addresses.covenantVault}" target="_blank" rel="noreferrer">Open vault ↗</a>` : ""}</div>
-        <div class="timeline">${liveHistoryRows()}</div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-head"><div><div class="section-kicker">Scenario evidence</div><h2>Arc EURC facility arc (A-1 → A-4)</h2></div><span class="mono">${arcEvidence ? `${arcEvidence.steps.length} steps` : "not yet recorded"}</span></div>
+        <div class="panel-head">
+          <div><div class="section-kicker">Scenario evidence</div><h2>Arc EURC facility arc (A-1 → A-4)</h2></div>
+          <div class="panel-head-actions">
+            <span class="mono">${arcEvidence ? `${arcEvidence.steps.length} steps` : "not yet recorded"}</span>
+            ${configured && explorerUrl && addresses ? `<a href="${explorerUrl}/address/${addresses.covenantVault}" target="_blank" rel="noreferrer">Open vault ↗</a>` : ""}
+          </div>
+        </div>
         ${arcEvidenceRows()}
       </section>
 
@@ -530,13 +529,26 @@ function render() {
 
 function bindActions() {
   document.querySelector("#connect")?.addEventListener("click", () => void connectWallet());
-  document.querySelector("#sync")?.addEventListener("click", () => void execute("sync"));
-  document.querySelector("#restore")?.addEventListener("click", () => void execute("restore"));
-  document.querySelector("#draw")?.addEventListener("click", () => void execute("draw"));
-  document.querySelector("#repay")?.addEventListener("click", () => void execute("repay"));
+  bindGatedAction("#sync", () => execute("sync"));
+  bindGatedAction("#restore", () => execute("restore"));
+  bindGatedAction("#draw", () => execute("draw"));
+  bindGatedAction("#repay", () => execute("repay"));
   document.querySelector<HTMLInputElement>("#amount")?.addEventListener("input", (event) => {
     amountValue = (event.target as HTMLInputElement).value;
     scheduleGateRefresh();
+  });
+}
+
+// aria-disabled keeps the button focusable and discoverable (unlike native `disabled`),
+// so a click while gated still needs a guard here — and, per Nielsen, must not be a
+// communication dead end: it answers with the reason rather than doing nothing.
+function bindGatedAction(selector: string, action: () => void) {
+  document.querySelector(selector)?.addEventListener("click", () => {
+    if (actionsGated()) {
+      announceGated();
+      return;
+    }
+    action();
   });
 }
 
@@ -664,49 +676,6 @@ async function writeSimulatedRequest(wallet: ReturnType<typeof createWalletClien
   }
 }
 
-async function loadHistory(): Promise<HistoryItem[]> {
-  if (!addresses) return [];
-  const currentBlock = await publicClient.getBlockNumber();
-  const fromBlock = currentBlock > 50_000n ? currentBlock - 50_000n : 0n;
-  const logs = await publicClient.getLogs({
-    address: [
-      addresses.facilityRegistry,
-      addresses.credentialRegistry,
-      addresses.covenantVault,
-    ],
-    fromBlock,
-    toBlock: "latest",
-  } as never);
-  const combinedAbi = [
-    ...facilityRegistryAbi,
-    ...credentialRegistryAbi,
-    ...covenantVaultAbi,
-  ] as Abi;
-  return logs
-    .flatMap((log) => {
-      try {
-        const decoded = decodeEventLog({
-          abi: combinedAbi,
-          data: log.data,
-          topics: log.topics,
-          strict: false,
-        } as never) as { eventName: string; args: Record<string, unknown> };
-        return [
-          {
-            eventName: decoded.eventName,
-            transactionHash: log.transactionHash!,
-            blockNumber: log.blockNumber!,
-            summary: summarizeArgs(decoded.args),
-          },
-        ];
-      } catch {
-        return [];
-      }
-    })
-    .sort((a, b) => Number(b.blockNumber - a.blockNumber))
-    .slice(0, 24);
-}
-
 function loadArcEvidence(): ArcEvidence | undefined {
   const modules = import.meta.glob<{ default: unknown }>(
     "../../../scenarios/output/arc-facility-evidence.json",
@@ -726,6 +695,15 @@ async function read(
   args: readonly unknown[] = [],
 ): Promise<unknown> {
   return publicClient.readContract({ address, abi, functionName, args } as never);
+}
+
+// Read live, never hardcoded: on Arc the settlement asset is the real USDC predeploy
+// (0x3600…0000), not a mock, and a stale "mUSD" label is a claims-discipline bug, not
+// just a cosmetic one — it reads as demoing with a mock when the facility uses Arc's
+// native USDC. Falls back to the manifest's own symbol before the first live read
+// lands, so the buttons are never wrong even for a moment.
+function tokenLabel() {
+  return live?.tokenSymbol ?? manifest?.settlementAsset.symbol ?? "the settlement asset";
 }
 
 function manifestBadge() {
@@ -895,35 +873,22 @@ function datum(label: string, content: string) {
 }
 
 function hedgeRows() {
-  if (!live?.hedges.length) {
-    return `<tr><td colspan="7" class="empty">No active onchain hedge IDs to display.</td></tr>`;
+  const currentLive = live;
+  if (!currentLive?.hedges.length) {
+    return `<tr><td colspan="8" class="empty">No active onchain hedge IDs to display.</td></tr>`;
   }
-  return live.hedges
+  return currentLive.hedges
     .map(
       (hedge) => `<tr>
         <td class="mono">${hashSpan(hedge.credential.tradeIdCommitment)}</td>
         <td class="mono">${short(hedge.issuer)}</td>
         <td class="num">${formatUsd(hedge.credential.remainingNotional)}</td>
         <td>${hedgeStatuses[hedge.credential.status] ?? "UNKNOWN"}</td>
+        <td>${freshnessBadge(hedge.credential.observedAt, currentLive.policy.credentialMaxAge, true)}</td>
         <td>${formatTimestamp(hedge.credential.maturity)}</td>
         <td>${formatTimestamp(hedge.credential.validUntil)}</td>
         <td>${hedgeReasons[hedge.eligibilityReason] ?? "UNKNOWN"}</td>
       </tr>`,
-    )
-    .join("");
-}
-
-function liveHistoryRows() {
-  if (!live?.history.length) {
-    return `<div class="empty">${configured ? "No recent protocol events found." : "Configure a deployment to read Arc events."}</div>`;
-  }
-  return live.history
-    .map(
-      (item) => `<div class="event">
-        <div class="event-state">${escapeHtml(item.eventName)}</div>
-        <div class="event-copy">${escapeHtml(item.summary)}</div>
-        <div class="event-meta">block ${item.blockNumber}<br/>${transactionLink(item.transactionHash)}</div>
-      </div>`,
     )
     .join("");
 }
@@ -941,7 +906,7 @@ function arcEvidenceRows() {
       const reason =
         typeof step.resultReason === "number" ? resultReasons[step.resultReason] ?? "UNKNOWN" : "—";
       return `<div class="event">
-        <div class="event-state">${escapeHtml(actual.toUpperCase())}</div>
+        <div class="event-state">${escapeHtml(actual)}</div>
         <div class="event-copy">${escapeHtml(action)} · expected ${escapeHtml(expected)} · reason ${escapeHtml(reason)}</div>
         <div class="event-meta">${hash ? transactionLink(hash as Hex) : "—"}</div>
       </div>`;
@@ -953,14 +918,6 @@ function transactionLink(hash: Hex) {
   return explorerUrl
     ? `<a href="${explorerUrl}/tx/${hash}" target="_blank" rel="noreferrer">${short(hash)} ↗</a>`
     : short(hash);
-}
-
-function summarizeArgs(args: Record<string, unknown>) {
-  const values = Object.entries(args)
-    .filter(([key]) => !/^\d+$/.test(key))
-    .slice(0, 4)
-    .map(([key, value]) => `${key}: ${formatUnknown(value)}`);
-  return values.length ? values.join(" · ") : "Protocol state transition";
 }
 
 function formatUnknown(value: unknown): string {
@@ -1014,6 +971,60 @@ function formatTimestamp(value: bigint) {
   });
 }
 
+function formatElapsed(totalSeconds: number) {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(seconds / 3_600);
+  const minutes = Math.floor((seconds % 3_600) / 60);
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  const secs = seconds % 60;
+  if (minutes > 0) return `${minutes}m ${secs}s`;
+  return `${secs}s`;
+}
+
+type FreshnessLevel = "fresh" | "ageing" | "stale";
+const FRESHNESS_GLYPH: Record<FreshnessLevel, string> = { fresh: "●", ageing: "◐", stale: "⊘" };
+
+// R-F1-4: a credential becomes unusable once now - observedAt > credentialMaxAge, and
+// A-5 is an acceptance criterion about exactly that. An operator should see it ageing
+// toward that cliff, not discover it at the cliff — so this warns at the halfway point,
+// well before the contract itself would start returning STALE.
+function freshnessInfo(observedAt: bigint, maxAgeSeconds: number) {
+  const ageSeconds = Math.max(0, Math.floor(Date.now() / 1_000) - Number(observedAt));
+  const remaining = maxAgeSeconds - ageSeconds;
+  if (remaining <= 0) {
+    return {
+      level: "stale" as FreshnessLevel,
+      label: "STALE",
+      detail: `attested ${formatElapsed(ageSeconds)} ago — stale ${formatElapsed(-remaining)} ago`,
+    };
+  }
+  if (remaining <= maxAgeSeconds / 2) {
+    return {
+      level: "ageing" as FreshnessLevel,
+      label: "AGEING",
+      detail: `attested ${formatElapsed(ageSeconds)} ago — stale in ${formatElapsed(remaining)}`,
+    };
+  }
+  return {
+    level: "fresh" as FreshnessLevel,
+    label: "FRESH",
+    detail: `attested ${formatElapsed(ageSeconds)} ago — valid ${formatDuration(maxAgeSeconds)}`,
+  };
+}
+
+// Word + shape + colour, never colour alone (E-UI-2, WCAG 1.4.1) — same discipline as
+// the covenant-state glyphs. `compact` drops the detail line into a title= for the
+// hedge table, where seven columns already compete for width.
+function freshnessBadge(observedAt: bigint, maxAgeSeconds: number, compact = false) {
+  const info = freshnessInfo(observedAt, maxAgeSeconds);
+  const glyph = FRESHNESS_GLYPH[info.level];
+  const word = `<span class="freshness freshness-${info.level}"><span class="gate-glyph">${glyph}</span>${info.label}</span>`;
+  if (compact) {
+    return `<span title="${escapeHtml(info.detail)}">${word}</span>`;
+  }
+  return `${word}<span class="freshness-detail mono">${escapeHtml(info.detail)}</span>`;
+}
+
 function parseSixDecimals(value: string) {
   if (!/^\d+(?:\.\d{1,6})?$/.test(value)) {
     throw new Error("Enter a positive amount with at most six decimals.");
@@ -1041,8 +1052,39 @@ function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function disabled() {
-  return busy || !configured || !walletAddress ? "disabled" : "";
+// A covenant refusal never disables these buttons on its own — only the absence of a
+// connected wallet, an unconfigured deployment, or an in-flight transaction does. Native
+// `disabled` makes a button unfocusable and often invisible to screen readers; aria-disabled
+// keeps it discoverable, paired with a reason that is always visible, not a tooltip.
+function actionsGated() {
+  return busy || !configured || !walletAddress;
+}
+
+function actionsAriaDisabled() {
+  return `aria-disabled="${actionsGated()}"`;
+}
+
+// The text here must always match what the four buttons above it actually look like —
+// a viewer reading this sentence and looking at the screen should see them agree. Only
+// the last branch claims the buttons "stay enabled", and only when they demonstrably are.
+function actionsFooterNote() {
+  const base =
+    'Every write is simulated first via <span class="mono">simulateContract</span>; a refusal is decoded from the vault\'s own custom error and shown before anything is signed.';
+  if (!configured) return `${base} These controls are inactive until a deployment is configured.`;
+  if (!walletAddress) {
+    return `${base} Connect a wallet to enable them — a covenant refusal alone never disables Draw; only the absence of a connected wallet does, which is why they're inactive right now.`;
+  }
+  if (busy) return `${base} Briefly inactive while a transaction is in flight.`;
+  return `${base} The Draw button stays enabled when held — a refusal is the gate working, not a reason to hide the control.`;
+}
+
+function announceGated() {
+  message = !configured
+    ? "Configure the deployment first."
+    : !walletAddress
+      ? "Connect a wallet first."
+      : "Busy — wait for the current action to finish.";
+  render();
 }
 
 function errorText(error: unknown) {
