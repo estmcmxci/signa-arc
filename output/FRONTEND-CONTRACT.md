@@ -2,7 +2,7 @@
 
 2026-09-11. Branch `frontend/research`; based on `5ed7f9a`. No push or merge authorized.
 
-The CLI/docs owner works in `cli/p0` in a separate worktree. User confirmed that dashboard `manifest.ts` belongs to frontend; CLI copies its validator. React and React DOM will match the docs worktree's **19.3.0**. Each branch generates its own pnpm lockfile; the second integrator reruns installation, never hand-merges it.
+The CLI/docs owner works in `cli/p0` in a separate worktree. User confirmed that dashboard `manifest.ts` belongs to frontend; CLI copies its validator. React, React DOM and @types/react match the docs worktree's **19.2.8**; @types/react-dom is **19.2.7**, since no 19.2.8 was released. Each branch generates its own pnpm lockfile; the second integrator reruns installation, never hand-merges it.
 
 Lead owns dashboard React code, browser adapter, design tokens, app entry, Vite/package/test config, generated frontend ABI subset, and integration. Landing subagent owns only `apps/dashboard/index.html`, `apps/dashboard/src/landing/**`, `apps/dashboard/security/index.html`, and its landing-specific assets. It may report review findings for dashboard files, not edit them without a handoff. Neither edits CLI/docs or contracts/evidence. Root integration changes remain with the lead.
 
