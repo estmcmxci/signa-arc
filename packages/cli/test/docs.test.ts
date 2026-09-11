@@ -1,24 +1,30 @@
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
+import { REFERENCE_PAGES, commandManifest } from "../../../apps/docs/scripts/generate-reference.ts";
 import { EVIDENCE_PAGE, renderEvidencePage } from "../../../scripts/generate-docs-evidence.ts";
-import { REPO_ROOT, runSigna } from "./helpers.ts";
+import { REPO_ROOT, envelopeFile, runSigna } from "./helpers.ts";
 
 const PAGES = new URL("apps/docs/src/pages/", REPO_ROOT);
-const pages = () =>
-  readdirSync(PAGES)
-    .filter((file) => file.endsWith(".md") || file.endsWith(".mdx"))
-    .map((file) => ({ file, text: readFileSync(new URL(file, PAGES), "utf8") }));
+const REFERENCE = new URL("reference/", PAGES);
 
-/** Stand-ins for the placeholders the docs use, so every command shape can be run. */
-const PLACEHOLDERS: Record<string, string> = { "<record>": "acceptance" };
+function pages(): { file: string; text: string }[] {
+  const walk = (directory: URL, prefix: string): { file: string; text: string }[] =>
+    readdirSync(directory, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory()
+        ? walk(new URL(`${entry.name}/`, directory), `${prefix}${entry.name}/`)
+        : entry.name.endsWith(".md") || entry.name.endsWith(".mdx")
+          ? [{ file: `${prefix}${entry.name}`, text: readFileSync(new URL(entry.name, directory), "utf8") }]
+          : [],
+    );
+  return walk(PAGES, "");
+}
 
-/**
- * Every `pnpm signa …` the docs show, whether on its own line in a code block or inline in a
- * sentence.
- */
-function documentedCommands() {
+/** Every `pnpm signa …` the docs show, in a fenced block or inline in a sentence. */
+function documentedCommands(): { file: string; command: string }[] {
   return pages().flatMap(({ file, text }) => {
     const inline = [...text.matchAll(/`(pnpm(?:\s+-s)?\s+signa\b[^`]*)`/g)].map((match) => match[1] ?? "");
     const blocks = text
@@ -29,23 +35,50 @@ function documentedCommands() {
   });
 }
 
+/** Commands whose stdout a reader is told to parse must silence pnpm's banner. */
 const PARSED_OUTPUT = /--json\b|--format(?:\s+|=)(?:json|jsonl|yaml)\b|--llms|--schema\b/;
+/** `<file>` and `[record]` in a usage synopsis: a shape to fill in, not a runnable example. */
+const PLACEHOLDER = /^[<[].*[>\]]$/;
+/** A flag that already selects the output, so the test must not append `--json`. */
+const SELECTS_OUTPUT = /^--(json|llms|llms-full|schema|help|version|format)$/;
 
 test("the Evidence page is generated from the bundled records", () => {
   assert.equal(readFileSync(EVIDENCE_PAGE, "utf8"), renderEvidencePage(), "apps/docs/src/pages/evidence.md drifted: run `pnpm generate:docs`");
 });
 
-test("every signa command the docs show, in a block or a sentence, runs against the shipped command tree", async () => {
+test("the Reference pages are generated from the shipped command tree, error codes, envelope schema and manifest", async () => {
+  for (const page of REFERENCE_PAGES) {
+    const path = new URL(page.file, REFERENCE);
+    assert.ok(existsSync(path), `missing reference page ${page.file}`);
+    assert.equal(readFileSync(path, "utf8"), await page.render(), `apps/docs/src/pages/reference/${page.file} drifted: run \`pnpm generate:docs\``);
+  }
+});
+
+test("every signa command the docs show, in a block or a sentence, is one signa ships and runs clean", async () => {
+  const known = (await commandManifest()).map((command) => command.name);
+  const envelope = envelopeFile();
   const commands = documentedCommands();
-  assert.ok(commands.length >= 12, `the docs show the commands they describe (found ${commands.length})`);
+  assert.ok(commands.length >= 20, `the docs show the commands they describe (found ${commands.length})`);
+
+  const ran = new Set<string>();
   for (const { file, command } of commands) {
-    const words = command.split(/\s+/);
-    const args = words.slice(words[1] === "-s" ? 3 : 2).map((word) => PLACEHOLDERS[word] ?? word);
-    assert.ok(!args.some((arg) => /^<.*>$/.test(arg)), `${file}: \`${command}\` has a placeholder the test cannot fill`);
-    const discovery = args.some((arg) => ["--help", "--llms", "--llms-full", "--version", "--schema"].includes(arg));
-    const run = await runSigna(discovery || args.includes("--json") ? args : [...args, "--json"]);
+    const words = command.split(/\s+/).slice(command.startsWith("pnpm -s") ? 3 : 2);
+    const path = words.filter((word) => !word.startsWith("-") && !PLACEHOLDER.test(word));
+    // An empty path names no command: `pnpm signa` as prose for the runner, or a root flag such
+    // as `signa --llms`. There is nothing to match against the command tree.
+    if (path.length > 0) {
+      assert.ok(
+        known.some((name) => path.join(" ") === name || path.join(" ").startsWith(`${name} `)),
+        `${file}: \`${command}\` is not a command signa ships`,
+      );
+    }
+    if (words.length === 0 || words.some((word) => PLACEHOLDER.test(word)) || ran.has(command)) continue;
+    ran.add(command);
+    const args = words.map((word) => (word.endsWith(".json") && !existsSync(join(fileURLToPath(REPO_ROOT), word)) ? envelope : word));
+    const run = await runSigna(args.some((arg) => SELECTS_OUTPUT.test(arg)) ? args : [...args, "--json"]);
     assert.equal(run.exitCode, 0, `${file}: ${command}\n${run.stdout}`);
   }
+  assert.ok(ran.size >= 8, `the docs' runnable examples are actually run (ran ${ran.size})`);
 });
 
 test("a command whose output is parsed runs through `pnpm -s`, so pnpm's banner stays off stdout", () => {

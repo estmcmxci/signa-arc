@@ -9,8 +9,14 @@ description: How an agent should drive signa. One JSON document on stdout, schem
 
 ```bash
 pnpm -s signa status --json
+pnpm -s signa facility show --json
+pnpm -s signa coverage show --json
+pnpm -s signa credentials list --json
+pnpm -s signa draw simulate --amount 1 --json
 pnpm -s signa evidence show --json
 ```
+
+Every command and option is in [Commands](/reference/commands), and every code in [Error codes](/reference/errors).
 
 With `--json`, stdout is exactly one JSON document. Use pnpm's `-s` flag so its own banner does not land on stdout. Every command here is read-only: none takes a key, and none sends a transaction.
 
@@ -21,8 +27,8 @@ Every result carries these fields:
 | Field | Meaning |
 |---|---|
 | `schemaVersion` | `1`. A breaking change to the result shape increments it. |
-| `kind` | `report` for everything in this release. |
-| `dataMode` | `live`: read from Arc Testnet at the block in `context.block`. `recorded`: copied from a bundled historical record, with its `recordedAt` and source SHA-256. |
+| `kind` | `report` for reads, `simulation` for `draw simulate`. |
+| `dataMode` | `live`: read from Arc Testnet at the block in `context.block`. `recorded`: copied from a bundled historical record, with its `recordedAt` and source SHA-256. `offline`: computed from an input file alone, with no block and no live claim. |
 
 **Never treat `recorded` data as the facility's current state.** `evidence show` describes transactions that happened when each record was made. Coverage evidence expires, so a facility that was COMPLIANT in a record may not be now.
 
@@ -47,6 +53,8 @@ On failure the exit code is 1, and stdout carries one JSON object. Branch on `co
 | `CHAIN_MISMATCH` | The RPC is not on Arc Testnet (5042002). |
 | `DEPLOYMENT_MISMATCH` | A contract has no code, a read reverts or returns nothing, or the wiring differs from the manifest. |
 | `RPC_UNAVAILABLE` | The RPC could not be reached or failed. Retrying may help. |
+| `INVALID_SIGNATURE` | A credential envelope's digest does not match its credential, or its signature does not recover to the claimed issuer. |
+| `SIMULATION_FAILED` | A simulated draw reverted with no data, or with data no known contract error decodes. A *decoded* refusal is not an error: it exits 0 with `allowed: false`. |
 | `VALIDATION_ERROR` | An argument or option failed its schema, such as an unknown evidence record. |
 | `COMMAND_NOT_FOUND` | No such command. |
 | `UNKNOWN` | An unknown flag, or an unexpected failure. |

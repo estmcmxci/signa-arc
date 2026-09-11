@@ -16,6 +16,22 @@ export default defineConfig({
       ],
     },
     {
+      text: "Guides",
+      items: [
+        { text: "Inspect a facility", link: "/guides/inspect-a-facility" },
+        { text: "Explain a refused draw", link: "/guides/explain-a-refused-draw" },
+      ],
+    },
+    {
+      text: "Reference",
+      items: [
+        { text: "Commands", link: "/reference/commands" },
+        { text: "Error codes", link: "/reference/errors" },
+        { text: "Credential envelope", link: "/reference/envelope" },
+        { text: "Deployment", link: "/reference/deployment" },
+      ],
+    },
+    {
       text: "Evidence",
       items: [{ text: "Recorded on Arc Testnet", link: "/evidence" }],
     },

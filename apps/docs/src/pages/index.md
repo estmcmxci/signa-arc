@@ -29,6 +29,11 @@ The deployment is on Arc Testnet, chain 5042002. The facility is fictional, the 
 | Command | What it does | Needs |
 |---|---|---|
 | `signa status` | Checks the deployment manifest and live connectivity: the chain, each contract's code, and the facility's wiring, all read at one block | An RPC; no key |
+| `signa facility show` | Reads the frozen policy, roles, vault balance and principal, and the covenant state the vault stored | An RPC; no key |
+| `signa coverage show` | Reads the engine's evaluation and its eligibility verdict on the exposure credential and each hedge | An RPC; no key |
+| `signa credentials list` | Lists the assertions the registry holds, with sequences and their age at the report block | An RPC; no key |
+| `signa credentials inspect <file>` | Checks a signed credential envelope offline: format, domain, facility, digest and recovered signer | Nothing: no RPC, no key |
+| `signa draw simulate --amount <USDC>` | Simulates the vault's own `draw` as the operator, and decodes a refusal | An RPC; no key |
 | `signa evidence show [record]` | Shows the recorded runs above, with every transaction linked | Nothing: no RPC, no key |
 
-Commands that read coverage, simulate a draw or submit credentials are specified but not built yet; they will appear here when they exist. The CLI is not published: [Run locally](/run-locally) has the commands. The [Quickstart](/quickstart) takes five minutes.
+Commands that submit credentials, sync, restore or send a draw are specified but not built yet; they will appear here when they exist. The CLI is not published: [Run locally](/run-locally) has the commands. The [Quickstart](/quickstart) takes five minutes.

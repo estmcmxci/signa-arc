@@ -18,6 +18,12 @@ const PAGES: [html: string, markdown: string, llms: string][] = [
   ["run-locally/index.html", "assets/md/run-locally.md", "/run-locally"],
   ["quickstart/index.html", "assets/md/quickstart.md", "/quickstart"],
   ["agents/index.html", "assets/md/agents.md", "/agents"],
+  ["guides/inspect-a-facility/index.html", "assets/md/guides/inspect-a-facility.md", "/guides/inspect-a-facility"],
+  ["guides/explain-a-refused-draw/index.html", "assets/md/guides/explain-a-refused-draw.md", "/guides/explain-a-refused-draw"],
+  ["reference/commands/index.html", "assets/md/reference/commands.md", "/reference/commands"],
+  ["reference/errors/index.html", "assets/md/reference/errors.md", "/reference/errors"],
+  ["reference/envelope/index.html", "assets/md/reference/envelope.md", "/reference/envelope"],
+  ["reference/deployment/index.html", "assets/md/reference/deployment.md", "/reference/deployment"],
   ["evidence/index.html", "assets/md/evidence.md", "/evidence"],
 ];
 const TEXT = /\.(html|js|mjs|cjs|css|json|txt|md|xml|svg|map|webmanifest)$/;

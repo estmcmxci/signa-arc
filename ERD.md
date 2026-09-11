@@ -90,7 +90,7 @@ These are proposed commands, not instructions runnable in today's repository. Du
 | `signa draw send --amount <USDC> --account <name>` | P1 | Require operator identity; fresh simulation followed by one explicitly requested draw |
 | `signa tx show <hash>` | P1 | Report pending, mined success or mined revert; decode available events and errors |
 
-**Shipped in the first P0 slice (branch `cli/p0`):** `signa status` and `signa evidence show [record]`. Every other row is still proposed.
+**Shipped in P0 (branch `cli/p0`):** `signa status`, `signa facility show`, `signa coverage show`, `signa credentials list`, `signa credentials inspect <file>`, `signa draw simulate --amount <USDC>` and `signa evidence show [record]`. Every P1 row is still proposed.
 
 Keep command argument schemas, descriptions, examples, outputs, errors and read/write classification together. Generate reference tables from that definition; do not maintain a second handwritten flag inventory. Export the incur CLI definition without executing it on import.
 
@@ -108,7 +108,7 @@ A completed simulation with `allowed: false` is a successful inquiry (exit 0). A
 
 Signa result fields distinguish `kind: report | simulation | transaction`, `dataMode`, context, outcome and optional transaction details. A refused simulation carries `allowed: false`, decoded contract error/arguments, engine reason where available, and an actionable explanation; raw revert data remains available for diagnostics. Never fabricate a decoded reason.
 
-Error codes include `INVALID_INPUT`, `INVALID_MANIFEST`, `CHAIN_MISMATCH`, `DEPLOYMENT_MISMATCH`, `RPC_UNAVAILABLE`, `INVALID_SIGNATURE`, `STALE_SEQUENCE`, `SIGNER_UNAVAILABLE`, `SIGNER_ROLE_MISMATCH`, `ACTION_REFUSED`, `TRANSACTION_REVERTED`, and `TRANSACTION_PENDING`. Pin and test actual exit semantics: exit 0 for completed reports/simulations and mined-success actions; nonzero for validation/transport/signing errors, refused actions, reverts and receipt timeouts. Consumers branch on codes, not error prose.
+Error codes include `INVALID_INPUT`, `INVALID_MANIFEST`, `CHAIN_MISMATCH`, `DEPLOYMENT_MISMATCH`, `RPC_UNAVAILABLE`, `INVALID_SIGNATURE`, `SIMULATION_FAILED`, `STALE_SEQUENCE`, `SIGNER_UNAVAILABLE`, `SIGNER_ROLE_MISMATCH`, `ACTION_REFUSED`, `TRANSACTION_REVERTED`, and `TRANSACTION_PENDING`. `SIMULATION_FAILED` was added in P0: a simulation that reverts without data, or with data no known contract error decodes, is a failed inquiry, unlike a decoded refusal. Pin and test actual exit semantics: exit 0 for completed reports/simulations and mined-success actions; nonzero for validation/transport/signing errors, refused actions, reverts and receipt timeouts. Consumers branch on codes, not error prose.
 
 Pinned behaviour, incur 0.5.1:
 - An error prints `{ code, message, retryable }` to stdout, which is one JSON document under `--json`, and exits 1.
