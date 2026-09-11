@@ -130,8 +130,8 @@ assert(latest.credential.sequence > 0n, "the trade has no hedge credential on th
 // Fail closed before spending gas: a stale exposure or a live waiver would
 // leave the update unable to move the covenant.
 assert.equal(await read(engine, engineAbi, "exposureEligibility", [facilityId]), 0, "the exposure credential is not eligible");
-assert.equal(await read(vault, vaultAbi, "activeWaiver"), false, "a waiver is active; the vault would not transition");
-const before = await covenantAt();
+const before = { ...(await covenantAt()), syncWouldMoveTo: await syncOutcome() };
+assert.equal(before.activeWaiver, false, "a waiver is active; the vault would not transition until it ends");
 
 // E-FIX-1: strictly above the latest sequence the registry holds for this trade.
 // E-FIX-2: observed at a block the chain has already produced, just before
@@ -193,6 +193,7 @@ try {
   for (const reading of [call.covenant, after]) {
     assert.equal(reading.coverageBps, Number(expectedBps), "coverage read back from CoverageEngine.evaluate");
     assert.equal(reading.covenantState, expectedState, "covenant state read back from the vault");
+    assert.equal(reading.activeWaiver, expectedState === "WAIVED", "activeWaiver read back from the vault");
   }
   evidence.outcome = "complete";
 } catch (error) {
@@ -243,14 +244,27 @@ async function covenantAt(blockNumber?: bigint) {
     resultReason: number;
   };
   const state = Number(await read(vault, vaultAbi, "covenantState", [], blockNumber));
+  const activeWaiver = (await read(vault, vaultAbi, "activeWaiver", [], blockNumber)) as boolean;
   const cureDeadline = (await read(vault, vaultAbi, "cureDeadline", [], blockNumber)) as bigint;
   return {
     readAtBlock: blockNumber?.toString() ?? "latest",
     coverageBps: Number(result.coverageBps),
     reasonCode: REASONS[result.resultReason] ?? String(result.resultReason),
     covenantState: STATES[state] ?? String(state),
+    activeWaiver,
     cureDeadline: cureDeadline.toString(),
   };
+}
+
+/** The state a permissionless syncCovenant would move the vault to now, simulated, never sent. */
+async function syncOutcome() {
+  const { result } = (await publicClient.simulateContract({
+    account: operator.address,
+    address: vault,
+    abi: vaultAbi,
+    functionName: "syncCovenant",
+  } as never)) as { result: readonly [unknown, number] };
+  return STATES[result[1]] ?? String(result[1]);
 }
 
 async function read(
