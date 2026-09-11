@@ -51,12 +51,12 @@ Records: `packages/privy-waiver/evidence/arc-waiver-evidence.json` and `arc-poli
 
 | | |
 |---|---|
-| Facility | **COMPLIANT**, 10000 bps, no active waiver — ready to film |
+| Facility | Stored state **COMPLIANT**, no active waiver. The exposure credential expired 2026-09-11 21:47:22 UTC, so `CoverageEngine` now evaluates **0 bps, INVALID_EXPOSURE** until fresh credentials are submitted. |
 | Suite | 64 TypeScript, 31 Solidity, dashboard builds |
 | Trunk | one branch, all lanes merged, clean-clone verified |
 | Quorum wallet gas | 0.2879 USDC |
 | Deployer gas | 0.5142 USDC |
-| Repo | `estmcmxci/signa-arc`, **still private** |
+| Repo | `estmcmxci/signa-arc`, **public** since 2026-09-11 |
 
 Top up gas at `faucet.circle.com` — 20 USDC per address every 2 hours — if a rehearsal drains it.
 

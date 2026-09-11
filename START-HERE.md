@@ -42,19 +42,19 @@ Arc is Circle's L1 where USDC is the native gas token. It ships StableFX — an 
 
 | Item | Req | State |
 |---|---|---|
-| Decimals boundary | R-F2-7 | ✅ `packages/credentials/src/decimals.ts`. Suite is **35** TypeScript + 25 Solidity green. Lane B closed a hole where hedge amounts reached credentials without passing through it. |
+| Decimals boundary | R-F2-7 | ✅ `packages/credentials/src/decimals.ts`. Suite is **64** TypeScript + 31 Solidity green as of 2026-09-11. Lane B closed a hole where hedge amounts reached credentials without passing through it. |
 | Arc EUR/USD fixtures | S-B | ✅ **Both defects fixed.** `arc-forward-restored.json` at sequence 4 makes A-4 possible; the demo now runs **10000 → 6840 → 10000 → 0 bps**. Public runs generate observations from a recorded chain timestamp, so credentials are current at run time. |
 | viem with `arcTestnet` | — | ✅ 2.56.3. Never hand-roll the chain definition. |
 | Architecture diagram | S-A | ✅ `ARC-ARCHITECTURE.html`. |
 | Chain unknowns | — | ✅ E1/E2/E3/E5 answered on-chain. See `ARC-FIELD-NOTES.md` §7. |
-| **`ICoverageGate`** | **R-F3-10** | ⬜ **Does not exist.** `CovenantVault.draw()` calls `CoverageEngine` directly. The seam is already there — `evaluate()` returns the verdict; `assess` adds the state check and the `reserveAmount` test `draw()` performs inline. ~2 hours. |
-| **Arc EURC scenario** | **S-2, S-4** | 🔨 **Next.** Nothing exists. Must import `arcTestnet` from `viem/chains` and assert receipt status per A-9. |
+| **`ICoverageGate`** | **R-F3-10** | ✅ `contracts/src/ICoverageGate.sol`. `CoverageEngine` implements it, and `CovenantVault` is the reference host: every draw is ruled by `assess`. |
+| **Arc EURC scenario** | **S-2, S-4** | ✅ `scenarios/arc-facility.ts` and `scenarios/arc-hedge-update.ts`. Both import `arcTestnet` from `viem/chains` and assert receipt status per A-9. |
 | **Deployment** | **S-1** | ✅ **Live on Arc Testnet 5042002**, verified by independent RPC. Facility `0x899dc705b298baf7…` is administered by a **Privy 2-of-2 key quorum** at `0x55C4DD3770A44695735717CB7b7005AC7dE9edA1` — set at creation and immutable.<br>`FacilityRegistry` `0xB54fe913C4a7dE73Bc285338dCbb384AEec5e448`<br>`CredentialRegistry` `0xD921734C9314442a74Cd3FEBAB8028b2Bb9A7624`<br>`CoverageEngine` `0x3341B76fEFF4CE691781fEAa4C76EA95479b9b6b`<br>`CovenantVault` `0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51`<br>Manifest: `deployments/arc-testnet.json`. |
-| `Deploy.s.sol` | S-1 | ⬜ Still guards on Base `84532` and uses `MockUSDC`. Swap for `5042002` and `0x3600…0000`. The script *pattern* is verified working on Arc (E1) — only the targets are wrong. |
-| Frontend | S-5 | ⬜ `apps/dashboard` reads a Base Sepolia manifest. **This is a qualification requirement**, not polish — a backend-only submission does not qualify for Arc. |
-| Wave 1 Base removals | — | ⬜ `scenarios/base-sepolia.ts`, both `base-sepolia-preflight` files and their test, both `deployment-manifest` files and their test, `index-base-ecosystem.mjs`, and the four `package.json` scripts calling them. **Every one is already preserved in the private `signa-batches` repo** — verified by diff. Removing them drops the TS suite by 7 tests. |
-| README | S-6 | ⬜ Currently a Base Sepolia deploy guide for scripts Wave 1 removes. Needs rewriting as the Arc README. |
-| Repo public | S-6 | ⬜ `signa-arc` is private. `gh repo edit estmcmxci/signa-arc --visibility public`. **Hard gate — every track dies without it.** |
+| `Deploy.s.sol` | S-1 | ✅ Targets Arc `5042002` and USDC `0x3600…0000`, and reverts `WrongChain` on any other chain. |
+| Frontend | S-5 | ✅ `apps/dashboard` reads the Arc manifest. A React rebuild with a public landing page is under way on the local `frontend/desk` branch and is not merged. |
+| Wave 1 Base removals | — | ✅ Done. `scenarios/base-sepolia.ts`, the `base-sepolia-preflight` and `deployment-manifest` files with their tests, `index-base-ecosystem.mjs` and the scripts calling them are gone; no `package.json` script mentions Base. **Every one is preserved in the private `signa-batches` repo.** |
+| README | S-6 | ✅ Rewritten as the Arc README. No Base Sepolia instructions remain. |
+| Repo public | S-6 | ✅ `estmcmxci/signa-arc` has been public since 2026-09-11. |
 | Video | S-A | ⬜ Not recorded. Must name the Arc bounty and state the boundary (A-8). |
 | Arc mainnet | — | ⬜ **Sept 30**, a separate deadline from submission. Decoupled, zero hackathon-window cost. |
 
@@ -70,6 +70,8 @@ Arc is Circle's L1 where USDC is the native gas token. It ships StableFX — an 
 8. **Mainnet by Sept 30** — after the deadline, worth doing.
 
 Items 1–4 are the critical path. 5–7 are the submission gate.
+
+**Status, 2026-09-11.** Items 1–6 are done. What remains is the video (7) and the mainnet deploy (8).
 
 **Concurrent execution runs in three lanes** — Contracts, Evidence, Surface — with three sync points. See `ARC-DELIVERY-PLAN.md` §"Lanes and sync points" and the lane column in `EED.md` §2. Under lanes, the plan's stage dates are sync-point dates.
 
@@ -99,7 +101,7 @@ Items 1–4 are the critical path. 5–7 are the submission gate.
 
 | Repo | Visibility | Holds |
 |---|---|---|
-| `estmcmxci/signa-arc` | private → public at S-6 | This build. Working tree is `~/signa`. |
+| `estmcmxci/signa-arc` | **public** since 2026-09-11 | This build. Working tree is `~/signa`. |
 | `estmcmxci/signa-batches` | private | Base code, business material, the four private strategy docs. |
 | `estmcmxci/signa` | private | The original, unclean history. A loose end — delete or archive. |
 
