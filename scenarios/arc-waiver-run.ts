@@ -28,6 +28,7 @@ import {
   concat,
   createPublicClient,
   createWalletClient,
+  decodeFunctionData,
   encodeFunctionData,
   formatEther,
   getAddress,
@@ -108,6 +109,18 @@ const options = new Map(
   }),
 );
 const checkOnly = options.has("check");
+// A resumed run adopts the transactions an interrupted attempt already sent, re-reading every one
+// from the chain, and picks the open waiver intent up rather than proposing a second one.
+const resuming = options.has("resume");
+const adopted = (options.get("adopt") ?? "")
+  .split(",")
+  .filter(Boolean)
+  .map((entry) => {
+    const [criterion, hash] = entry.split(":");
+    assert(criterion && hash?.startsWith("0x"), "--adopt takes <step>:<transaction hash> entries, comma separated");
+    return { criterion: criterion as Phase, hash: hash as Hex };
+  });
+assert(!resuming || adopted.length > 0, "--resume needs --adopt=<step>:<hash>,… for the transactions already sent");
 const refreshExposure = options.has("refresh-exposure");
 const durationSeconds = Number(options.get("duration") ?? DEFAULT_DURATION);
 const statedReason =
@@ -140,6 +153,7 @@ type Step = {
   transactionHash: Hex;
   explorer: string;
   blockNumber: string;
+  blockTimestamp?: string;
   sender: Address;
   expectedStatus: Status;
   actualStatus: string;
@@ -257,6 +271,7 @@ const evidence = {
   steps: [] as Step[],
   credentials: [] as unknown[],
   waiver: undefined as unknown,
+  interruption: undefined as unknown,
   ending: {
     covenantState: "unrecorded",
     byDesign: true,
@@ -274,6 +289,13 @@ assert(service && privy, "the quorum service is not configured");
 evidence.before = preflight.chain;
 
 try {
+  if (resuming) {
+    // W-1 … W-3 are already on chain. Every one is re-read and re-asserted here, in the direction
+    // its step expects; nothing is re-sent.
+    for (const entry of adopted) await adoptStep(entry.criterion, entry.hash);
+    const seam = await recordInterruption();
+    process.stdout.write(`resumed after ${seam} minutes, adopting ${adopted.length} transactions\n`);
+  } else {
   // W-1 — fund the facility so a draw is possible at all, then draw, permitted.
   if (preflight.funding.deposit > 0n) {
     if (preflight.funding.allowance < preflight.funding.deposit) {
@@ -290,6 +312,7 @@ try {
 
   // W-3 — the identical draw, refused on chain, with the receipt to show for it.
   await drawStep("W-3", "0x0");
+  }
 
   // W-4 — the lender's side: two people, one override.
   const waiver = await waive();
@@ -337,7 +360,11 @@ async function inspect() {
   note(rehearsal || !repository.scriptDirty, `commit ${SCRIPT_PATH} before a public run, so the evidence names the code that produced it`);
 
   const chain = await covenantAt();
-  note(chain.state === "COMPLIANT", `the facility is ${chain.state}; this run starts from COMPLIANT so its first draw is permitted`);
+  const expectedState = resuming ? "CURE" : "COMPLIANT";
+  note(
+    chain.state === expectedState,
+    `the facility is ${chain.state}; ${resuming ? "a resumed run continues from CURE, where the refusal left it" : "this run starts from COMPLIANT so its first draw is permitted"}`,
+  );
   note(chain.activeWaiver === false, "a waiver is already active; it cannot be revoked, so wait for it to lapse");
 
   // A stale exposure would make every evaluation in the run INVALID_EXPOSURE instead of a coverage story.
@@ -364,7 +391,7 @@ async function inspect() {
   note(hedge.credential.sequence > 0n, "the trade has no hedge credential on this facility yet");
 
   const balance = await vaultBalance();
-  const required = reserveAmount + 2n * DRAW;
+  const required = reserveAmount + (resuming ? DRAW : 2n * DRAW);
   const deposit = balance >= required ? 0n : required - balance;
   const [operatorUsdc, allowance, keeperGas] = await Promise.all([
     read(manifest.settlementAsset.address, usdcAbi as Abi, "balanceOf", [operator.address]) as Promise<bigint>,
@@ -395,7 +422,12 @@ async function inspect() {
         (action) => action.kind === "waiver.create" && !action.broadcast && ["pending", "granted", "processing", "executed"].includes(action.status),
       );
       openIntent = open?.intentId ?? null;
-      note(!open, `waiver intent ${open?.intentId} is already open (${open?.status}); it pins the admin nonce, so finish or reject it first`);
+      note(
+        resuming ? Boolean(open) : !open,
+        resuming
+          ? "no waiver intent is open; a resumed run finishes the one the interrupted attempt proposed"
+          : `waiver intent ${open?.intentId} is already open (${open?.status}); it pins the admin nonce, so finish or reject it first`,
+      );
       readiness = await service.waiverReadiness();
       quorumReady = true;
     }
@@ -415,7 +447,8 @@ async function inspect() {
     } catch (error) {
       // The draw only simulates once the vault is funded; that is the deposit's job, not a blocker.
       const detail = error instanceof BaseError ? error.shortMessage : String(error);
-      const expected = call === "draw" && deposit > 0n;
+      // The draw only simulates once the vault is funded, and never while the facility is in CURE.
+      const expected = call === "draw" && (deposit > 0n || resuming);
       simulations.push({ call, ok: false, detail: expected ? `${detail} (expected before the deposit)` : detail });
       if (!expected) blockers.push(`${call} does not simulate: ${detail}`);
     }
@@ -528,12 +561,67 @@ async function refreshExposureCredential() {
   return step;
 }
 
+/** A transaction an interrupted attempt sent: re-read from the chain, relabelled, re-asserted. */
+async function adoptStep(criterion: Phase, hash: Hex) {
+  const transaction = await publicClient.getTransaction({ hash });
+  assert(isAddressEqual(transaction.from, operator.address), `${hash} was not sent by the operator`);
+  const { functionName, args = [] } = decodeFunctionData({ abi: eventAbi, data: transaction.input });
+  const isDraw = functionName === "draw";
+  if (isDraw) assert.equal(transaction.input, drawCalldata, "an adopted draw must be the identical call");
+  // W-3 is the refusal by definition, so the expectation is fixed by the step, not by what happened.
+  const expected: Status = criterion === "W-3" ? "0x0" : "0x1";
+  const action =
+    functionName === "approve"
+      ? `approve ${args[1]} to the vault`
+      : functionName === "deposit"
+        ? `deposit ${args[0]} (facility funding)`
+        : functionName === "draw"
+          ? `draw ${args[0]}`
+          : functionName === "submitHedge"
+            ? `submit hedge seq ${(args[0] as { sequence: bigint }).sequence} (${(args[0] as { remainingNotional: bigint }).remainingNotional} USD base units)`
+            : functionName;
+  const step = await record(criterion, action, hash, expected);
+  step.note = "Sent by the interrupted first attempt and adopted here: re-read from the chain and re-asserted, never re-sent.";
+  if (isDraw) await verifyDraw(step, expected, undefined);
+  return step;
+}
+
+/** The seam in this record, named where a reader meets it. */
+async function recordInterruption() {
+  const first = evidence.steps[0];
+  const firstBlock = first ? await publicClient.getBlock({ blockNumber: BigInt(first.blockNumber) }) : undefined;
+  const now = await publicClient.getBlock();
+  const seamMinutes = firstBlock ? Math.round(Number(now.timestamp - firstBlock.timestamp) / 60) : 0;
+  const openedAt = evidence.steps.at(-1)?.blockTimestamp ?? null;
+  evidence.interruption = {
+    happened: true,
+    cause:
+      "The first attempt ran in a background shell that was killed when the session which started it ended. It had sent W-1 through W-3 and taken the risk officer's approval; the process did not reach its evidence writer, which ran in a finally block, so those six landed transactions left no record. This run journals every step as it lands.",
+    lastCompletedStep: "W-4, the risk officer's approval: intent pending, 1 of 2",
+    approvalSurvived:
+      "The risk officer's approval was still standing at 1 of 2 when this run resumed, roughly forty minutes later. The threshold is enforced inside Privy, not in the process that proposed the intent: the half-approved intent neither executed nor expired when the machine that proposed it went away, and it still pinned the admin wallet's next nonce, so nothing else could be proposed meanwhile.",
+    resumedAt: new Date().toISOString(),
+    approximateGapMinutes: seamMinutes,
+    refusalRecordedAt: openedAt,
+    adoptedTransactions: adopted.map((entry) => `${entry.criterion} ${entry.hash}`),
+    note: "The sequence is therefore one facility and one uninterrupted chain of state, but not one tight block range. The block numbers show the seam.",
+  };
+  await writeEvidence({ quiet: true });
+  return seamMinutes;
+}
+
 /** Propose, two approvals, Privy signs, we broadcast. The service is the console's own. */
 async function waive() {
   const adminGasBefore = await publicClient.getBalance({ address: quorum!.walletAddress! });
   const readiness = await service!.waiverReadiness();
   assert.equal(readiness.refusals.length, 0, `the contract would refuse a waiver now: ${readiness.refusals.join("; ")}`);
-  const proposed = await service!.proposeWaiver({ durationSeconds, reason: statedReason });
+  const open = (await service!.list()).find(
+    (action) => action.kind === "waiver.create" && !action.broadcast && ["pending", "granted", "processing", "executed"].includes(action.status),
+  );
+  assert(!resuming || open, "no open waiver intent to resume");
+  // Never a second proposal: the first pins the admin wallet's next nonce until it is finished.
+  const proposed = open ?? (await service!.proposeWaiver({ durationSeconds, reason: statedReason }));
+  if (open) process.stdout.write(`W-4 resuming intent ${open.intentId} (${open.status}), proposed ${new Date(open.createdAt).toISOString()}\n`);
   const sent = new Map<string, { signature: string; timestamp: number; payloadSha256: string }>();
   let view = proposed;
   for (const approver of approvers) {
@@ -658,6 +746,12 @@ async function drawStep(criterion: Phase, expected: Status) {
   assert.equal(transaction.input, drawCalldata, "every draw must be the identical call");
 
   const step = await record(criterion, `draw ${DRAW}`, hash, expected);
+  await verifyDraw(step, expected, predicted);
+  return step;
+}
+
+/** Everything a draw must show after its receipt, whether this process sent it or adopted it. */
+async function verifyDraw(step: Step, expected: Status, predicted: Awaited<ReturnType<typeof refusalAt>> | undefined) {
   const blockNumber = BigInt(step.blockNumber);
   const [balanceBefore, balanceAfter, principalBefore, principalAfter] = await Promise.all([
     vaultBalance(blockNumber - 1n),
@@ -680,7 +774,7 @@ async function drawStep(criterion: Phase, expected: Status) {
     assert.equal(balanceBefore - balanceAfter, DRAW, "the draw must move USDC out of the vault");
     assert.equal(principalAfter - principalBefore, DRAW);
     assert(step.events.some(({ event }) => event === "Drawn"), "no Drawn event");
-    if (criterion === "W-5") {
+    if (step.criterion === "W-5") {
       // The whole point of the step: permitted, and still not compliant.
       const covenant = await covenantAt(blockNumber);
       assert.equal(covenant.state, "WAIVED", "W-5 must draw under the waiver");
@@ -688,7 +782,8 @@ async function drawStep(criterion: Phase, expected: Status) {
       assert(covenant.coverageBps < covenant.requiredCoverageBps, "W-5 coverage is not below the minimum");
       step.note = `Permitted under the waiver while coverage was ${covenant.coverageBps} of ${covenant.requiredCoverageBps} bps: the exception releases the draw, it does not restore cover.`;
     }
-    return step;
+    await writeEvidence({ quiet: true });
+    return;
   }
 
   // A transport error, an unrelated revert or an out-of-gas is not acceptance evidence.
@@ -699,12 +794,17 @@ async function drawStep(criterion: Phase, expected: Status) {
   // Arc's RPC does not serve debug_traceTransaction, so the revert data comes from replaying the
   // identical call against the state on either side of it.
   const replays = [await refusalAt(blockNumber - 1n), await refusalAt(blockNumber)];
-  for (const refusal of [predicted, ...replays]) {
-    assert.equal(refusal?.error, "DrawNotAllowed");
-    assert.equal(refusal?.state, "CURE");
+  for (const refusal of [...(predicted ? [predicted] : []), ...replays]) {
+    assert.equal(refusal.error, "DrawNotAllowed");
+    assert.equal(refusal.state, "CURE");
   }
-  step.refusal = { predictedBeforeBroadcast: predicted, stateReplays: replays, gasLimit: REFUSAL_GAS_LIMIT.toString() };
-  return step;
+  step.refusal = {
+    predictedBeforeBroadcast:
+      predicted ?? "not recorded: this draw was adopted after the fact, so no prediction was made before it was broadcast",
+    stateReplays: replays,
+    gasLimit: REFUSAL_GAS_LIMIT.toString(),
+  };
+  await writeEvidence({ quiet: true });
 }
 
 async function refusalAt(blockNumber: bigint) {
@@ -747,6 +847,9 @@ async function record(criterion: Phase, action: string, hash: Hex, expected: Sta
     events: parseEventLogs({ abi: eventAbi, logs: receipt.logs.map(normalizeLog) }).map((log) => ({ contract: log.address, event: log.eventName, args: log.args })),
   };
   evidence.steps.push(step);
+  // The record is written here, step by step. An earlier attempt kept it in a finally block, the
+  // process was killed, and six landed transactions left no record at all. A finally is not a journal.
+  await writeEvidence({ quiet: true });
   process.stdout.write(`${criterion} ${action}: ${receipt.status} (expected ${expected}), ${covenant.coverageBps} bps ${covenant.reason}, ${covenant.state}  ${step.explorer}\n`);
   // A-9: the receipt decides, never an exit code.
   assert.equal(receipt.status, expected, `${criterion} ${action}: expected status ${expected}, got ${receipt.status} (${step.explorer})`);
@@ -851,7 +954,7 @@ function gitState() {
   return { head: git("rev-parse", "HEAD"), scriptDirty: git("status", "--porcelain", "--", SCRIPT_PATH) !== "" };
 }
 
-async function writeEvidence() {
+async function writeEvidence({ quiet = false }: { quiet?: boolean } = {}) {
   await mkdir(EVIDENCE_DIR, { recursive: true });
   await mkdir(WAIVER_EVIDENCE_DIR, { recursive: true });
   const json = (value: unknown) => `${JSON.stringify(value, (_key, item: unknown) => (typeof item === "bigint" ? item.toString() : item), 2)}\n`;
@@ -874,6 +977,7 @@ async function writeEvidence() {
       "utf8",
     );
   }
+  if (quiet) return;
   process.stdout.write(`\nEvidence (${evidence.outcome}): ${join(EVIDENCE_DIR, `${EVIDENCE_NAME}.json`)}\n`);
   process.stdout.write(`${ENDING}\n`);
 }
