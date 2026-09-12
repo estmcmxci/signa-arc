@@ -16,7 +16,14 @@
   --error:#ff8389; --error-bg:#520408;
   --font-sans:'Inter Variable',Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   --font-mono:'Geist Mono Variable',ui-monospace,SFMono-Regular,monospace;
-  --radius-sm:5px; --radius-md:8px; --radius-lg:12px;
+  /* Borrowed from oikonomos: no radius anywhere. A sharp corner reads as an instrument;
+     a rounded one reads as a web app. */
+  --radius-sm:0; --radius-md:0; --radius-lg:0;
+  /* The three fixed layers behind every page: a ruled grid, two soft glows, and film
+     grain. Neutral rather than accent-tinted, because this palette's accent is also
+     --ok, and a green wash would read as a compliance verdict. */
+  --grid-line:#ffffff0a; --glow-top:#ffffff0a; --glow-side:#ffffff07; --noise-opacity:.22;
+  --panel-glass:color-mix(in srgb,var(--panel) 72%,transparent);
   --shadow-sm:0 0 0 1px var(--line),0 2px 2px #00000032;
   --shadow-md:0 0 0 1px var(--line),0 8px 16px -8px #00000060;
   --shadow-lg:0 0 0 1px var(--line),0 16px 48px #00000060;
@@ -35,6 +42,7 @@
   --ok:#0e6029; --ok-bg:#defbe6; --hold:#8a3800; --hold-bg:#fff2e8;
   --breach:#9f1853; --breach-bg:#ffd6e8; --waiver:#6929c4; --waiver-bg:#e8daff;
   --error:#a2191f; --error-bg:#fff1f1;
+  --grid-line:#00000008; --glow-top:#00000006; --glow-side:#00000004; --noise-opacity:0;
   --shadow-sm:0 0 0 1px var(--line),0 2px 2px #0000000a;
   --shadow-md:0 0 0 1px var(--line),0 8px 16px -8px #00000012;
   --shadow-lg:0 0 0 1px var(--line),0 16px 48px #00000018;
@@ -42,7 +50,17 @@
 [data-density='compact'] {--row-h:28px;--row-pad:4px;--table-size:12px}
 [data-density='comfortable'] {--row-h:48px;--row-pad:14px;--table-size:14px}
 * {box-sizing:border-box}
-body {margin:0;min-width:320px}
+body {
+  margin:0;min-width:320px;
+  background-image:linear-gradient(var(--grid-line) 1px,transparent 1px),linear-gradient(90deg,var(--grid-line) 1px,transparent 1px);
+  background-size:60px 60px;background-attachment:fixed;
+}
+body::before,body::after {content:'';position:fixed;inset:0;z-index:-1;pointer-events:none}
+body::before {background:radial-gradient(ellipse 80% 50% at 50% -20%,var(--glow-top),transparent),radial-gradient(ellipse 60% 40% at 85% 55%,var(--glow-side),transparent)}
+body::after {
+  opacity:var(--noise-opacity);mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
 button,input,select,textarea {font:inherit;color:inherit}
 button,a,input,select,summary { -webkit-tap-highlight-color:transparent }
 button {cursor:pointer;transition:transform var(--motion-fast) var(--ease-out),background-color 150ms ease}
@@ -58,4 +76,16 @@ a {color:inherit;text-underline-offset:4px}
   *,*::before,*::after {scroll-behavior:auto!important;animation:none!important}
   button {transition:background-color 100ms ease}
   button:active {transform:none}
+  /* The borrowed hover lift is movement, so it goes; the border still brightens. */
+  .feature-grid article:hover,.audience-grid article:hover {transform:none}
 }
+
+/* Chrome is mono, uppercase and widely tracked; prose and quantities stay in Inter. */
+.eyebrow,.badge,th,.mock-tag,.environment,.step-number,.component-label,.criterion {
+  font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.12em;
+}
+button,.button {font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em;font-size:12px}
+
+/* The live dot on the hero badge. Reduced motion stops it: the rule above sets
+   animation:none on everything, which leaves the dot solid rather than blinking. */
+@keyframes pulse {0%,100%{opacity:1}50%{opacity:.35}}

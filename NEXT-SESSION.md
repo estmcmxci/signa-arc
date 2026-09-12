@@ -25,7 +25,7 @@ Read [HANDOVER-PRIVY-DESK.md](./HANDOVER-PRIVY-DESK.md) for the round that just 
 | | |
 |---|---|
 | `integration` | `9f1c0b9`. **21 commits unpushed.** `origin/main` is `e8b361e` — 63 commits were pushed at 00:50 today, so the history is no longer two days stale |
-| `ui/oikonomos` | `9fc9cb8`, 6 commits ahead of `integration`. **Not merged. Your decision.** |
+| `ui/aesthetic` | merged into `integration` |
 | Suites | **170 TypeScript, 31 Solidity, 16 docs pages**, `pnpm check` exit 0. Dashboard: **17 unit, 15 browser** (was 20; the wallet tests went with the signing path) |
 | Facility | **CURE**, 6840 of 10000 bps, `BELOW_THRESHOLD`, no active waiver, a waiver would be accepted |
 | Exposure | Sequence 4, re-observed 08:40 EDT today, **eligible until roughly 08:40 EDT on the 13th** |
@@ -52,7 +52,7 @@ That boundary is still stated on the desk's waiver panel, at the point of use in
 
 ## Open, and yours to decide
 
-1. **Merge `ui/oikonomos` or not.** Its six commits are three background layers, zero radius, mono uppercase chrome, glass panels, the four step cards, the 1400px shell and the built-with marks. Two of the six are pure copy and are already on `integration`; the rest is the look. Browser suite is green at 15 on the fork, axe included, on both routes.
+1. **`ui/aesthetic` is merged.** Background layers, zero radius, mono uppercase chrome, glass panels, the four step cards, the 1400px shell and the built-with marks. Browser suite was green at 15 on the fork, axe included, on both routes.
 2. **The hero's right half is empty.** The reference puts a live panel there. For Signa that would be the facility itself — `CURE · 6840 / 10000 bps · vault 0xa68f…bF51` — read from chain, which would put the proof above the fold and replace what the recorded-proof section used to do. Not built. It needs the landing to read chain again, which was stripped out of `src/landing/main.ts`.
 3. **Privy's mark is recoloured**, not a vendor-supplied on-dark asset. Their own site serves it near-black; it was cropped to the lockup and turned white for the dark plate. Arc's and USDC's are their own on-dark files.
 4. **The video script has no Privy scene.** You asked me not to write it.
