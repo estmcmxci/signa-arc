@@ -1,7 +1,6 @@
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { SignaError } from "@signa/client";
 
@@ -17,7 +16,21 @@ import { SignaError } from "@signa/client";
  * transaction can be reconciled later with `signa tx show`.
  */
 
-const REPO_ROOT = resolve(fileURLToPath(new URL("../../../", import.meta.url)));
+/**
+ * The git working copy a path sits in, if any. Found by walking up looking for `.git`, which is a
+ * directory in a normal clone and a file in a worktree. This is asked of the journal path itself
+ * rather than measured from this file's own location, which means nothing once the CLI is
+ * installed somewhere else entirely.
+ */
+function gitWorkingCopy(path: string): string | null {
+  let directory = dirname(resolve(path));
+  for (;;) {
+    if (existsSync(join(directory, ".git"))) return directory;
+    const parent = dirname(directory);
+    if (parent === directory) return null;
+    directory = parent;
+  }
+}
 
 export type JournalEnv = {
   SIGNA_JOURNAL?: string | undefined;
@@ -47,10 +60,11 @@ export type Journal = {
 export function journalPath(env: JournalEnv, cwd: string): string {
   if (env.SIGNA_JOURNAL && env.SIGNA_JOURNAL.length > 0) {
     const named = resolve(cwd, env.SIGNA_JOURNAL);
-    if (named === REPO_ROOT || named.startsWith(`${REPO_ROOT}/`)) {
+    const checkout = gitWorkingCopy(named);
+    if (checkout) {
       throw new SignaError(
         "INVALID_INPUT",
-        `SIGNA_JOURNAL points inside the repository at ${named}; the operation journal records real accounts and transactions and must live outside a working copy`,
+        `SIGNA_JOURNAL points inside the git working copy at ${checkout}; the operation journal records real accounts and transactions and must live outside a working copy`,
       );
     }
     return named;

@@ -98,4 +98,6 @@ pnpm -s signa status --schema --format json
 
 ## Read these docs as Markdown
 
-`/llms.txt` indexes every page, and `/llms-full.txt` contains all of them. The docs server (`pnpm docs:dev` or `pnpm docs:preview`) also serves each page as Markdown at `/<page>.md`, for example `/quickstart.md`. The static build writes those files under `/assets/md/`.
+`/llms.txt` indexes every page, and `/llms-full.txt` contains all of them. Every page is also served as Markdown at its own route with `.md` appended, for example `/quickstart.md` or `/guides/send-and-reconcile.md`.
+
+Those routes are real files in the static build, not a server rewrite, so they behave the same locally (`pnpm docs:dev`, `pnpm docs:preview`) and on any static host. The build fails if one is missing.

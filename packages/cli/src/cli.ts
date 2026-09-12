@@ -65,7 +65,20 @@ import {
  * sends a transaction.
  */
 
-export const SIGNA_CLI_VERSION = "0.0.0";
+export const SIGNA_CLI_VERSION = "0.1.0";
+
+/**
+ * The registry name this CLI would be published under. **It is not owned yet**, and choosing it
+ * needs a credential nobody here has, so nothing may depend on it resolving.
+ *
+ * This matters because of a finding recorded in SPIKES.md: incur 0.5.1 honours `--update` even
+ * with `update: false`, and with a `signa` bin declared it would infer a package name and run
+ * `npm install --global <name>@latest`. Against an unowned name that is an install of whatever
+ * someone else has registered. Supplying both `check` and `install` removes the hazard entirely:
+ * incur uses them instead of fetching from a registry or shelling out to a package manager, so
+ * `--update` contacts nothing and installs nothing.
+ */
+export const SIGNA_PACKAGE_NAME = "@signa/cli";
 
 export type SignaCliDependencies = {
   /** Creates the client for live reads and receipts. Offline and recorded commands never call it. */
@@ -220,9 +233,16 @@ export function createSignaCli(dependencies: SignaCliDependencies = {}) {
 
   const cli = Cli.create("signa", {
     version: SIGNA_CLI_VERSION,
-    description: "Inspect a Signa Covenant facility on Arc Testnet, simulate a draw, check a signed credential offline, and read the recorded evidence. Read-only: no command here needs a key.",
-    // No automatic update checks. See SPIKES.md for what `--update` does.
-    update: false,
+    description: "Inspect a Signa Covenant facility on Arc Testnet, simulate a draw, check a signed credential offline, submit credentials, send covenant operations and read the recorded evidence. Reading needs no key; only the commands that take --account can change anything.",
+    update: {
+      package: SIGNA_PACKAGE_NAME,
+      // Never contacts a registry: there is no published version to find.
+      check: () => undefined,
+      // Never shells out to a package manager. Replacing this is part of publishing for real.
+      install: () => {
+        throw new Error(`${SIGNA_PACKAGE_NAME} is not published, so signa cannot update itself. Reinstall it from source.`);
+      },
+    },
   });
 
   cli.command("status", {
