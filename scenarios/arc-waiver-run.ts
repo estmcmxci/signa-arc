@@ -121,6 +121,7 @@ const adopted = (options.get("adopt") ?? "")
     return { criterion: criterion as Phase, hash: hash as Hex };
   });
 assert(!resuming || adopted.length > 0, "--resume needs --adopt=<step>:<hash>,… for the transactions already sent");
+const adoptedWaiver = options.get("adopt-waiver") as Hex | undefined;
 const refreshExposure = options.has("refresh-exposure");
 const durationSeconds = Number(options.get("duration") ?? DEFAULT_DURATION);
 const statedReason =
@@ -293,8 +294,7 @@ try {
     // W-1 … W-3 are already on chain. Every one is re-read and re-asserted here, in the direction
     // its step expects; nothing is re-sent.
     for (const entry of adopted) await adoptStep(entry.criterion, entry.hash);
-    const seam = await recordInterruption();
-    process.stdout.write(`resumed after ${seam} minutes, adopting ${adopted.length} transactions\n`);
+    process.stdout.write(`resumed, adopting ${adopted.length} transactions\n`);
   } else {
   // W-1 — fund the facility so a draw is possible at all, then draw, permitted.
   if (preflight.funding.deposit > 0n) {
@@ -316,6 +316,8 @@ try {
 
   // W-4 — the lender's side: two people, one override.
   const waiver = await waive();
+  // Recorded once the waiver is in hand, so the seam can cite the approvals it actually survived.
+  if (resuming) await recordInterruption();
 
   // W-5 — the same call again, permitted under the exception, cover still short of policy.
   await drawStep("W-5", "0x1");
@@ -588,43 +590,51 @@ async function adoptStep(criterion: Phase, hash: Hex) {
 
 /** The seam in this record, named where a reader meets it. */
 async function recordInterruption() {
-  const first = evidence.steps[0];
-  const firstBlock = first ? await publicClient.getBlock({ blockNumber: BigInt(first.blockNumber) }) : undefined;
-  const now = await publicClient.getBlock();
-  const seamMinutes = firstBlock ? Math.round(Number(now.timestamp - firstBlock.timestamp) / 60) : 0;
-  const openedAt = evidence.steps.at(-1)?.blockTimestamp ?? null;
+  const waiver = evidence.waiver as
+    | { approvals: { role: string; signedAt: string | null }[]; privySigned: { decodedNonce: number }; broadcast: { blockTimestamp?: string } }
+    | undefined;
+  const refusal = evidence.steps.find((step) => step.criterion === "W-3");
+  const created = evidence.steps.find((step) => step.criterion === "W-4");
+  const gapMinutes =
+    refusal?.blockTimestamp && created?.blockTimestamp
+      ? Math.round((Date.parse(created.blockTimestamp) - Date.parse(refusal.blockTimestamp)) / 60_000)
+      : null;
+  const signedAt = (role: string) => waiver?.approvals.find((approval) => approval.role === role)?.signedAt ?? "not recorded";
   evidence.interruption = {
     happened: true,
     cause:
-      "The first attempt ran in a background shell that was killed when the session which started it ended. It had sent W-1 through W-3 and taken the risk officer's approval; the process did not reach its evidence writer, which ran in a finally block, so those six landed transactions left no record. This run journals every step as it lands.",
-    lastCompletedStep: "W-4, the risk officer's approval: intent pending, 1 of 2",
-    approvalSurvived:
-      "The risk officer's approval was still standing at 1 of 2 when this run resumed, roughly forty minutes later. The threshold is enforced inside Privy, not in the process that proposed the intent: the half-approved intent neither executed nor expired when the machine that proposed it went away, and it still pinned the admin wallet's next nonce, so nothing else could be proposed meanwhile.",
+      "Two processes were killed before they finished; each ran in a background shell that ended with the session which started it. The first sent W-1 through W-3 and took both approvals. The second broadcast the waiver and sent W-5, then died inside the wait for the waiver to lapse. Only the first lost a record: its evidence writer ran in a finally block that never ran, so six landed transactions left no trace at all. Every run since journals each step as it lands, which is why the second kill cost nothing.",
+    whatSurvived: `Both approvals landed in the first attempt, three seconds apart — risk officer ${signedAt("Risk officer")}, treasury lead ${signedAt("Treasury lead")} — so Privy met the threshold and signed. The signed transaction then sat unbroadcast for about ${gapMinutes ?? "forty"} minutes across a killed process, and was still valid when it was finally sent: nonce ${waiver?.privySigned.decodedNonce ?? "?"} had not been taken and the fee cap it was pinned with still stood. Privy holds the signature and we hold the broadcast; neither depends on the other staying alive. The quorum is enforced where the keys are, not in the process that asked for them.`,
     resumedAt: new Date().toISOString(),
-    approximateGapMinutes: seamMinutes,
-    refusalRecordedAt: openedAt,
-    adoptedTransactions: adopted.map((entry) => `${entry.criterion} ${entry.hash}`),
-    note: "The sequence is therefore one facility and one uninterrupted chain of state, but not one tight block range. The block numbers show the seam.",
+    minutesBetweenRefusalAndWaiver: gapMinutes,
+    adoptedTransactions: [
+      ...adopted.map((entry) => `${entry.criterion} ${entry.hash}`),
+      ...(adoptedWaiver ? [`W-4 ${adoptedWaiver}`] : []),
+    ],
+    note: "The sequence is therefore one facility and one unbroken chain of state, but not one tight block range. The block numbers show the seam, and every adopted transaction was re-read from the chain and re-asserted here rather than taken on trust.",
   };
   await writeEvidence({ quiet: true });
-  return seamMinutes;
 }
 
 /** Propose, two approvals, Privy signs, we broadcast. The service is the console's own. */
 async function waive() {
-  const adminGasBefore = await publicClient.getBalance({ address: quorum!.walletAddress! });
   const readiness = await service!.waiverReadiness();
   assert.equal(readiness.refusals.length, 0, `the contract would refuse a waiver now: ${readiness.refusals.join("; ")}`);
   const open = (await service!.list()).find(
     (action) => action.kind === "waiver.create" && !action.broadcast && ["pending", "granted", "processing", "executed"].includes(action.status),
   );
-  assert(!resuming || open, "no open waiver intent to resume");
+  const broadcastAlready = adoptedWaiver
+    ? (await service!.list()).find((action) => action.kind === "waiver.create" && action.broadcast?.hash?.toLowerCase() === adoptedWaiver.toLowerCase())
+    : undefined;
+  assert(!adoptedWaiver || broadcastAlready, `no waiver intent in the store was broadcast as ${adoptedWaiver}`);
+  assert(adoptedWaiver || !resuming || open, "no open waiver intent to resume");
   // Never a second proposal: the first pins the admin wallet's next nonce until it is finished.
-  const proposed = open ?? (await service!.proposeWaiver({ durationSeconds, reason: statedReason }));
-  if (open) process.stdout.write(`W-4 resuming intent ${open.intentId} (${open.status}), proposed ${new Date(open.createdAt).toISOString()}\n`);
+  const proposed = broadcastAlready ?? open ?? (await service!.proposeWaiver({ durationSeconds, reason: statedReason }));
+  if (broadcastAlready) process.stdout.write(`W-4 adopting the waiver already broadcast as ${adoptedWaiver} from intent ${proposed.intentId}\n`);
+  else if (open) process.stdout.write(`W-4 resuming intent ${open.intentId} (${open.status}), proposed ${new Date(open.createdAt).toISOString()}\n`);
   const sent = new Map<string, { signature: string; timestamp: number; payloadSha256: string }>();
   let view = proposed;
-  for (const approver of approvers) {
+  for (const approver of adoptedWaiver ? [] : approvers) {
     view = await service!.get(proposed.intentId);
     if (view.status !== "pending") break;
     const publicKey = normalizePublicKey(approver.publicKey);
@@ -639,13 +649,13 @@ async function waive() {
     sent.set(publicKey, { signature, timestamp: payload.timestamp, payloadSha256: createHash("sha256").update(bytes).digest("hex") });
     process.stdout.write(`W-4 ${approver.label} approved: intent ${view.status}, ${view.approvals.members.filter((m) => m.signedAt).length} of ${view.approvals.threshold}\n`);
   }
-  for (let attempt = 0; attempt < 30 && ["pending", "granted", "processing"].includes(view.status); attempt++) {
+  for (let attempt = 0; !adoptedWaiver && attempt < 30 && ["pending", "granted", "processing"].includes(view.status); attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 1_000));
     view = await service!.get(proposed.intentId);
   }
+  if (adoptedWaiver) view = await service!.get(proposed.intentId);
   assert.equal(view.status, "executed", `intent ${proposed.intentId} is ${view.status}, not executed`);
-  const executed = await service!.execute(proposed.intentId);
-  const broadcast = executed.broadcast;
+  const broadcast = adoptedWaiver ? { hash: adoptedWaiver } : (await service!.execute(proposed.intentId)).broadcast;
   assert(broadcast, "nothing was broadcast");
 
   // Re-read from Privy and from Arc, not from the service.
@@ -659,15 +669,32 @@ async function waive() {
   // is only worth making against what was actually proposed and approved.
   const recordedReason = proposed.reason ?? statedReason;
   const commitment = reasonCommitment(recordedReason);
-  const created = step.events.find((event) => event.event === "WaiverCreated")?.args as { facilityId?: Hex; reasonCommitment?: Hex; endsAt?: bigint } | undefined;
+  const waiverEvents = step.events.filter((event) => event.event === "WaiverCreated");
+  const created = waiverEvents[0]?.args as { facilityId?: Hex; reasonCommitment?: Hex; endsAt?: bigint } | undefined;
   assert(created, "the receipt carries no WaiverCreated");
-  assert.equal(String(created.facilityId).toLowerCase(), facilityId.toLowerCase(), "WaiverCreated names another facility");
-  assert.equal(String(created.reasonCommitment).toLowerCase(), commitment.toLowerCase(), "WaiverCreated does not commit to the stated reason");
-  assert(isAddressEqual(recoveredSigner, quorum!.walletAddress!), "the signed transaction does not recover to the admin wallet");
-  assert.equal(step.covenantState, "WAIVED", "the vault is not WAIVED after the waiver");
+  const checks = {
+    exactlyOneWaiverCreated: waiverEvents.length === 1,
+    waiverCreatedNamesThisFacility: String(created.facilityId).toLowerCase() === facilityId.toLowerCase(),
+    waiverCreatedCommitsToTheStatedReason: String(created.reasonCommitment).toLowerCase() === commitment.toLowerCase(),
+    signedByTheAdminWallet: isAddressEqual(recoveredSigner, quorum!.walletAddress!),
+    // The transaction Privy signed is field for field the one the approvers were shown.
+    signedTransactionIsTheApprovedOne:
+      decoded.chainId === proposed.call.chainId &&
+      isAddressEqual(decoded.to ?? "0x0000000000000000000000000000000000000000", proposed.call.to) &&
+      (decoded.data ?? "0x").toLowerCase() === proposed.call.data.toLowerCase() &&
+      (decoded.nonce ?? 0) === proposed.call.nonce &&
+      (decoded.value ?? 0n) === 0n,
+    receiptStatusIs0x1: step.actualStatus === "0x1",
+    covenantStateReadBackWaived: step.covenantState === "WAIVED",
+  };
+  for (const [name, passed] of Object.entries(checks)) assert(passed, `waiver check failed: ${name}`);
 
   const endsAt = (await read(covenantVault.address, vaultAbi, "waiverEndsAt")) as bigint;
-  const adminGasAfter = await publicClient.getBalance({ address: quorum!.walletAddress! });
+  const waiverBlock = BigInt(step.blockNumber);
+  const [adminGasBefore, adminGasAfter] = await Promise.all([
+    publicClient.getBalance({ address: quorum!.walletAddress!, blockNumber: waiverBlock - 1n }),
+    publicClient.getBalance({ address: quorum!.walletAddress!, blockNumber: waiverBlock }),
+  ]);
   const spentOnWaiver = adminGasBefore - adminGasAfter;
   const approvals = keyMembers(intent).map((member) => {
     const approver = approvers.find((candidate) => normalizePublicKey(candidate.publicKey) === member.publicKey);
@@ -705,12 +732,12 @@ async function waive() {
     broadcast: { transactionHash: step.transactionHash, explorer: step.explorer, blockNumber: step.blockNumber, blockTimestamp: step.blockTimestamp, sender: step.sender, expectedStatus: "0x1", actualStatus: step.actualStatus, gasUsed: step.gasUsed },
     assertions: {
       bothApproversSigned: approvals.filter((approval) => approval.signedAt && approval.role !== "not one of our approvers").length === 2,
-      everyRecordedSignatureVerifies: approvals.every((approval) => approval.signatureVerifies !== false),
-      signedByTheAdminWallet: isAddressEqual(recoveredSigner, quorum!.walletAddress!),
-      receiptStatusIs0x1: step.actualStatus === "0x1",
-      waiverCreatedNamesThisFacility: true,
-      waiverCreatedCommitsToTheStatedReason: true,
-      covenantStateReadBackWaived: step.covenantState === "WAIVED",
+      // A field that reads as a passed check when it verified nothing is worse than no field.
+      signaturesReVerifiedHere:
+        approvals.some((approval) => approval.signature !== null)
+          ? approvals.filter((approval) => approval.signature !== null).every((approval) => approval.signatureVerifies === true)
+          : "not re-verified in this process: both approvals were made before it started, and Privy holds them. Their timestamps above are Privy's record, not a signature this run checked.",
+      ...checks,
     },
   };
   return { endsAt, intentId: proposed.intentId };
