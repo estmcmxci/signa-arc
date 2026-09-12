@@ -362,11 +362,10 @@ async function inspect() {
   note(rehearsal || !repository.scriptDirty, `commit ${SCRIPT_PATH} before a public run, so the evidence names the code that produced it`);
 
   const chain = await covenantAt();
-  const expectedState = resuming ? "CURE" : "COMPLIANT";
-  note(
-    chain.state === expectedState,
-    `the facility is ${chain.state}; ${resuming ? "a resumed run continues from CURE, where the refusal left it" : "this run starts from COMPLIANT so its first draw is permitted"}`,
-  );
+  // Where each kind of run expects to find the facility: a fresh one at COMPLIANT, a resumed one at
+  // CURE where the refusal left it, and one adopting a broadcast waiver at WAIVED, before its sync.
+  const expectedState = adoptedWaiver ? "WAIVED" : resuming ? "CURE" : "COMPLIANT";
+  note(chain.state === expectedState, `the facility is ${chain.state}; this run expects ${expectedState}`);
   note(chain.activeWaiver === false, "a waiver is already active; it cannot be revoked, so wait for it to lapse");
 
   // A stale exposure would make every evaluation in the run INVALID_EXPOSURE instead of a coverage story.
@@ -393,7 +392,8 @@ async function inspect() {
   note(hedge.credential.sequence > 0n, "the trade has no hedge credential on this facility yet");
 
   const balance = await vaultBalance();
-  const required = reserveAmount + (resuming ? DRAW : 2n * DRAW);
+  // A run adopting the waiver has both draws behind it; only the reserve still has to stand.
+  const required = reserveAmount + (adoptedWaiver ? 0n : resuming ? DRAW : 2n * DRAW);
   const deposit = balance >= required ? 0n : required - balance;
   const [operatorUsdc, allowance, keeperGas] = await Promise.all([
     read(manifest.settlementAsset.address, usdcAbi as Abi, "balanceOf", [operator.address]) as Promise<bigint>,
@@ -425,10 +425,10 @@ async function inspect() {
       );
       openIntent = open?.intentId ?? null;
       note(
-        resuming ? Boolean(open) : !open,
-        resuming
-          ? "no waiver intent is open; a resumed run finishes the one the interrupted attempt proposed"
-          : `waiver intent ${open?.intentId} is already open (${open?.status}); it pins the admin nonce, so finish or reject it first`,
+        adoptedWaiver || !resuming ? !open : Boolean(open),
+        adoptedWaiver || !resuming
+          ? `waiver intent ${open?.intentId} is open (${open?.status}); it pins the admin nonce, so finish or reject it first`
+          : "no waiver intent is open; a resumed run finishes the one the interrupted attempt proposed",
       );
       readiness = await service.waiverReadiness();
       quorumReady = true;
@@ -450,7 +450,7 @@ async function inspect() {
       // The draw only simulates once the vault is funded; that is the deposit's job, not a blocker.
       const detail = error instanceof BaseError ? error.shortMessage : String(error);
       // The draw only simulates once the vault is funded, and never while the facility is in CURE.
-      const expected = call === "draw" && (deposit > 0n || resuming);
+      const expected = call === "draw" && (deposit > 0n || resuming || Boolean(adoptedWaiver));
       simulations.push({ call, ok: false, detail: expected ? `${detail} (expected before the deposit)` : detail });
       if (!expected) blockers.push(`${call} does not simulate: ${detail}`);
     }
