@@ -11,7 +11,7 @@
     "build:contracts": "forge build",
     "test:contracts": "forge test --offline",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p packages/cli/tsconfig.json",
-    "test:ts": "node --import tsx --test packages/*/test/*.test.ts scripts/test/*.test.ts",
+    "test:ts": "node --import tsx --test packages/*/test/*.test.ts scripts/test/*.test.ts scenarios/test/*.test.ts",
     "dashboard:build": "pnpm --filter @fx-coverage/dashboard build",
     "build:cli": "pnpm --filter @signa/cli build",
     "pack:cli": "pnpm build:cli && mkdir -p dist && pnpm --filter @signa/cli exec npm pack --pack-destination ../../dist",
