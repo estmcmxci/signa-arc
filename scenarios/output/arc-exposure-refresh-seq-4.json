@@ -1,0 +1,120 @@
+{
+  "title": "Exposure re-observation at sequence 4",
+  "rehearsal": false,
+  "outcome": "complete",
+  "disclaimer": "Fictional EUR-denominated loan book. Mock provider and exposure data. Testnet USDC only; no real counterparties.",
+  "generatedAt": "2026-09-12T12:41:16.690Z",
+  "network": {
+    "chainId": 5042002,
+    "rpcUrl": "https://rpc.testnet.arc.network",
+    "explorer": "https://testnet.arcscan.app"
+  },
+  "script": {
+    "path": "scenarios/arc-exposure-refresh.ts",
+    "commit": "7c349f58a708024bf169a8f37104cf4e91f5c984",
+    "dirty": false
+  },
+  "deployment": {
+    "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+    "credentialRegistry": "0xD921734C9314442a74Cd3FEBAB8028b2Bb9A7624",
+    "coverageEngine": "0x3341B76fEFF4CE691781fEAa4C76EA95479b9b6b",
+    "covenantVault": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51"
+  },
+  "before": {
+    "exposureSequence": "3",
+    "exposureDigest": "0x63a465eabcd848974534f0a63bbe5d7211587b34d6ccdabbb7fe97c80de28e26",
+    "observedAt": "1789191139",
+    "validUntil": "1789277539",
+    "readAtBlock": "latest",
+    "compliant": false,
+    "coverageBps": 6840,
+    "reasonCode": "BELOW_THRESHOLD",
+    "covenantState": "WAIVED",
+    "activeWaiver": false,
+    "cureDeadline": "1789619969",
+    "exposureEligibility": {
+      "code": 0,
+      "reason": "ELIGIBLE"
+    }
+  },
+  "credential": {
+    "kind": "ExposureCredential",
+    "observedAtBlock": {
+      "number": "61730831",
+      "hash": "0x9f507d93133dbea24dd79fb08cbed2061f3bb935c3b561224336b3b70863b4f2",
+      "timestamp": "1789216876"
+    },
+    "sourceRecord": {
+      "mock": true,
+      "disclaimer": "Fictional EUR-denominated loan book. Mock provider and exposure data. Testnet USDC only; no real counterparties.",
+      "portfolio": "Fictional EUR-denominated loan book",
+      "denomination": "EUR",
+      "denominatingAsset": "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a",
+      "settlementObligationUsd": "1.000000",
+      "observedAtBlock": "61730831",
+      "sequence": "4"
+    },
+    "issuer": "0x4317497399f27d52007d7f2012EAd27f148B6662",
+    "digest": "0x38320e854893688da3b9c0f5296260e02dc412aca5b69dc749da1b60c4ddbb2c",
+    "credential": {
+      "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+      "exposureCurrency": "0x455552",
+      "settlementCurrency": "0x555344",
+      "outstandingValue": "1000000",
+      "exposureMaturity": "1805147242",
+      "observedAt": "1789216876",
+      "validUntil": "1789303276",
+      "sequence": "4",
+      "sourceCommitment": "0x3f1926c2be2a476487b3c66aadf600bfcb89fdb71298f77b4124ca6d92ebe919"
+    },
+    "signature": "0xf770697e1d96d377859f01c535a096600458a1df22859be7ff735720104650c8412120062e73ff58e65591cd89a12cf2800552c6d9e382ed95897b80021411731b"
+  },
+  "steps": [
+    {
+      "action": "submit exposure seq 4 (1.000000 USD, re-observed)",
+      "transactionHash": "0xc40d9a430e96d7b1beb693d9397a38d86061c51863aaff26e8173bf1a26d4939",
+      "explorer": "https://testnet.arcscan.app/tx/0xc40d9a430e96d7b1beb693d9397a38d86061c51863aaff26e8173bf1a26d4939",
+      "blockNumber": "61730833",
+      "sender": "0x7e09657321f1818825a9a15cedd9d95308130ed4",
+      "expectedStatus": "0x1",
+      "actualStatus": "0x1",
+      "gasUsed": "94798",
+      "covenant": {
+        "readAtBlock": "61730833",
+        "compliant": false,
+        "coverageBps": 6840,
+        "reasonCode": "BELOW_THRESHOLD",
+        "covenantState": "WAIVED",
+        "activeWaiver": false,
+        "cureDeadline": "1789619969"
+      },
+      "events": [
+        {
+          "contract": "0xd921734c9314442a74cd3febab8028b2bb9a7624",
+          "event": "ExposureCredentialAccepted",
+          "args": {
+            "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+            "issuer": "0x4317497399f27d52007d7f2012EAd27f148B6662",
+            "digest": "0x38320e854893688da3b9c0f5296260e02dc412aca5b69dc749da1b60c4ddbb2c",
+            "sequence": "4",
+            "outstandingValue": "1000000",
+            "acceptedAt": "1789216877"
+          }
+        }
+      ]
+    }
+  ],
+  "after": {
+    "readAtBlock": "latest",
+    "compliant": false,
+    "coverageBps": 6840,
+    "reasonCode": "BELOW_THRESHOLD",
+    "covenantState": "WAIVED",
+    "activeWaiver": false,
+    "cureDeadline": "1789619969",
+    "exposureEligibility": {
+      "code": 0,
+      "reason": "ELIGIBLE"
+    }
+  }
+}
