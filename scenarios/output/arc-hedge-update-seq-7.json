@@ -1,0 +1,173 @@
+{
+  "title": "Hedge update: restored at sequence 7, then restoreCompliance",
+  "rehearsal": false,
+  "outcome": "complete",
+  "providerDisclaimer": "Mock provider data — no Ebury connection or endorsement.",
+  "generatedAt": "2026-09-12T01:55:44.789Z",
+  "network": {
+    "chainId": 5042002,
+    "rpcUrl": "https://rpc.testnet.arc.network",
+    "explorer": "https://testnet.arcscan.app"
+  },
+  "script": {
+    "path": "scenarios/arc-hedge-update.ts",
+    "commit": "7bb3fc1e7e271ee1ba8cb9e10d76079c310e4872",
+    "dirty": false
+  },
+  "deployment": {
+    "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+    "credentialRegistry": "0xD921734C9314442a74Cd3FEBAB8028b2Bb9A7624",
+    "coverageEngine": "0x3341B76fEFF4CE691781fEAa4C76EA95479b9b6b",
+    "covenantVault": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51"
+  },
+  "before": {
+    "hedgeSequence": "6",
+    "readAtBlock": "latest",
+    "compliant": false,
+    "coverageBps": 0,
+    "reasonCode": "BELOW_THRESHOLD",
+    "covenantState": "COMPLIANT",
+    "activeWaiver": false,
+    "cureDeadline": "0",
+    "syncWouldMoveTo": "CURE"
+  },
+  "expected": {
+    "coverageBps": 10000,
+    "covenantState": "COMPLIANT"
+  },
+  "credential": {
+    "observedAtBlock": {
+      "number": "61658916",
+      "hash": "0xa5e75d533aad9ecd30f982497498d15f528acb79053a25366acd8439a52cd65c",
+      "timestamp": "1789178143"
+    },
+    "fixture": {
+      "mock": true,
+      "disclaimer": "Mock provider data — no Ebury connection or endorsement.",
+      "provider_name": "Fictional Treasury Desk",
+      "trade": {
+        "id": "ARC-EUR-USD-001",
+        "buy_currency": "USD",
+        "sell_currency": "EUR",
+        "remaining_buy_amount": "1.060000",
+        "maturity_date": "2027-03-15T21:47:22.000Z",
+        "status": "booked",
+        "updated_at": "2026-09-12T01:55:43.000Z",
+        "credential_valid_until": "2026-09-13T01:55:43.000Z",
+        "sequence": 7,
+        "receipt_reference": "FICTIONAL-ARC-RECEIPT-007"
+      }
+    },
+    "disclaimer": "Mock provider data — no Ebury connection or endorsement.",
+    "issuer": "0xAD515A2BE433e78B6b570064797626012e272e0a",
+    "digest": "0xc1d8eba32b9703aef1b53ea44460400204507cbddad6fe5509472d35ba6ec1ad",
+    "credential": {
+      "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+      "tradeIdCommitment": "0xea65d291768b8a3968f0b3fc5d79bdfa39d68d1f4fa11eff157b909b94dde664",
+      "baseCurrency": "0x555344",
+      "quoteCurrency": "0x455552",
+      "remainingNotional": "1060000",
+      "maturity": "1805147242",
+      "status": 0,
+      "observedAt": "1789178143",
+      "validUntil": "1789264543",
+      "sequence": "7",
+      "sourceCommitment": "0xf989cb614c6b9866530a670c58bdff14e3da6074704d22650cbdfab16079811b"
+    },
+    "signature": "0x3bf249f3f8aafd99ae51ff7200aecaa7dbdf0da86db62376aca3716dbfe747e63e5c90d89c1c5116096717ca9d1b8a95c3ed468eb928c6a268d8503f91fd2b641c"
+  },
+  "steps": [
+    {
+      "action": "submit hedge seq 7 (1.060000 USD, booked)",
+      "transactionHash": "0xc18a9146101cc7c9f47fc6024f0758389f4244b0b2165a8bac3018efa22316c1",
+      "explorer": "https://testnet.arcscan.app/tx/0xc18a9146101cc7c9f47fc6024f0758389f4244b0b2165a8bac3018efa22316c1",
+      "blockNumber": "61658919",
+      "sender": "0x7e09657321f1818825a9a15cedd9d95308130ed4",
+      "expectedStatus": "0x1",
+      "actualStatus": "0x1",
+      "gasUsed": "101825",
+      "covenant": {
+        "readAtBlock": "61658919",
+        "compliant": true,
+        "coverageBps": 10000,
+        "reasonCode": "NONE",
+        "covenantState": "COMPLIANT",
+        "activeWaiver": false,
+        "cureDeadline": "0"
+      },
+      "events": [
+        {
+          "contract": "0xd921734c9314442a74cd3febab8028b2bb9a7624",
+          "event": "HedgeCredentialAccepted",
+          "args": {
+            "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+            "tradeIdCommitment": "0xea65d291768b8a3968f0b3fc5d79bdfa39d68d1f4fa11eff157b909b94dde664",
+            "issuer": "0xAD515A2BE433e78B6b570064797626012e272e0a",
+            "digest": "0xc1d8eba32b9703aef1b53ea44460400204507cbddad6fe5509472d35ba6ec1ad",
+            "sequence": "7",
+            "status": 0,
+            "remainingNotional": "1060000",
+            "acceptedAt": "1789178145"
+          }
+        }
+      ]
+    },
+    {
+      "action": "restoreCompliance",
+      "transactionHash": "0xcfaa10a1f7c345354e8c429454a760fa5f46ef4cd36615ee6010f75b3c1880a1",
+      "explorer": "https://testnet.arcscan.app/tx/0xcfaa10a1f7c345354e8c429454a760fa5f46ef4cd36615ee6010f75b3c1880a1",
+      "blockNumber": "61658929",
+      "sender": "0x7e09657321f1818825a9a15cedd9d95308130ed4",
+      "expectedStatus": "0x1",
+      "actualStatus": "0x1",
+      "gasUsed": "128207",
+      "covenant": {
+        "readAtBlock": "61658929",
+        "compliant": true,
+        "coverageBps": 10000,
+        "reasonCode": "NONE",
+        "covenantState": "COMPLIANT",
+        "activeWaiver": false,
+        "cureDeadline": "0"
+      },
+      "events": [
+        {
+          "contract": "0xa68fb25ba98d522ce8326471a6b6bf3732e3bf51",
+          "event": "CovenantSynchronized",
+          "args": {
+            "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+            "previousState": 1,
+            "newState": 1,
+            "coverageBps": 10000,
+            "requiredCoverageBps": 10000,
+            "outstandingValue": "1000000",
+            "grossEligible": "1007000",
+            "countedEligible": "1000000",
+            "reason": 0,
+            "cureDeadline": "0"
+          }
+        }
+      ]
+    }
+  ],
+  "after": {
+    "atCallBlock": {
+      "readAtBlock": "61658929",
+      "compliant": true,
+      "coverageBps": 10000,
+      "reasonCode": "NONE",
+      "covenantState": "COMPLIANT",
+      "activeWaiver": false,
+      "cureDeadline": "0"
+    },
+    "atLatest": {
+      "readAtBlock": "latest",
+      "compliant": true,
+      "coverageBps": 10000,
+      "reasonCode": "NONE",
+      "covenantState": "COMPLIANT",
+      "activeWaiver": false,
+      "cureDeadline": "0"
+    }
+  }
+}
