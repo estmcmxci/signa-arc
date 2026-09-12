@@ -42,6 +42,16 @@ const FORBIDDEN = [
   /PRODUCT-THESIS|CUTLIST|SPONSOR-STRATEGY-REVIEW|ETHONLINE-WORKSTREAMS/,
 ];
 
+/**
+ * The name and its value do not have to appear together. `{"key":"PRIVY_APP_SECRET","value":"…"}`
+ * defeats the name pattern above, and a minified bundle can carry the value with the name nowhere
+ * in sight. So when the secret is in this environment, assert no built file contains it literally,
+ * in any file, text or not. Skipped when the variable is unset, which is the usual case: the name
+ * pattern above still covers that. The value is never printed, only the file that carries it.
+ */
+const SECRET = process.env["PRIVY_APP_SECRET"]?.trim();
+const SECRET_BYTES = SECRET && SECRET.length >= 8 ? Buffer.from(SECRET) : undefined;
+
 const problems: string[] = [];
 for (const page of ALLOWED_PAGES) {
   if (!existsSync(new URL(page.html, OUT))) problems.push(`missing page ${page.html}`);
@@ -65,6 +75,9 @@ const walk = (directory: URL, relative: string): void => {
       walk(new URL(`${name}/`, directory), `${relative}${name}/`);
       continue;
     }
+    if (SECRET_BYTES && readFileSync(entry).includes(SECRET_BYTES)) {
+      problems.push(`${relative}${name} contains the literal value of PRIVY_APP_SECRET`);
+    }
     if (!TEXT.test(name)) continue;
     scanned += 1;
     const text = readFileSync(entry, "utf8");
@@ -85,5 +98,6 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log(
-  `docs build verified: ${PAGES.length} pages with Markdown twins, llms.txt and llms-full.txt; ${scanned} text files scanned, no local paths or secrets`,
+  `docs build verified: ${PAGES.length} pages with Markdown twins, llms.txt and llms-full.txt; ${scanned} text files scanned, no local paths or secrets` +
+    `; PRIVY_APP_SECRET value check ${SECRET_BYTES ? "ran against every file" : "skipped (unset in this environment)"}`,
 );
