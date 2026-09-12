@@ -8,6 +8,9 @@
   --surface:var(--sand-100); --panel:var(--sand-200); --raised:var(--sand-300);
   --text:var(--sand-1200); --muted:var(--sand-1100); --subtle:var(--sand-1000);
   --line:var(--sand-500); --line-strong:var(--sand-800);
+  /* Brand accent: the mark's own green. Used as a pointer — a rule beside a
+     passage, never on text — so it cannot be read as a coverage verdict. */
+  --accent:#3fb55d;
   --ok:#3fb55d; --ok-bg:#022d0d; --hold:#ff9c57; --hold-bg:#231000;
   --breach:#ff7eb6; --breach-bg:#2a0a18; --waiver:#c3a1ff; --waiver-bg:#1c0f30;
   --error:#ff8389; --error-bg:#520408;
