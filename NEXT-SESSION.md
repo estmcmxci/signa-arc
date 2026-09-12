@@ -1,58 +1,22 @@
-# NEXT SESSION — 2026-09-12, 00:30 EDT
+# NEXT SESSION — 2026-09-12, 11:15 EDT
 
-**Submission closes Sunday 2026-09-13, 12:00 pm EDT.** Roughly 35 hours from this writing.
+**Submission closes Sunday 2026-09-13, 12:00 pm EDT. 24.5 hours from this writing.**
 
-Read [HANDOVER.md](./HANDOVER.md) for what is proven on chain, then [START-HERE.md](./START-HERE.md) for the architecture. This file is the state at the end of the 11 September night session, the decision we reached, and what to build next.
-
----
-
-## The decision this session reached
-
-**Privy must be visible in the demo, and it is not.** That is the whole job next session.
-
-Privy holds the **facility admin** key: a server wallet owned by a 2-of-2 key quorum, a risk officer and a treasury lead. It is the only party that can grant a waiver when the covenant blocks a draw. It produced a real waiver on chain — `0xf6f7d9ec90f0dc41eaf46c5b2acbdb7e7567eb279afa7690e4a957ab6c3cf34b`, receipt `0x1`, block 61473309.
-
-That flow currently lives on a **separate page** (`packages/privy-waiver/ui/approver.html`, its own Node server), so a judge watching the operator desk never sees Privy at all.
-
-### What to build
-
-Bring **propose → approve → broadcast** onto the operator desk at `/app/`, as the lender's view:
-
-1. Borrower's draw is refused — coverage below the minimum.
-2. The lender's side proposes a waiver.
-3. Risk officer approves. One of two. Nothing executes.
-4. Treasury lead approves. Two of two — **Privy signs** the transaction with the admin key.
-5. We broadcast the signed transaction to Arc. `WaiverCreated` lands.
-6. Borrower draws again. Permitted.
-
-Steps 2–4 are the point: custody and multi-party approval of the key that can override the rule.
-
-### Settled details
-
-- **Single browser, two key slots.** The user demos both approvers himself. The cryptography is real — two distinct P-256 keys, quorum enforced by Privy, no execution until the second signature — but both keys are in one browser. **Say so out loud once in the video.** The research doc requires this be labelled: both keys server-side is "a demo shortcut and must be labelled as one."
-- **Remove the wallet connect button from the desk.** The borrower's key is a Foundry keystore, not a browser wallet, so the button promises something the demo cannot do, and it is currently the only broken control on the page. It reports "Wallet connection did not complete" for every failure that is not a user rejection, and two wallets (Phantom, MetaMask) announce themselves.
-- The desk reads the live facility fine with no wallet connected.
+Read [HANDOVER-PRIVY-DESK.md](./HANDOVER-PRIVY-DESK.md) for the round that just finished and [START-HERE.md](./START-HERE.md) for the standing architecture. This file is the state at the end of the 12 September morning session.
 
 ---
 
-## Who the parties are
+## What is done that was not done yesterday
 
-This caused real confusion. From `CovenantVault.draw()`: it is `onlyOperator`, and the drawn USDC transfers **to** `policy.operator`.
+**Privy is on the operator desk.** The waiver panel at `/app/` is the lender's view: the quorum and the single call its key may ever sign, an approver key per role held non-extractable in the browser, the chain's own answer on whether a waiver is possible, and a proposal moving from nobody, to one of two, to signed, to broadcast, to a checked `WaiverCreated`. Approved and broadcast are separate states on screen because they are separate in fact. The desk reaches the local approver service through a Vite proxy and holds no Privy secret.
 
-| Role | Who | Key custody | Address |
-|---|---|---|---|
-| **Operator** | The **borrower** — the credit originator drawing on the facility | Foundry keystore | `0x7e09657321F1818825a9A15cedd9D95308130ED4` |
-| **Facility admin** | The **lender's** side — risk officer + treasury lead | **Privy 2-of-2 quorum** | `0x55C4DD3770A44695735717CB7b7005AC7dE9edA1` |
-| **Exposure issuer** | The servicer. R-ROLE-2: answers to the lender, never the borrower | Foundry keystore | `0x4317497399f27d52007d7f2012EAd27f148B6662` |
-| **Hedge issuer** | Verifier of the broker's confirmations | Foundry keystore | `0xAD515A2BE433e78B6b570064797626012e272e0a` |
+**Wallet connect and the signing path are gone from the desk.** The borrower's key is a Foundry keystore, so the button promised what the demo cannot do. The desk reads, simulates and explains; the only thing signed anywhere on it is a waiver, by two people.
 
-**The operator desk is the borrower's screen.** Privy is the lender's custody story. They are different screens because they are different hands — that separation *is* the product, and collapsing it into one login would undermine the claim.
+**The CLI can create a waiver, not only read one.** `signa waiver status | propose | approve | reject | broadcast`, over the same service the console uses. `reject` exists because each proposal pins the admin wallet's next nonce and only one may be in flight.
 
-### Hard constraints, read from the contracts
+**The whole sequence has run once, on one facility, in one block range.** Blocks 61678097 to 61684351: a permitted draw, the hedge falling to 0.720000, a sync to CURE, the identical calldata refused with receipt `0x0` and `DrawNotAllowed(CURE)`, a 2-of-2 waiver at [`0x665838e2…`](https://testnet.arcscan.app/tx/0x665838e29a3ffb39e6b909e5e84e6d071945153db049ff01228862ce0863fdf0), the identical calldata then permitted **at 6840 of 10000 bps**, the waiver lapsing, and the facility syncing back to CURE. The exception released the draw without restoring cover, which is the claim, in receipts. Record: `scenarios/output/arc-waiver-run-evidence.{json,md}`.
 
-- **The operator cannot be changed.** `FacilityRegistry` has exactly three mutating functions after creation: `freezeFacility`, `setExposureIssuer`, `setHedgeIssuer`. There is no setter for `operator` or `admin`. So a Privy wallet cannot become the operator of this facility. Do not propose it again.
-- **Privy signs; we broadcast.** `eth_sendTransaction` on Arc returns `401 App is not authorized to transact on chain`. `eth_signTransaction` works, so the flow is: approve → Privy signs → `eth_sendRawTransaction` from us.
-- **A Privy policy cannot cap the waiver duration** — its comparator never matches integers narrower than `uint64`, and the duration is `uint32`. The contract enforces the cap instead.
+**The landing page is 286 words and fits one screen.** 1158 words yesterday. See "The landing" below.
 
 ---
 
@@ -60,43 +24,66 @@ This caused real confusion. From `CovenantVault.draw()`: it is `onlyOperator`, a
 
 | | |
 |---|---|
-| Branch | `main` = `integration` = `dce8d2a`, worktree clean |
-| Unpushed | **61 commits.** `origin/main` is still `808f26e` from 10 September |
-| Facility | **COMPLIANT**, 10000 bps, no active waiver |
-| Suite | 151 TypeScript + 31 Solidity; dashboard 17 unit + 20 browser; docs build 15 pages |
-| Servers | dashboard `127.0.0.1:5176` (may have died with the session); docs `localhost:5180` |
+| `integration` | `9f1c0b9`. **21 commits unpushed.** `origin/main` is `e8b361e` — 63 commits were pushed at 00:50 today, so the history is no longer two days stale |
+| `ui/oikonomos` | `9fc9cb8`, 6 commits ahead of `integration`. **Not merged. Your decision.** |
+| Suites | **170 TypeScript, 31 Solidity, 16 docs pages**, `pnpm check` exit 0. Dashboard: **17 unit, 15 browser** (was 20; the wallet tests went with the signing path) |
+| Facility | **CURE**, 6840 of 10000 bps, `BELOW_THRESHOLD`, no active waiver, a waiver would be accepted |
+| Exposure | Sequence 4, re-observed 08:40 EDT today, **eligible until roughly 08:40 EDT on the 13th** |
+| Admin wallet | 0.284 USDC, about 75 waivers at 0.0037 each |
+| Fleet | All four agents **stopped**. Their work is merged |
 
-### What shipped tonight
+### The expiry, stated exactly
 
-- **CLI** complete through P2 — `signa` inspects, signs and sends, packaged and proven to run outside the checkout. Publishing is blocked by `private: true`, deliberately.
-- **Docs site** — 15 pages including a new `/architecture` page. The landing, security and desk links point at it; `/architecture.html` still serves the original artifact, which the video script opens on camera.
-- **Credentials refreshed on chain** — exposure seq 2 (`0x37a3359a…`), hedge seq 7 (`0xc18a9146…`), `restoreCompliance` (`0xcfaa10a1…`), all receipts `0x1`.
-- **Logo** — traced to vector, two themed variants, on all four dashboard surfaces and the docs.
-- **Landing copy** rewritten repeatedly with the user. Hero is his words. Every explanation is under 280 characters.
-
-### Copy still open
-
-- **§07 contact band** — "Talk to us about your drawdown process" asks a stranger for their process before the page has earned it.
-- **§03 versus §02** — "What the vault enforces" still restates the four mechanism steps above it. Decide whether it survives.
-- The four audience cards in §05 are **deliberately untouched**. The user said so explicitly.
+The exposure credential goes stale about **08:40 EDT on the 13th**, and submission closes at **12:00**. That leaves roughly three hours at the end where the live desk cannot show eligible evidence. One more `node --import tsx scenarios/arc-exposure-refresh.ts` on the morning of the 13th removes the problem; it costs about 0.0023 USDC, moves no state, and leaves the facility in CURE.
 
 ---
 
-## Then the actual gates
+## The landing, and what it cost
 
-None of the engineering above is a submission requirement. These are:
+Sections removed: the problem, what the vault enforces, the recorded proof, inspect the control, start a conversation, who it is for, and the whole `/security/` page. What remains is the hero, four step cards, a built-with row and a one-line footer.
 
-1. **Push.** 61 commits are invisible to judges. ETHGlobal's rules say they check commit history.
-2. **Record the video** from `output/VIDEO-SCRIPT.md`. Four minutes maximum, no speeding up — that disqualifies.
-3. **Cover image.** The logo is done; the cover is not.
-4. **Finish the form:** prizes (Arc: Best DeFi/Onchain Finance Application), video, the Future text drafted in session, then Final.
+The reasoning was that a landing page has one job — make a judge believe the claim and open the desk — and most of what was there taught architecture that the 16 documentation pages teach better.
+
+**The cost, recorded because it is a real loss rather than a tidy.** The landing no longer carries: the demonstration framing, "no production offering", the sentence disclaiming loan origination and derivatives, "fictional loan book, mock issuers and test funds", and "signatures establish who made an assertion; they do not prove a hedge legally exists". The only honesty text left on the page is the `Mock issuers` tag inside step 02.
+
+That boundary is still stated on the desk's waiver panel, at the point of use in the desk's credential table, and in the video script as acceptance criterion A-8 — which is where the PRD actually puts it, since A-8 governs the video rather than any page. But it is no longer on the landing, and anyone reviewing the claims discipline should know that was a deliberate trade, not an oversight.
 
 ---
 
-## Working notes
+## Open, and yours to decide
 
-- **Worktrees:** `~/signa` is on `frontend/research`; the integration worktree under `id-agents-desktop/workspace/signa-integration` holds everything and is where work happened. `main` is not checked out anywhere.
-- **Keystores:** `~/.foundry/keystores` — four real keys. The password lives in the macOS Keychain, service `signa-arc-testnet-keystores`, account `signa-arc`. Never print it.
-- **Never run docs commands naming `--account`** in the docs tests: they execute what the documentation shows and would unlock a real keystore.
-- **Backticks in commit messages execute** inside double-quoted shell strings. Use a quoted heredoc with `git commit -F`. This has already caused one incident.
-- **Claims discipline:** no bank has signed anything, both issuers are test keys held by the project, testnet only, sponsors are integration targets and never partners.
+1. **Merge `ui/oikonomos` or not.** Its six commits are three background layers, zero radius, mono uppercase chrome, glass panels, the four step cards, the 1400px shell and the built-with marks. Two of the six are pure copy and are already on `integration`; the rest is the look. Browser suite is green at 15 on the fork, axe included, on both routes.
+2. **The hero's right half is empty.** The reference puts a live panel there. For Signa that would be the facility itself — `CURE · 6840 / 10000 bps · vault 0xa68f…bF51` — read from chain, which would put the proof above the fold and replace what the recorded-proof section used to do. Not built. It needs the landing to read chain again, which was stripped out of `src/landing/main.ts`.
+3. **Privy's mark is recoloured**, not a vendor-supplied on-dark asset. Their own site serves it near-black; it was cropped to the lockup and turned white for the dark plate. Arc's and USDC's are their own on-dark files.
+4. **The video script has no Privy scene.** You asked me not to write it.
+5. **The cover image** is still not done, and it is a form field.
+
+---
+
+## The gates
+
+1. **Refresh the exposure** on the morning of the 13th, before recording.
+2. **Record the video** from `output/VIDEO-SCRIPT.md`. Four minutes maximum; speeding it up disqualifies.
+3. **Cover image.**
+4. **Push.** 21 commits are local. ETHGlobal checks commit history.
+5. **Finish the form:** Arc — Best DeFi/Onchain Finance Application, video, the Future text, then Final.
+
+---
+
+## Traps learned today, so they are not relearned
+
+- **A screenshot of `/app/` through the browser tooling is not evidence.** It returns an 852px frame for a 1558px viewport and goes blank after a scripted scroll. I read three captures as "the waiver panel is missing" before measuring the DOM, which showed the panel 815px tall and the page 3473. Measure, do not look.
+- **`docs.privy.io/logo/dark.svg` serves Mintlify's starter-kit logo.** It shipped to the page labelled as Privy because it was installed without being viewed. Render a fetched asset and look at it before it goes near the build.
+- **A background shell dies with the session that started it.** Lane B's first run was killed between the two approvals; its evidence writer sat in a `finally` that never ran. The fix in that scenario is to journal each step as it lands.
+- **An approved Privy intent outlives the process that made it.** Both approvals had landed and Privy had signed; the signed transaction sat unbroadcast for forty minutes across a killed process and was still valid when sent. Nonce and fee cap are the two things to check before broadcasting a stale one.
+- **A field that asserts its own construction reads as a passed check.** Three in the waiver evidence did, including one that "re-verified" signatures the process never held. Ask of any evidence field: did this compare two things, or restate one?
+- **`vite preview` and the browser cache.** The served HTML was correct while the tab showed the old page; curl the port before doubting the build.
+- Editing `configs/signa.yaml` does not retrain live agents — the manager's database is the source of truth, and briefs reach agents through `/ask`.
+
+## Standing notes
+
+- **Keystores:** `~/.foundry/keystores`, password in the macOS Keychain, service `signa-arc-testnet-keystores`, account `signa-arc`. Never print it. Read it into a mode-600 file, use `--password-file`, delete it.
+- **Approver keys:** `~/.signa-privy-waiver/approvers/`. Back that directory up: those two keys are the only way the admin wallet can ever sign, and a facility's admin can never change.
+- **Backticks in commit messages execute** inside double-quoted shell strings. Use a quoted heredoc with `git commit -F`.
+- **Never commit `.claude/`.** Check staging before every commit; the repo is public.
+- **Claims discipline:** testnet only, fictional facility, labelled mock issuer data, no bank has signed anything, sponsors are integration targets and never partners. Never "trustless", and never claim Privy is more trust-minimised than a Safe.
