@@ -48,6 +48,12 @@ const ELIDED = /\u2026/;
  * behaviour is covered against a local Anvil chain, with disposable accounts, in anvil.test.ts.
  */
 const NAMES_A_SIGNER = /(^|\s)--account(\s|=)/;
+/**
+ * A waiver command. Never executed here either: even `waiver status` reads live Arc, and the rest
+ * would reach for approver keys in ~/.signa-privy-waiver and Privy credentials belonging to
+ * whoever runs the suite. The adapter is covered by waiver.test.ts with an injected service.
+ */
+const IS_WAIVER = /^pnpm(?:\s+-s)?\s+signa\s+waiver\b/;
 /** A flag that already selects the output, so the test must not append `--json`. */
 const SELECTS_OUTPUT = /^--(json|llms|llms-full|schema|help|version|format)$/;
 
@@ -82,7 +88,7 @@ test("every signa command the docs show, in a block or a sentence, is one signa 
       );
     }
     if (words.length === 0 || words.some((word) => PLACEHOLDER.test(word)) || ran.has(command)) continue;
-    if (NAMES_A_SIGNER.test(command) || ELIDED.test(command)) continue;
+    if (NAMES_A_SIGNER.test(command) || IS_WAIVER.test(command) || ELIDED.test(command)) continue;
     ran.add(command);
     const args = words.map((word) => (word.endsWith(".json") && !existsSync(join(fileURLToPath(REPO_ROOT), word)) ? envelope : word));
     const run = await runSigna(args.some((arg) => SELECTS_OUTPUT.test(arg)) ? args : [...args, "--json"]);

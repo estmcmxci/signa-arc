@@ -90,12 +90,12 @@ test("the packed package runs from a temporary directory with no repository, wor
     const help = runPacked(root, ["--help"]);
     assert.equal(help.exitCode, 0, help.stdout);
     assert.match(help.stdout, /Usage: signa <command>/);
-    for (const group of ["status", "facility", "coverage", "credentials", "draw", "covenant", "tx", "evidence"]) {
+    for (const group of ["status", "facility", "coverage", "credentials", "draw", "covenant", "tx", "evidence", "waiver"]) {
       assert.match(help.stdout, new RegExp(`\\b${group}\\b`), `${group} is listed`);
     }
     const manifest = JSON.parse(runPacked(root, ["--llms", "--format", "json"]).stdout);
     assert.equal(manifest.version, "incur.v1");
-    assert.equal(manifest.commands.length, 12, "every shipped command is discoverable");
+    assert.equal(manifest.commands.length, 17, "every shipped command is discoverable");
   });
 
   await t.test("recorded evidence works offline, with the records read from beside the bundle", () => {
@@ -139,6 +139,26 @@ test("the packed package runs from a temporary directory with no repository, wor
     assert.equal(result.dataMode, "offline");
     assert.equal(result.envelope.manifestRole, "hedgeIssuer");
     assert.equal(result.envelope.recoveredSigner, result.envelope.claimedIssuer, "the signature was recovered by the bundled credentials package");
+  });
+
+  await t.test("a waiver command fails on the missing credential, not on a missing file", () => {
+    // packages/privy-waiver is not a workspace package and is bundled by relative path. Its own
+    // loadManifest() resolves a repository path relative to its module URL, which points nowhere
+    // here, so this would fail with ENOENT if the CLI ever called it instead of passing its own
+    // resolved manifest. Reaching the credential check proves it did not.
+    const run = runPacked(root, ["waiver", "propose", "--duration", "300", "--reason", "packed smoke", "--json"]);
+    assert.equal(run.exitCode, 1);
+    const error = JSON.parse(run.stdout);
+    assert.equal(error.code, "SIGNER_UNAVAILABLE");
+    assert.match(error.message, /PRIVY_APP_ID/, `expected the missing credential, got: ${error.message}`);
+    assert.doesNotMatch(error.message, /ENOENT|no such file|arc-testnet\.json/i, "a packaging fault would look like a missing file");
+  });
+
+  await t.test("waiver status reads the bundled manifest, and needs no credential to fail on the network", () => {
+    const run = runPacked(root, ["waiver", "status", "--rpc-url", "http://127.0.0.1:1", "--json"]);
+    assert.equal(run.exitCode, 1);
+    const error = JSON.parse(run.stdout);
+    assert.equal(error.code, "RPC_UNAVAILABLE", `a read needs no credential, so it should reach the RPC: ${run.stdout}`);
   });
 
   await t.test("--update installs nothing from here either", () => {

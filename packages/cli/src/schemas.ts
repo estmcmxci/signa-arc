@@ -327,3 +327,113 @@ export const txShowOutput = z.object({
   undecodableRevert: z.string().nullable().describe("Revert data no known contract error decodes. Never guessed at"),
   scope: z.string(),
 });
+
+// ---------------------------------------------------------------------------------------------
+// The waiver desk. A waiver is authorized by a Privy key quorum, not by a keystore, so these
+// results carry a proposal rather than a signer.
+
+/** Where the quorum's proposals are recorded, and what the admin wallet is. */
+const quorumContext = z.object({
+  chainId: z.number(),
+  facilityId: z.string(),
+  vault: z.string(),
+  admin: z.object({
+    walletId: z.string().describe("The Privy wallet the manifest names as the facility admin"),
+    address: z.string(),
+  }),
+  manifest,
+  rpc: z.object({ url: z.string(), source: z.enum(["option", "environment", "manifest"]) }),
+});
+
+export const waiverStatusOutput = z.object({
+  schemaVersion: z.literal(1),
+  kind: z.literal("report"),
+  dataMode: z.literal("live"),
+  context: quorumContext,
+  wouldAccept: z.boolean().describe("Whether createWaiver would be accepted now. A refusal is an answer, so this exits 0 either way"),
+  refusals: z.array(z.string()).describe("Every reason the contract would refuse a waiver of any duration. Empty when it would accept one"),
+  covenant: z.object({ storedState: z.string(), activeWaiver: z.boolean(), waiverEndsAt: z.string() }),
+  coverage: z.object({
+    compliant: z.boolean(),
+    coverageBps: z.number(),
+    requiredCoverageBps: z.number(),
+    resultReason: z.string(),
+    exposureReason: z.string(),
+  }).describe("A fresh evaluation, because createWaiver syncs before it checks"),
+  maxWaiverDurationSeconds: z.number(),
+  scope: z.string(),
+});
+
+const proposal = z.object({
+  intentId: z.string(),
+  kind: z.string(),
+  status: z.string().describe("Privy's status for the intent"),
+  description: z.string(),
+  reason: z.string().optional().describe("The stated reason. Only its keccak256 goes on chain"),
+  createdAt: z.string(),
+  expiresAt: z.string(),
+  call: z.object({
+    to: z.string(),
+    data: z.string(),
+    functionName: z.string(),
+    args: z.array(z.string()),
+    chainId: z.number(),
+    nonce: z.number().describe("Pinned at proposal. Only one proposal can be in flight"),
+    value: z.string(),
+  }),
+  approvals: z.object({
+    threshold: z.number(),
+    collected: z.number(),
+    members: z.array(z.object({ publicKey: z.string(), signedAt: z.string().nullable() })),
+  }),
+  broadcast: z
+    .object({ hash: z.string(), status: z.string(), blockNumber: z.string(), explorerUrl: z.string() })
+    .optional(),
+});
+
+const proposalBase = {
+  schemaVersion: z.literal(1),
+  kind: z.literal("proposal").describe("Not a chain transaction: a Privy intent, which only broadcast puts on chain"),
+  dataMode: z.literal("live"),
+  context: quorumContext,
+  proposal,
+  store: z.object({ path: z.string().describe("Where proposals are recorded, outside every repository") }),
+  scope: z.string(),
+};
+
+export const waiverProposeOutput = z.object({ ...proposalBase, willSign: z.string().describe("Exactly what each approver will authorize") });
+export const waiverApproveOutput = z.object({
+  ...proposalBase,
+  approved: z.object({ role: z.string(), publicKey: z.string(), signedAt: z.string() }),
+  remaining: z.number().describe("Approvals still needed before Privy will sign"),
+});
+export const waiverRejectOutput = z.object(proposalBase);
+
+export const waiverBroadcastOutput = z.object({
+  schemaVersion: z.literal(1),
+  kind: z.literal("transaction"),
+  dataMode: z.literal("live"),
+  context: quorumContext,
+  proposal,
+  broadcast: z.literal(true),
+  transaction: z.object({
+    hash: z.string(),
+    status: z.literal("success").describe("Decided by the receipt, never by Privy's own status"),
+    blockNumber: z.string(),
+    explorerUrl: z.string(),
+  }),
+  waiverCreated: z
+    .object({
+      facilityId: z.string(),
+      reasonCommitment: z.string(),
+      startsAt: z.string(),
+      endsAt: z.string(),
+      logIndex: z.number(),
+      facilityMatches: z.boolean(),
+      reasonCommitmentMatches: z.boolean(),
+    })
+    .nullable()
+    .describe("The event the receipt must carry, checked against this facility and the stated reason"),
+  journal: z.object({ path: z.string() }),
+  scope: z.string(),
+});

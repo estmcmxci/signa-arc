@@ -41,6 +41,7 @@ import { EVIDENCE_RECORD_IDS, RECORDED_NOTICE, evidenceRecord, evidenceSummary }
 import { openJournal } from "./journal.ts";
 import { performSend, requireSignerRole, type SendContext } from "./operations.ts";
 import { openSigner, runCast, type CastRun } from "./signer.ts";
+import { approverApproval, openWaiverDesk, proposalView, resolveProposal, signedTransactionHash, withServiceErrors, type DeskMode } from "./waiver.ts";
 import {
   covenantRestoreOutput,
   covenantSyncOutput,
@@ -48,6 +49,11 @@ import {
   credentialsSubmitOutput,
   drawSendOutput,
   txShowOutput,
+  waiverApproveOutput,
+  waiverBroadcastOutput,
+  waiverProposeOutput,
+  waiverRejectOutput,
+  waiverStatusOutput,
   credentialsListOutput,
   drawSimulateOutput,
   evidenceOutput,
@@ -88,6 +94,8 @@ export type SignaCliDependencies = {
   cwd?: (() => string) | undefined;
   /** Runs Foundry's `cast`, which is how a write command signs. Tests inject a fake. */
   cast?: CastRun | undefined;
+  /** Opens the quorum desk. Tests inject one over a fake chain, with no Privy credentials. */
+  openDesk?: typeof openWaiverDesk | undefined;
 };
 
 /** Options every live command takes (ERD C-02). */
@@ -113,6 +121,30 @@ const writeEnv = liveEnv.extend({
   SIGNA_JOURNAL: z.string().optional().describe("Operation journal file. Must be outside the repository. Default $XDG_STATE_HOME/signa/operations.jsonl"),
   XDG_STATE_HOME: z.string().optional().describe("Base directory for the default operation journal location"),
 });
+
+/** Options and environment for the waiver desk. Privy credentials never come from a flag. */
+const waiverOptions = liveOptions;
+const waiverEnv = liveEnv.extend({
+  PRIVY_APP_ID: z.string().optional().describe("Privy app id. Required by every waiver command except status"),
+  PRIVY_APP_SECRET: z.string().optional().describe("Privy app secret. Read from the environment only, never from a flag, which would land in shell history"),
+  PRIVY_API_URL: z.string().optional().describe("Privy API base URL. Defaults to https://api.privy.io"),
+  PRIVY_WALLET_ID: z.string().optional().describe("Overrides the quorum wallet the manifest names"),
+  PRIVY_APPROVER_KEY_DIR: z.string().optional().describe("Approver key directory. Defaults to ~/.signa-privy-waiver/approvers"),
+  PRIVY_WAIVER_STORE: z.string().optional().describe("Where proposals are recorded. Defaults to ~/.signa-privy-waiver/actions.json"),
+  SIGNA_JOURNAL: z.string().optional().describe("Operation journal file. Must be outside the repository. Default $XDG_STATE_HOME/signa/operations.jsonl"),
+  XDG_STATE_HOME: z.string().optional().describe("Base directory for the default operation journal location"),
+});
+const intentOption = z.string().optional().describe("The proposal to act on. Defaults to the one in flight, since only one can be");
+
+const WAIVER_STATUS_SCOPE =
+  "Whether the contract would accept a waiver now, read fresh from Arc because createWaiver syncs before it checks. A refusal is an answer, so this exits 0 either way. These reads are not pinned to one block.";
+const PROPOSAL_SCOPE =
+  "A Privy intent, not a chain transaction. Nothing reaches Arc until `signa waiver broadcast`, and Privy signs nothing until the quorum's threshold is met.";
+const WAIVER_BROADCAST_SCOPE =
+  "One transaction, broadcast once. Its hash is recorded before any receipt wait, success is decided by the receipt, and the WaiverCreated event is checked against this facility and the stated reason.";
+/** JsonFileStore reads its file once, at construction. Both surfaces need saying out loud. */
+const ONE_SURFACE =
+  "The approver console reads its proposals once, when it starts. A proposal made here is invisible to a console that is already running until it is restarted, and a proposal made there is invisible here until this command runs again.";
 
 const SEND_SCOPE =
   "One transaction, simulated as the signer at the preflight block and then broadcast once. Its hash is recorded before any receipt wait. Success is decided by the receipt, not by the signing tool's exit code. Postconditions are read at the receipt's own block.";
@@ -146,6 +178,7 @@ export function createSignaCli(dependencies: SignaCliDependencies = {}) {
   const readFile = dependencies.readFile ?? ((path: string) => readFileSync(path));
   const cwd = dependencies.cwd ?? (() => invocationDirectory());
   const cast = dependencies.cast ?? runCast;
+  const openDesk = dependencies.openDesk ?? openWaiverDesk;
 
   /** Resolves configuration, runs one live read, and wraps it in the shared live context. */
   async function live<T extends { chainId: number; block: BlockContext }>(
@@ -229,6 +262,40 @@ export function createSignaCli(dependencies: SignaCliDependencies = {}) {
     } catch (error) {
       throw new SignaError("INVALID_INPUT", `${path} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  /**
+   * Resolves configuration and opens the quorum desk. A read needs no Privy credentials; anything
+   * that touches Privy loads them from the environment first, before any network call.
+   */
+  async function waiverDesk(
+    options: { manifest?: string | undefined; rpcUrl?: string | undefined },
+    env: Parameters<typeof operate>[1] & {
+      PRIVY_APP_ID?: string | undefined;
+      PRIVY_APP_SECRET?: string | undefined;
+      PRIVY_API_URL?: string | undefined;
+      PRIVY_WALLET_ID?: string | undefined;
+      PRIVY_APPROVER_KEY_DIR?: string | undefined;
+      PRIVY_WAIVER_STORE?: string | undefined;
+    },
+    mode: DeskMode,
+  ) {
+    const config = resolveConfig({ manifestOption: options.manifest, rpcUrlOption: options.rpcUrl, env, readFile, cwd: cwd() });
+    // The gateway reads through the RPC the CLI resolved, not whatever the manifest file names.
+    const desk = await openDesk({ ...config.manifest, rpcUrl: config.rpcUrl }, env, mode);
+    return {
+      config,
+      desk,
+      env,
+      context: {
+        chainId: config.manifest.chainId,
+        facilityId: config.manifest.facility.id,
+        vault: config.manifest.contracts.covenantVault.address,
+        admin: { walletId: desk.walletId, address: desk.walletAddress },
+        manifest: config.manifestProvenance,
+        rpc: config.rpc,
+      },
+    };
   }
 
   const cli = Cli.create("signa", {
@@ -675,6 +742,215 @@ export function createSignaCli(dependencies: SignaCliDependencies = {}) {
     },
   });
   cli.command(covenant);
+
+  const waiver = Cli.create("waiver", {
+    description: "The facility admin's waiver: propose it, collect both approvals, then broadcast it. Authorized by a Privy key quorum, not by a keystore",
+  });
+
+  waiver.command("status", {
+    description: "Report whether the contract would accept a waiver now, and every reason it would refuse one",
+    options: waiverOptions,
+    env: waiverEnv,
+    output: waiverStatusOutput,
+    examples: [{ description: "Check whether a waiver could be created now" }],
+    hint: "A refusal is an answer, not a failure: this exits 0 either way. It needs no Privy credentials, because it only reads Arc.",
+    async run(c) {
+      return guarded(c, async () => {
+        const { desk, context } = await waiverDesk(c.options, c.env, "read");
+        const readiness = await withServiceErrors(() => desk.service.waiverReadiness(), "read the facility from Arc");
+        return {
+          schemaVersion: 1 as const,
+          kind: "report" as const,
+          dataMode: "live" as const,
+          context,
+          wouldAccept: readiness.refusals.length === 0,
+          refusals: readiness.refusals,
+          covenant: { storedState: readiness.covenantState, activeWaiver: readiness.activeWaiver, waiverEndsAt: readiness.waiverEndsAt },
+          coverage: {
+            compliant: readiness.coverage.compliant,
+            coverageBps: readiness.coverage.coverageBps,
+            requiredCoverageBps: readiness.coverage.requiredCoverageBps,
+            resultReason: readiness.coverage.resultReason,
+            exposureReason: readiness.coverage.exposureReason,
+          },
+          maxWaiverDurationSeconds: readiness.maxWaiverDurationSeconds,
+          scope: WAIVER_STATUS_SCOPE,
+        };
+      });
+    },
+  });
+
+  waiver.command("propose", {
+    description: "Propose a waiver as a Privy intent, after checking the contract would accept it. Nothing is signed or sent",
+    options: waiverOptions.extend({
+      duration: z.string().describe("How long the waiver lasts, in whole seconds. Rehearse with 300: a waiver cannot be revoked"),
+      reason: z.string().describe("Why the covenant is being overridden. Only its keccak256 goes on chain"),
+    }),
+    env: waiverEnv,
+    output: waiverProposeOutput,
+    destructive: true,
+    mcp: false,
+    examples: [{ options: { duration: "300", reason: "Hedge rolled early; replacement confirmed for value tomorrow" }, description: "Propose a five-minute waiver" }],
+    hint: `A waiver cannot be revoked, and while one is active the vault stays WAIVED. ${ONE_SURFACE}`,
+    async run(c) {
+      return guarded(c, async () => {
+        // Malformed input is refused here, so anything the service refuses is a refusal about the chain.
+        if (!/^[1-9][0-9]*$/.test(c.options.duration)) throw new SignaError("INVALID_INPUT", `--duration takes whole seconds above zero: ${c.options.duration}`);
+        const reason = c.options.reason.trim();
+        if (!reason) throw new SignaError("INVALID_INPUT", "--reason cannot be empty: a waiver's stated reason is committed on chain as its hash");
+        const { desk, context } = await waiverDesk(c.options, c.env, "authorized");
+        const action = await withServiceErrors(
+          () => desk.service.proposeWaiver({ durationSeconds: Number(c.options.duration), reason }),
+          "propose the waiver",
+        );
+        return {
+          schemaVersion: 1 as const,
+          kind: "proposal" as const,
+          dataMode: "live" as const,
+          context,
+          proposal: proposalView(action),
+          willSign: action.signingPayload ?? "the payload is stamped fresh when each approver signs",
+          store: { path: desk.storePath },
+          scope: PROPOSAL_SCOPE,
+        };
+      });
+    },
+  });
+
+  waiver.command("approve", {
+    description: "Approve the proposal in flight as one of the two quorum members, signing a freshly stamped payload",
+    options: waiverOptions.extend({
+      role: z.enum(["risk-officer", "treasury-lead"]).describe("Which approver key signs"),
+      intent: intentOption,
+    }),
+    env: waiverEnv,
+    output: waiverApproveOutput,
+    destructive: true,
+    mcp: false,
+    examples: [{ options: { role: "risk-officer" }, description: "Approve as the risk officer" }],
+    hint: "The payload is fetched fresh and expires in 300 seconds. The service verifies the signature under a quorum member's key before it reaches Privy.",
+    async run(c) {
+      return guarded(c, async () => {
+        const { desk, context } = await waiverDesk(c.options, c.env, "authorized");
+        const action = await resolveProposal(desk, c.options.intent);
+        // Fresh at the moment of approval: the payload embeds a timestamp Privy accepts for 300s.
+        const payload = await withServiceErrors(() => desk.service.signingPayloadFor(action.intentId), `stamp a payload for ${action.intentId}`);
+        const approval = approverApproval(desk.approverDirectory, c.options.role, payload);
+        const updated = await withServiceErrors(() => desk.service.approve(action.intentId, approval), `approve ${action.intentId}`);
+        const collected = updated.approvals.members.filter((member) => member.signedAt !== null).length;
+        return {
+          schemaVersion: 1 as const,
+          kind: "proposal" as const,
+          dataMode: "live" as const,
+          context,
+          proposal: proposalView(updated),
+          approved: { role: c.options.role, publicKey: approval.publicKey, signedAt: new Date(approval.timestamp).toISOString() },
+          remaining: Math.max(0, updated.approvals.threshold - collected),
+          store: { path: desk.storePath },
+          scope: PROPOSAL_SCOPE,
+        };
+      });
+    },
+  });
+
+  waiver.command("reject", {
+    description: "Reject the proposal in flight, releasing the wallet nonce it pinned so a later waiver can be proposed",
+    options: waiverOptions.extend({ intent: intentOption }),
+    env: waiverEnv,
+    output: waiverRejectOutput,
+    destructive: true,
+    mcp: false,
+    examples: [{ description: "Reject the proposal in flight" }],
+    hint: "Each proposal pins the admin wallet's next nonce and only one can be in flight, so a stale proposal blocks every later waiver until it is rejected or expires.",
+    async run(c) {
+      return guarded(c, async () => {
+        const { desk, context } = await waiverDesk(c.options, c.env, "authorized");
+        const action = await resolveProposal(desk, c.options.intent);
+        const rejected = await withServiceErrors(() => desk.service.reject(action.intentId), `reject ${action.intentId}`);
+        return {
+          schemaVersion: 1 as const,
+          kind: "proposal" as const,
+          dataMode: "live" as const,
+          context,
+          proposal: proposalView(rejected),
+          store: { path: desk.storePath },
+          scope: PROPOSAL_SCOPE,
+        };
+      });
+    },
+  });
+
+  waiver.command("broadcast", {
+    description: "Broadcast the transaction Privy signed once both approvals are in, and decide by the receipt",
+    options: waiverOptions.extend({ intent: intentOption }),
+    env: waiverEnv,
+    output: waiverBroadcastOutput,
+    destructive: true,
+    mcp: false,
+    examples: [{ description: "Broadcast the approved waiver" }],
+    hint: "The hash is recorded in the operation journal before any wait, so an interrupted broadcast can still be reconciled with `signa tx show`.",
+    async run(c) {
+      return guarded(c, async () => {
+        const { desk, context } = await waiverDesk(c.options, c.env, "authorized");
+        const action = await resolveProposal(desk, c.options.intent);
+        const journal = openJournal(c.env, cwd());
+        const entry = {
+          command: "waiver broadcast",
+          chainId: context.chainId,
+          facilityId: context.facilityId,
+          account: desk.walletId,
+          signer: desk.walletAddress,
+          contract: action.call.to,
+          function: action.call.functionName,
+        };
+        // The service checked the signed transaction field by field when it was proposed and checks
+        // it again before it sends; this reads the hash it will have, before the wait begins.
+        const hash = await signedTransactionHash(desk, action.intentId);
+        journal.append({ ...entry, event: "broadcast", hash });
+
+        let executed;
+        try {
+          executed = await withServiceErrors(() => desk.service.execute(action.intentId), `broadcast ${action.intentId}`);
+        } catch (error) {
+          journal.append({ ...entry, event: "outcome", hash, status: "failed", detail: error instanceof Error ? error.message : String(error) });
+          if (error instanceof SignaError) throw new SignaError(error.code, error.message, error.retryable, { hash, broadcast: "true" });
+          throw error;
+        }
+        const broadcast = executed.broadcast;
+        if (!broadcast) throw new SignaError("TRANSACTION_REVERTED", `${action.intentId} reports no broadcast after execution`, false, { hash });
+        journal.append({ ...entry, event: "outcome", hash: broadcast.hash, status: broadcast.status });
+        const created = broadcast.waiverCreated;
+        return {
+          schemaVersion: 1 as const,
+          kind: "transaction" as const,
+          dataMode: "live" as const,
+          context,
+          proposal: proposalView(executed),
+          broadcast: true as const,
+          transaction: {
+            hash: broadcast.hash,
+            status: "success" as const,
+            blockNumber: broadcast.blockNumber,
+            explorerUrl: broadcast.explorerUrl,
+          },
+          waiverCreated: created
+            ? {
+                facilityId: created.facilityId,
+                reasonCommitment: created.reasonCommitment,
+                startsAt: created.startsAt,
+                endsAt: created.endsAt,
+                logIndex: created.logIndex,
+                facilityMatches: created.facilityMatches,
+                reasonCommitmentMatches: created.reasonCommitmentMatches,
+              }
+            : null,
+          journal: { path: journal.path },
+          scope: WAIVER_BROADCAST_SCOPE,
+        };
+      });
+    },
+  });
+  cli.command(waiver);
 
   const evidence = Cli.create("evidence", {
     description: "Recorded evidence from Arc Testnet: past transactions, not current state",

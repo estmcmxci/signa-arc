@@ -31,7 +31,9 @@ const LOCAL_PATHS: [needle: string, label: string][] = [
  */
 const THIRD_PARTY_EXAMPLES: { file: RegExp; literal: string }[] = [{ file: /^playground-modal\.client-[\w-]+\.js$/, literal: "/home/user/" }];
 const FORBIDDEN = [
-  /PRIVY_APP_SECRET/,
+  // The variable's NAME belongs in the docs: an operator has to be told which one to set. What
+  // must never appear is a value assigned to it.
+  /PRIVY_APP_SECRET["']?\s*[:=]\s*["']?[A-Za-z0-9_\-]{8,}/,
   // A PEM header followed by key material. A bare header is not a key: the bundled OpenAPI
   // playground uses `-----BEGIN PRIVATE KEY-----` as an input placeholder.
   /-----BEGIN (?:EC |RSA |OPENSSH )?PRIVATE KEY-----(?:\\n|\s)*[A-Za-z0-9+/]{40,}/,

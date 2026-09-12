@@ -43,7 +43,7 @@ test("help lists the implemented commands, and nothing that is only specified", 
   assert.equal(root.exitCode, 0);
   assert.match(root.stdout, /status\s+Check the manifest and live connectivity/);
   assert.match(root.stdout, /evidence\s+Recorded evidence from Arc Testnet: past transactions, not current state/);
-  for (const group of ["facility", "coverage", "credentials", "draw", "covenant", "tx"]) {
+  for (const group of ["facility", "coverage", "credentials", "draw", "covenant", "tx", "waiver"]) {
     assert.match(root.stdout, new RegExp(`^\\s+${group}\\s`, "m"), group);
   }
   // Repayment and deposit approval orchestration are later work, and must not appear.
@@ -182,6 +182,11 @@ test("incur 0.5.1: the envelope flag is --full-output, --verbose is refused, and
     "facility show",
     "status",
     "tx show",
+    "waiver approve",
+    "waiver broadcast",
+    "waiver propose",
+    "waiver reject",
+    "waiver status",
   ]);
   const schema = onlyJson(await runSigna(["status", "--schema", "--format", "json"]));
   assert.deepEqual(Object.keys(schema.options.properties).sort(), ["manifest", "rpcUrl"]);
@@ -221,4 +226,26 @@ test("every command that signs is marked destructive and hidden from MCP clients
     assert.match(definition, /mcp: false/, `a signing command must set mcp: false (${name})`);
     assert.match(definition, /destructive: true/, `a signing command must be marked destructive (${name})`);
   }
+});
+
+test("every waiver command that changes anything is destructive and hidden from MCP clients", () => {
+  // The waiver group signs through a Privy key quorum rather than a keystore, so it is not caught
+  // by the writeOptions guard above. `waiver status` only reads and stays available.
+  const source = readFileSync(new URL("../src/cli.ts", import.meta.url), "utf8");
+  const group = source.slice(source.indexOf('const waiver = Cli.create("waiver"'), source.indexOf("cli.command(waiver);"));
+  const blocks = group.split(/waiver\.command\(/).slice(1);
+  assert.equal(blocks.length, 5, "status, propose, approve, reject and broadcast");
+  for (const block of blocks) {
+    const name = /^"([a-z]+)"/.exec(block)?.[1] ?? "?";
+    const definition = block.slice(0, block.indexOf("async run"));
+    if (name === "status") {
+      assert.doesNotMatch(definition, /destructive: true/, "status only reads");
+      continue;
+    }
+    assert.match(definition, /mcp: false/, `${name} must not be an MCP tool`);
+    assert.match(definition, /destructive: true/, `${name} must be marked destructive`);
+  }
+  // A Privy credential must never be reachable through a flag, where it would land in shell history.
+  assert.doesNotMatch(group, /PRIVY_APP_SECRET: z\.string\(\)[^\n]*describe/, "the secret is environment-only");
+  assert.match(source, /PRIVY_APP_SECRET: z\.string\(\)\.optional\(\)\.describe/, "and is declared as environment, not an option");
 });
