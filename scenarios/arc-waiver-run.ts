@@ -61,6 +61,7 @@ import { createArcGateway, loadManifest as loadArcManifest, reasonCommitment } f
 import { PrivyClient, keyMembers, loadPrivyConfig, signedTransactionOf } from "../packages/privy-waiver/src/privy-client.ts";
 import { QuorumAdminService, type ActionView, type FacilityConfig } from "../packages/privy-waiver/src/service.ts";
 import { JsonFileStore, defaultStorePath } from "../packages/privy-waiver/src/store.ts";
+import { planRun, type Phase } from "./run-plan.ts";
 
 // One facility, one block range: the covenant permits a draw, loses cover, refuses the identical
 // draw, is waived by a 2-of-2 Privy quorum, permits that same draw again while still below policy,
@@ -122,14 +123,20 @@ const adopted = (options.get("adopt") ?? "")
   });
 assert(!resuming || adopted.length > 0, "--resume needs --adopt=<step>:<hash>,… for the transactions already sent");
 const adoptedWaiver = options.get("adopt-waiver") as Hex | undefined;
-// A step already on chain is never sent again, whatever else the sequence still owes.
-const alreadySent = new Set(adopted.map((entry) => entry.criterion));
 const refreshExposure = options.has("refresh-exposure");
 const durationSeconds = Number(options.get("duration") ?? DEFAULT_DURATION);
 const statedReason =
   options.get("reason")?.trim() ||
   "Rehearsal: hedge replacement in progress with the broker; bounded exception while cover is restored.";
 assert(Number.isInteger(durationSeconds) && durationSeconds > 0, "--duration must be whole seconds");
+// A step already on chain is never sent again, whatever else the sequence still owes. The plan
+// decides that per step rather than per mode; scenarios/test/run-plan.test.ts holds it to that.
+const plan = planRun({
+  adopted: adopted.map((entry) => entry.criterion),
+  adoptedWaiver: Boolean(adoptedWaiver),
+  refreshExposure,
+});
+const sends = (phase: Phase) => plan.send.includes(phase);
 
 type Deployed = { address: Address; deployTx: Hex; block: number };
 type Manifest = {
@@ -149,7 +156,6 @@ type Manifest = {
   facility: { id: Hex; policy: { credentialMaxAgeSeconds: number; maxWaiverDurationSeconds: number; reserveAmount: string } };
 };
 type Status = "0x1" | "0x0";
-type Phase = "W-1" | "W-2" | "W-3" | "W-4" | "W-5" | "W-6" | "W-7";
 type Step = {
   criterion: Phase;
   action: string;
@@ -292,29 +298,31 @@ assert(service && privy, "the quorum service is not configured");
 evidence.before = preflight.chain;
 
 try {
-  if (resuming) {
-    // W-1 … W-3 are already on chain. Every one is re-read and re-asserted here, in the direction
-    // its step expects; nothing is re-sent.
-    for (const entry of adopted) await adoptStep(entry.criterion, entry.hash);
-    process.stdout.write(`resumed, adopting ${adopted.length} transactions\n`);
-  } else {
+  // Whatever an interrupted attempt already sent: re-read from the chain and re-asserted here, in
+  // the direction each step expects, and never re-sent.
+  for (const entry of adopted) await adoptStep(entry.criterion, entry.hash);
+  if (adopted.length) process.stdout.write(`adopted ${adopted.length} transactions already on chain\n`);
+
   // W-1 — fund the facility so a draw is possible at all, then draw, permitted.
-  if (preflight.funding.deposit > 0n) {
-    if (preflight.funding.allowance < preflight.funding.deposit) {
-      await transact("W-1", `approve ${preflight.funding.deposit} to the vault`, manifest.settlementAsset.address, usdcAbi as Abi, "approve", [covenantVault.address, preflight.funding.deposit]);
+  if (sends("W-1")) {
+    if (preflight.funding.deposit > 0n) {
+      if (preflight.funding.allowance < preflight.funding.deposit) {
+        await transact("W-1", `approve ${preflight.funding.deposit} to the vault`, manifest.settlementAsset.address, usdcAbi as Abi, "approve", [covenantVault.address, preflight.funding.deposit]);
+      }
+      await transact("W-1", `deposit ${preflight.funding.deposit} (facility funding)`, covenantVault.address, vaultAbi, "deposit", [preflight.funding.deposit]);
     }
-    await transact("W-1", `deposit ${preflight.funding.deposit} (facility funding)`, covenantVault.address, vaultAbi, "deposit", [preflight.funding.deposit]);
+    await drawStep("W-1", "0x1");
   }
-  await drawStep("W-1", "0x1");
 
   // W-2 — the hedge is replaced with less cover, and the permissionless sync records CURE.
-  await submitHedge("W-2");
-  const synced = await transact("W-2", "syncCovenant", covenantVault.address, vaultAbi, "syncCovenant");
-  assert.equal(synced.covenantState, "CURE", "the hedge update did not move the covenant to CURE");
+  if (sends("W-2")) {
+    await submitHedge("W-2");
+    const synced = await transact("W-2", "syncCovenant", covenantVault.address, vaultAbi, "syncCovenant");
+    assert.equal(synced.covenantState, "CURE", "the hedge update did not move the covenant to CURE");
+  }
 
   // W-3 — the identical draw, refused on chain, with the receipt to show for it.
-  await drawStep("W-3", "0x0");
-  }
+  if (sends("W-3")) await drawStep("W-3", "0x0");
 
   // W-4 — the lender's side: two people, one override.
   const waiver = await waive();
@@ -322,11 +330,11 @@ try {
   if (resuming) await recordInterruption();
 
   // W-5 — the same call again, permitted under the exception, cover still short of policy.
-  if (!alreadySent.has("W-5")) await drawStep("W-5", "0x1");
+  if (sends("W-5")) await drawStep("W-5", "0x1");
 
   // W-6 — the exception lapses and the covenant closes over the facility again.
   await lapse(waiver.endsAt);
-  if (!alreadySent.has("W-6")) {
+  if (sends("W-6")) {
     const resynced = await transact("W-6", "syncCovenant (after the waiver lapsed)", covenantVault.address, vaultAbi, "syncCovenant");
     assert.equal(resynced.covenantState, "CURE", "the facility did not return to CURE when the waiver lapsed");
   }
@@ -334,7 +342,7 @@ try {
 
   // W-7 — housekeeping, outside the sequence: a fresh observation of the same obligation, so the
   // desk keeps a readable facility after this run. It restates nothing and moves no state.
-  if (refreshExposure && !alreadySent.has("W-7")) await refreshExposureCredential();
+  if (sends("W-7")) await refreshExposureCredential();
 
   const ended = await covenantAt();
   evidence.ending = { covenantState: ended.state, byDesign: true, statement: ENDING };
