@@ -15,6 +15,7 @@ export default defineConfig({
       text: "Start",
       items: [
         { text: "What Covenant does", link: "/" },
+        { text: "Architecture", link: "/architecture" },
         { text: "Install", link: "/install" },
         { text: "Run locally", link: "/run-locally" },
         { text: "Quickstart", link: "/quickstart" },

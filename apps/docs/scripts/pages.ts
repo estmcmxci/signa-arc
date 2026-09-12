@@ -26,6 +26,7 @@ const page = (route: string, source: string): Page => ({
 
 export const PAGES: readonly Page[] = [
   page("/index", "index.md"),
+  page("/architecture", "architecture.md"),
   page("/run-locally", "run-locally.md"),
   page("/quickstart", "quickstart.md"),
   page("/install", "install.md"),
