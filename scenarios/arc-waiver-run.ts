@@ -122,6 +122,8 @@ const adopted = (options.get("adopt") ?? "")
   });
 assert(!resuming || adopted.length > 0, "--resume needs --adopt=<step>:<hash>,… for the transactions already sent");
 const adoptedWaiver = options.get("adopt-waiver") as Hex | undefined;
+// A step already on chain is never sent again, whatever else the sequence still owes.
+const alreadySent = new Set(adopted.map((entry) => entry.criterion));
 const refreshExposure = options.has("refresh-exposure");
 const durationSeconds = Number(options.get("duration") ?? DEFAULT_DURATION);
 const statedReason =
@@ -320,17 +322,19 @@ try {
   if (resuming) await recordInterruption();
 
   // W-5 — the same call again, permitted under the exception, cover still short of policy.
-  await drawStep("W-5", "0x1");
+  if (!alreadySent.has("W-5")) await drawStep("W-5", "0x1");
 
   // W-6 — the exception lapses and the covenant closes over the facility again.
   await lapse(waiver.endsAt);
-  const resynced = await transact("W-6", "syncCovenant (after the waiver lapsed)", covenantVault.address, vaultAbi, "syncCovenant");
-  assert.equal(resynced.covenantState, "CURE", "the facility did not return to CURE when the waiver lapsed");
+  if (!alreadySent.has("W-6")) {
+    const resynced = await transact("W-6", "syncCovenant (after the waiver lapsed)", covenantVault.address, vaultAbi, "syncCovenant");
+    assert.equal(resynced.covenantState, "CURE", "the facility did not return to CURE when the waiver lapsed");
+  }
   assert.equal(await read(covenantVault.address, vaultAbi, "activeWaiver"), false, "a waiver is still active");
 
   // W-7 — housekeeping, outside the sequence: a fresh observation of the same obligation, so the
   // desk keeps a readable facility after this run. It restates nothing and moves no state.
-  if (refreshExposure) await refreshExposureCredential();
+  if (refreshExposure && !alreadySent.has("W-7")) await refreshExposureCredential();
 
   const ended = await covenantAt();
   evidence.ending = { covenantState: ended.state, byDesign: true, statement: ENDING };
