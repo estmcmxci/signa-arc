@@ -17,5 +17,5 @@ export default defineConfig({
   }],
   server:{proxy:approverProxy},
   preview:{proxy:approverProxy},
-  build:{rollupOptions:{input:{landing:resolve(import.meta.dirname,'index.html'),dashboard:resolve(import.meta.dirname,'app/index.html'),security:resolve(import.meta.dirname,'security/index.html')}}},
+  build:{rollupOptions:{input:{landing:resolve(import.meta.dirname,'index.html'),dashboard:resolve(import.meta.dirname,'app/index.html')}}},
 });

@@ -49,9 +49,6 @@ test('the built routes load, survive a direct refresh, and pass the accessibilit
   await page.goto('/');
   await expect(page).toHaveTitle(/Signa Covenant/);
   await accessible(page, 'landing');
-  await page.goto('/security/');
-  await expect(page.getByRole('heading', { name: 'Know what the control proves.' })).toBeVisible();
-  await accessible(page, 'security');
   await page.goto('/app/');
   await expect(page.getByRole('heading', { name: 'EUR / USD facility' })).toBeVisible();
   await page.reload();
