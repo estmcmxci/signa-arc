@@ -85,3 +85,7 @@ a {color:inherit;text-underline-offset:4px}
   font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.12em;
 }
 button,.button {font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em;font-size:12px}
+
+/* The live dot on the hero badge. Reduced motion stops it: the rule above sets
+   animation:none on everything, which leaves the dot solid rather than blinking. */
+@keyframes pulse {0%,100%{opacity:1}50%{opacity:.35}}
