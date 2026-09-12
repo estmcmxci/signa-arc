@@ -49,6 +49,20 @@ export type ArcTestnetManifest = {
         note: string;
       }
     | undefined;
+  // Optional for the same reason: the fixture manifest predates the Privy quorum and
+  // must keep validating. facilityAdmin (roles.facilityAdmin) is this wallet's address;
+  // this block is who may ever move it and how.
+  facilityAdminQuorum?:
+    | {
+        provider: string;
+        note: string;
+        keyQuorumId: string;
+        walletId: string;
+        threshold: number;
+        approvers: { role: string; publicKey: string }[];
+        policyId: string;
+      }
+    | undefined;
 };
 
 export const ARC_TESTNET_CHAIN_ID = 5_042_002;
@@ -167,8 +181,41 @@ export function validateManifest(data: unknown): { ok: true; manifest: ArcTestne
         },
       },
       exposureDenomination: parseExposureDenomination(record["exposureDenomination"]),
+      facilityAdminQuorum: parseFacilityAdminQuorum(record["facilityAdminQuorum"]),
     },
   };
+}
+
+function parseFacilityAdminQuorum(raw: unknown): ArcTestnetManifest["facilityAdminQuorum"] {
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const record = raw as Record<string, unknown>;
+  const provider = record["provider"];
+  const note = record["note"];
+  const keyQuorumId = record["keyQuorumId"];
+  const walletId = record["walletId"];
+  const threshold = record["threshold"];
+  const policyId = record["policyId"];
+  const approversRaw = record["approvers"];
+  if (
+    typeof provider !== "string" ||
+    typeof note !== "string" ||
+    typeof keyQuorumId !== "string" ||
+    typeof walletId !== "string" ||
+    typeof threshold !== "number" ||
+    typeof policyId !== "string" ||
+    !Array.isArray(approversRaw)
+  ) {
+    return undefined;
+  }
+  const approvers: { role: string; publicKey: string }[] = [];
+  for (const entry of approversRaw) {
+    if (typeof entry !== "object" || entry === null) return undefined;
+    const role = (entry as Record<string, unknown>)["role"];
+    const publicKey = (entry as Record<string, unknown>)["publicKey"];
+    if (typeof role !== "string" || typeof publicKey !== "string") return undefined;
+    approvers.push({ role, publicKey });
+  }
+  return { provider, note, keyQuorumId, walletId, threshold, approvers, policyId };
 }
 
 function parseExposureDenomination(

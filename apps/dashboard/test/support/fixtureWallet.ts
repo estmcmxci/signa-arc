@@ -1,12 +1,18 @@
 import { getAddress, isAddressEqual, numberToHex, type Address, type Hex } from 'viem';
-import { ARC_CHAIN_ID, RpcError, type FixtureChain } from './chain';
-import { label } from './fixtures';
+import { ARC_CHAIN_ID, RpcError, type FixtureChain } from '../../src/test/chain';
+import { label } from '../../src/test/fixtures';
 
-// The injected EIP-1193 wallet for the /test-ui/ chain fixture and the browser tests
-// (FRONTEND-PLAN stage 1, output/FRONTEND-CONTRACT.md). It holds no key and signs
-// nothing: an approved eth_sendTransaction hands the unsigned request to the in-page
-// FixtureChain, and every signing method is refused. Each request that needs consent
-// waits for approve() or decline(), as a wallet window would.
+// A test-only EIP-1193 wallet double, used solely by test/chain.test.ts to verify
+// FixtureChain's fidelity against viem's wallet transport (mining, replacement,
+// reverts, decline, chain-switch events). This lives under apps/dashboard/test/ —
+// the Node-run unit-test tree — never under src/test/, so it is never imported by the
+// app or the /test-ui/ dev harness and can never reach the shipped bundle. The desk
+// itself has no wallet connector; this file's only job is testing chain.ts.
+//
+// It holds no key and signs nothing: an approved eth_sendTransaction hands the
+// unsigned request to the in-page FixtureChain, and every signing method is refused.
+// Each request that needs consent waits for approve() or decline(), as a wallet
+// window would.
 
 export const OTHER_ACCOUNT = getAddress(label('FIXTURE-OTHER-ACCOUNT', 20));
 export const OTHER_CHAIN = { id: 1, name: 'Ethereum' } as const;
