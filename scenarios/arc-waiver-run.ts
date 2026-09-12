@@ -523,12 +523,14 @@ async function refreshExposureCredential() {
   );
   evidence.credentials.push({ kind: "ExposureCredential", observedAtBlock: blockReference(block), sourceRecord, issuer: exposureIssuer.address, digest, credential, signature });
   const step = await transact("W-7", `submit exposure seq ${sequence} (re-observed, outside the sequence)`, credentialRegistry.address, credentialsAbi, "submitExposure", [credential, signature]);
-  step.note = "Housekeeping, not part of the six steps: the same obligation re-observed so the facility stays readable after the run. It changes no value and moves no state.";
+  const eligibleUntil = min(credential.observedAt + BigInt(manifest.facility.policy.credentialMaxAgeSeconds), credential.validUntil);
+  step.note = `Housekeeping, not part of the six steps: the same obligation re-observed, so the facility stays readable after this run. It changes no value and moves no state. Freshness is min(observedAt + credentialMaxAge, validUntil), so this observation is eligible until ${iso(eligibleUntil)} and then goes stale like any other. It moves the expiry; it does not remove it, and a further re-observation is needed before any recording after that time.`;
   return step;
 }
 
 /** Propose, two approvals, Privy signs, we broadcast. The service is the console's own. */
 async function waive() {
+  const adminGasBefore = await publicClient.getBalance({ address: quorum!.walletAddress! });
   const readiness = await service!.waiverReadiness();
   assert.equal(readiness.refusals.length, 0, `the contract would refuse a waiver now: ${readiness.refusals.join("; ")}`);
   const proposed = await service!.proposeWaiver({ durationSeconds, reason: statedReason });
@@ -574,6 +576,8 @@ async function waive() {
   assert.equal(step.covenantState, "WAIVED", "the vault is not WAIVED after the waiver");
 
   const endsAt = (await read(covenantVault.address, vaultAbi, "waiverEndsAt")) as bigint;
+  const adminGasAfter = await publicClient.getBalance({ address: quorum!.walletAddress! });
+  const spentOnWaiver = adminGasBefore - adminGasAfter;
   const approvals = keyMembers(intent).map((member) => {
     const approver = approvers.find((candidate) => normalizePublicKey(candidate.publicKey) === member.publicKey);
     const ours = sent.get(member.publicKey);
@@ -598,6 +602,13 @@ async function waive() {
     call: { to: proposed.call.to, functionName: proposed.call.functionName, args: proposed.call.args, data: proposed.call.data },
     pinned: { chainId: proposed.call.chainId, nonce: proposed.call.nonce, gasLimit: proposed.call.gasLimit, maxFeePerGasWei: proposed.call.maxFeePerGasWei },
     readiness,
+    gas: {
+      adminBefore: formatEther(adminGasBefore),
+      adminAfter: formatEther(adminGasAfter),
+      spentOnThisWaiver: formatEther(spentOnWaiver),
+      furtherWaiversAtThisPrice: spentOnWaiver > 0n ? (adminGasAfter / spentOnWaiver).toString() : "unknown",
+      topUp: "faucet.circle.com funds 20 USDC per address every two hours",
+    },
     approvals,
     privySigned: { signedTransaction, recoveredSigner, decodedNonce: decoded.nonce ?? 0, decodedTo: decoded.to, decodedValue: (decoded.value ?? 0n).toString() },
     broadcast: { transactionHash: step.transactionHash, explorer: step.explorer, blockNumber: step.blockNumber, blockTimestamp: step.blockTimestamp, sender: step.sender, expectedStatus: "0x1", actualStatus: step.actualStatus, gasUsed: step.gasUsed },
@@ -869,7 +880,16 @@ async function writeEvidence() {
 
 function markdown(): string {
   const waiver = evidence.waiver as
-    | { intentId: string; statedReason: string; reasonCommitment: Hex; durationSeconds: number; endsAt: string; approvals: { role: string; signedAt: string | null }[]; broadcast: { transactionHash: Hex; explorer: string } }
+    | {
+        intentId: string;
+        statedReason: string;
+        reasonCommitment: Hex;
+        durationSeconds: number;
+        endsAt: string;
+        approvals: { role: string; signedAt: string | null }[];
+        broadcast: { transactionHash: Hex; explorer: string };
+        gas: { adminBefore: string; adminAfter: string; spentOnThisWaiver: string; furtherWaiversAtThisPrice: string; topUp: string };
+      }
     | undefined;
   const refused = evidence.steps.find((step) => step.refusal);
   const refusal = refused?.refusal as { stateReplays: { blockNumber: string; revertData: Hex }[]; gasLimit: string } | undefined;
@@ -905,6 +925,8 @@ function markdown(): string {
           ...waiver.approvals.map((approval) => `| ${approval.role} | ${approval.signedAt ?? "not signed"} |`),
           "",
           `Broadcast: [${waiver.broadcast.transactionHash}](${waiver.broadcast.explorer}).`,
+          "",
+          `Gas: the quorum wallet held ${waiver.gas.adminBefore} USDC before this run and ${waiver.gas.adminAfter} after it, spending ${waiver.gas.spentOnThisWaiver} on the waiver — about ${waiver.gas.furtherWaiversAtThisPrice} more at this gas price. ${waiver.gas.topUp}.`,
           "",
         ]
       : []),
