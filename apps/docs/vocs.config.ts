@@ -5,6 +5,10 @@ export default defineConfig({
   title: "Signa Covenant",
   description: "Inspect a Signa Covenant facility on Arc Testnet from the command line, and read its recorded evidence.",
   renderStrategy: "full-static",
+  // Sampled from the logo: its bar is #3fb55d on a #10100e ground. The light scheme keeps
+  // the darker partner so link text stays legible on white. Served from apps/docs/public.
+  iconUrl: "/favicon.png",
+  accentColor: "light-dark(#0e6029, #3fb55d)",
   sidebar: [
     {
       text: "Start",

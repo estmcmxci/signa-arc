@@ -8,7 +8,7 @@
   --surface:var(--sand-100); --panel:var(--sand-200); --raised:var(--sand-300);
   --text:var(--sand-1200); --muted:var(--sand-1100); --subtle:var(--sand-1000);
   --line:var(--sand-500); --line-strong:var(--sand-800);
-  --ok:#42be65; --ok-bg:#022d0d; --hold:#ff9c57; --hold-bg:#231000;
+  --ok:#3fb55d; --ok-bg:#022d0d; --hold:#ff9c57; --hold-bg:#231000;
   --breach:#ff7eb6; --breach-bg:#2a0a18; --waiver:#c3a1ff; --waiver-bg:#1c0f30;
   --error:#ff8389; --error-bg:#520408;
   --font-sans:'Inter Variable',Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
@@ -29,7 +29,7 @@
   --sand-400:#e9e9e7; --sand-500:#e2e1de; --sand-600:#dad9d6;
   --sand-700:#cfceca; --sand-800:#82827c; --sand-900:#706f69;
   --sand-1000:#686760; --sand-1100:#63635e; --sand-1200:#21201c;
-  --ok:#0e6027; --ok-bg:#defbe6; --hold:#8a3800; --hold-bg:#fff2e8;
+  --ok:#0e6029; --ok-bg:#defbe6; --hold:#8a3800; --hold-bg:#fff2e8;
   --breach:#9f1853; --breach-bg:#ffd6e8; --waiver:#6929c4; --waiver-bg:#e8daff;
   --error:#a2191f; --error-bg:#fff1f1;
   --shadow-sm:0 0 0 1px var(--line),0 2px 2px #0000000a;
