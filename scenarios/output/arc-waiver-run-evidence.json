@@ -1,0 +1,657 @@
+{
+  "title": "Signa Covenant: permitted, refused, waived by a 2-of-2 quorum, permitted, lapsed — one facility, one run",
+  "rehearsal": false,
+  "outcome": "complete",
+  "disclaimer": "Fictional EUR-denominated loan book. Mock provider and exposure data. Testnet USDC only; no real counterparties.",
+  "providerDisclaimer": "Mock provider data — no Ebury connection or endorsement.",
+  "generatedAt": "2026-09-12T05:32:03.376Z",
+  "network": {
+    "chainId": 5042002,
+    "rpcUrl": "https://rpc.testnet.arc.network",
+    "explorer": "https://testnet.arcscan.app"
+  },
+  "scenario": {
+    "path": "scenarios/arc-waiver-run.ts",
+    "commit": "af3e8dc4d040f070a3a44dce14de7dec7d48ec04",
+    "dirty": false
+  },
+  "deployment": {
+    "sourceCommit": "5fefd2322f148cdbd713fa9b266c74b6f044b940",
+    "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+    "facilityRegistry": "0xB54fe913C4a7dE73Bc285338dCbb384AEec5e448",
+    "credentialRegistry": "0xD921734C9314442a74Cd3FEBAB8028b2Bb9A7624",
+    "coverageEngine": "0x3341B76fEFF4CE691781fEAa4C76EA95479b9b6b",
+    "covenantVault": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+    "settlementAsset": "0x3600000000000000000000000000000000000000",
+    "exposureDenomination": {
+      "currency": "EUR",
+      "referenceAsset": {
+        "address": "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a",
+        "decimals": 6,
+        "symbol": "EURC"
+      },
+      "note": "Denominating asset of the exposure, referenced only (E-DEC-2). No EURC is transferred, held or approved. The exposure is a EUR-denominated loan book asserted by ExposureCredential; the facility is funded, drawn and repaid in USDC."
+    }
+  },
+  "identities": {
+    "operatorAndKeeper": "0x7e09657321F1818825a9A15cedd9D95308130ED4",
+    "exposureIssuer": "0x4317497399f27d52007d7f2012EAd27f148B6662",
+    "hedgeIssuer": "0xAD515A2BE433e78B6b570064797626012e272e0a",
+    "facilityAdmin": "0x55C4DD3770A44695735717CB7b7005AC7dE9edA1"
+  },
+  "draw": {
+    "amount": "1000000",
+    "calldata": "0x3b30414700000000000000000000000000000000000000000000000000000000000f4240"
+  },
+  "before": {
+    "readAtBlock": "latest",
+    "compliant": false,
+    "coverageBps": 6840,
+    "requiredCoverageBps": 10000,
+    "reason": "BELOW_THRESHOLD",
+    "state": "WAIVED",
+    "activeWaiver": false,
+    "block": "61684319",
+    "blockTimestamp": "2026-09-12T05:32:04.000Z"
+  },
+  "steps": [
+    {
+      "criterion": "W-1",
+      "action": "approve 2000000 to the vault",
+      "transactionHash": "0xf490374765312d104c3c5c2742f66a0cc101efc0ad9ac3781f8eed881fc9bd3c",
+      "explorer": "https://testnet.arcscan.app/tx/0xf490374765312d104c3c5c2742f66a0cc101efc0ad9ac3781f8eed881fc9bd3c",
+      "blockNumber": "61678097",
+      "blockTimestamp": "2026-09-12T04:39:09.000Z",
+      "sender": "0x7e09657321f1818825a9a15cedd9d95308130ed4",
+      "expectedStatus": "0x1",
+      "actualStatus": "0x1",
+      "gasUsed": "55438",
+      "coverageBps": 10000,
+      "reasonCode": "NONE",
+      "covenantState": "COMPLIANT",
+      "events": [
+        {
+          "contract": "0x3600000000000000000000000000000000000000",
+          "event": "Approval",
+          "args": {
+            "owner": "0x7e09657321F1818825a9A15cedd9D95308130ED4",
+            "spender": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+            "value": "2000000"
+          }
+        }
+      ],
+      "note": "Sent by the interrupted first attempt and adopted here: re-read from the chain and re-asserted, never re-sent."
+    },
+    {
+      "criterion": "W-1",
+      "action": "deposit 2000000 (facility funding)",
+      "transactionHash": "0xb84fac35ef8680841cceedc55d71c4594014765ca65501ef967eb04a2b4d20e3",
+      "explorer": "https://testnet.arcscan.app/tx/0xb84fac35ef8680841cceedc55d71c4594014765ca65501ef967eb04a2b4d20e3",
+      "blockNumber": "61678107",
+      "blockTimestamp": "2026-09-12T04:39:14.000Z",
+      "sender": "0x7e09657321f1818825a9a15cedd9d95308130ed4",
+      "expectedStatus": "0x1",
+      "actualStatus": "0x1",
+      "gasUsed": "54973",
+      "coverageBps": 10000,
+      "reasonCode": "NONE",
+      "covenantState": "COMPLIANT",
+      "events": [
+        {
+          "contract": "0xfffffffffffffffffffffffffffffffffffffffe",
+          "event": "Transfer",
+          "args": {
+            "from": "0x7e09657321F1818825a9A15cedd9D95308130ED4",
+            "to": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+            "value": "2000000000000000000"
+          }
+        },
+        {
+          "contract": "0x3600000000000000000000000000000000000000",
+          "event": "Transfer",
+          "args": {
+            "from": "0x7e09657321F1818825a9A15cedd9D95308130ED4",
+            "to": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+            "value": "2000000"
+          }
+        },
+        {
+          "contract": "0xa68fb25ba98d522ce8326471a6b6bf3732e3bf51",
+          "event": "Deposited",
+          "args": {
+            "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+            "from": "0x7e09657321F1818825a9A15cedd9D95308130ED4",
+            "amount": "2000000"
+          }
+        }
+      ],
+      "note": "Sent by the interrupted first attempt and adopted here: re-read from the chain and re-asserted, never re-sent."
+    },
+    {
+      "criterion": "W-1",
+      "action": "draw 1000000",
+      "transactionHash": "0xc02108e763210c08859f60c5f6c23994833fdc33b78c04dc4b3bce67d13e6ccd",
+      "explorer": "https://testnet.arcscan.app/tx/0xc02108e763210c08859f60c5f6c23994833fdc33b78c04dc4b3bce67d13e6ccd",
+      "blockNumber": "61678117",
+      "blockTimestamp": "2026-09-12T04:39:21.000Z",
+      "sender": "0x7e09657321f1818825a9a15cedd9d95308130ed4",
+      "expectedStatus": "0x1",
+      "actualStatus": "0x1",
+      "gasUsed": "210311",
+      "coverageBps": 10000,
+      "reasonCode": "NONE",
+      "covenantState": "COMPLIANT",
+      "events": [
+        {
+          "contract": "0xa68fb25ba98d522ce8326471a6b6bf3732e3bf51",
+          "event": "CovenantSynchronized",
+          "args": {
+            "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+            "previousState": 1,
+            "newState": 1,
+            "coverageBps": 10000,
+            "requiredCoverageBps": 10000,
+            "outstandingValue": "1000000",
+            "grossEligible": "1007000",
+            "countedEligible": "1000000",
+            "reason": 0,
+            "cureDeadline": "0"
+          }
+        },
+        {
+          "contract": "0xfffffffffffffffffffffffffffffffffffffffe",
+          "event": "Transfer",
+          "args": {
+            "from": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+            "to": "0x7e09657321F1818825a9A15cedd9D95308130ED4",
+            "value": "1000000000000000000"
+          }
+        },
+        {
+          "contract": "0x3600000000000000000000000000000000000000",
+          "event": "Transfer",
+          "args": {
+            "from": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+            "to": "0x7e09657321F1818825a9A15cedd9D95308130ED4",
+            "value": "1000000"
+          }
+        },
+        {
+          "contract": "0xa68fb25ba98d522ce8326471a6b6bf3732e3bf51",
+          "event": "Drawn",
+          "args": {
+            "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+            "operator": "0x7e09657321F1818825a9A15cedd9D95308130ED4",
+            "amount": "1000000",
+            "principal": "3000000"
+          }
+        }
+      ],
+      "note": "Sent by the interrupted first attempt and adopted here: re-read from the chain and re-asserted, never re-sent.",
+      "calldata": "0x3b30414700000000000000000000000000000000000000000000000000000000000f4240",
+      "gate": {
+        "allowed": true,
+        "reason": "NONE",
+        "pinnedBlock": "61678116"
+      },
+      "vault": {
+        "balanceBefore": "2500000",
+        "balanceAfter": "1500000",
+        "principalBefore": "2000000",
+        "principalAfter": "3000000"
+      }
+    },
+    {
+      "criterion": "W-2",
+      "action": "submit hedge seq 8 (720000 USD base units)",
+      "transactionHash": "0xfbee0cd95352a78804188c09c988b15d975c722e050885bad3479af980ae027e",
+      "explorer": "https://testnet.arcscan.app/tx/0xfbee0cd95352a78804188c09c988b15d975c722e050885bad3479af980ae027e",
+      "blockNumber": "61678125",
+      "blockTimestamp": "2026-09-12T04:39:25.000Z",
+      "sender": "0x7e09657321f1818825a9a15cedd9d95308130ed4",
+      "expectedStatus": "0x1",
+      "actualStatus": "0x1",
+      "gasUsed": "104637",
+      "coverageBps": 6840,
+      "reasonCode": "BELOW_THRESHOLD",
+      "covenantState": "COMPLIANT",
+      "events": [
+        {
+          "contract": "0xd921734c9314442a74cd3febab8028b2bb9a7624",
+          "event": "HedgeCredentialAccepted",
+          "args": {
+            "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+            "tradeIdCommitment": "0xea65d291768b8a3968f0b3fc5d79bdfa39d68d1f4fa11eff157b909b94dde664",
+            "issuer": "0xAD515A2BE433e78B6b570064797626012e272e0a",
+            "digest": "0xda81c24c6916e5d81a0efc4f77f8ca53a49dcbde7c9404098f14a653df173981",
+            "sequence": "8",
+            "status": 0,
+            "remainingNotional": "720000",
+            "acceptedAt": "1789187965"
+          }
+        }
+      ],
+      "note": "Sent by the interrupted first attempt and adopted here: re-read from the chain and re-asserted, never re-sent."
+    },
+    {
+      "criterion": "W-2",
+      "action": "syncCovenant",
+      "transactionHash": "0x8d6a5e03fa7590e9231d3fff3c244f1978328eb432dddf88f0cf22bc87ba8dfd",
+      "explorer": "https://testnet.arcscan.app/tx/0x8d6a5e03fa7590e9231d3fff3c244f1978328eb432dddf88f0cf22bc87ba8dfd",
+      "blockNumber": "61678134",
+      "blockTimestamp": "2026-09-12T04:39:29.000Z",
+      "sender": "0x7e09657321f1818825a9a15cedd9d95308130ed4",
+      "expectedStatus": "0x1",
+      "actualStatus": "0x1",
+      "gasUsed": "156842",
+      "coverageBps": 6840,
+      "reasonCode": "BELOW_THRESHOLD",
+      "covenantState": "CURE",
+      "events": [
+        {
+          "contract": "0xa68fb25ba98d522ce8326471a6b6bf3732e3bf51",
+          "event": "CovenantSynchronized",
+          "args": {
+            "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+            "previousState": 1,
+            "newState": 2,
+            "coverageBps": 6840,
+            "requiredCoverageBps": 10000,
+            "outstandingValue": "1000000",
+            "grossEligible": "684000",
+            "countedEligible": "684000",
+            "reason": 3,
+            "cureDeadline": "1789619969"
+          }
+        }
+      ],
+      "note": "Sent by the interrupted first attempt and adopted here: re-read from the chain and re-asserted, never re-sent."
+    },
+    {
+      "criterion": "W-3",
+      "action": "draw 1000000",
+      "transactionHash": "0xe4f039a990dd4e2a1f8663a92b4a6d476dff4fc5566643e7958a79269c88194f",
+      "explorer": "https://testnet.arcscan.app/tx/0xe4f039a990dd4e2a1f8663a92b4a6d476dff4fc5566643e7958a79269c88194f",
+      "blockNumber": "61678137",
+      "blockTimestamp": "2026-09-12T04:39:31.000Z",
+      "sender": "0x7e09657321f1818825a9a15cedd9d95308130ed4",
+      "expectedStatus": "0x0",
+      "actualStatus": "0x0",
+      "gasUsed": "172586",
+      "coverageBps": 6840,
+      "reasonCode": "BELOW_THRESHOLD",
+      "covenantState": "CURE",
+      "events": [],
+      "note": "Sent by the interrupted first attempt and adopted here: re-read from the chain and re-asserted, never re-sent.",
+      "calldata": "0x3b30414700000000000000000000000000000000000000000000000000000000000f4240",
+      "gate": {
+        "allowed": false,
+        "reason": "BELOW_THRESHOLD",
+        "pinnedBlock": "61678136"
+      },
+      "vault": {
+        "balanceBefore": "1500000",
+        "balanceAfter": "1500000",
+        "principalBefore": "3000000",
+        "principalAfter": "3000000"
+      },
+      "refusal": {
+        "predictedBeforeBroadcast": "not recorded: this draw was adopted after the fact, so no prediction was made before it was broadcast",
+        "stateReplays": [
+          {
+            "blockNumber": "61678136",
+            "error": "DrawNotAllowed",
+            "state": "CURE",
+            "revertData": "0xbe9867850000000000000000000000000000000000000000000000000000000000000002"
+          },
+          {
+            "blockNumber": "61678137",
+            "error": "DrawNotAllowed",
+            "state": "CURE",
+            "revertData": "0xbe9867850000000000000000000000000000000000000000000000000000000000000002"
+          }
+        ],
+        "gasLimit": "1000000"
+      }
+    },
+    {
+      "criterion": "W-4",
+      "action": "createWaiver(300 s) by the 2-of-2 quorum",
+      "transactionHash": "0x665838e29a3ffb39e6b909e5e84e6d071945153db049ff01228862ce0863fdf0",
+      "explorer": "https://testnet.arcscan.app/tx/0x665838e29a3ffb39e6b909e5e84e6d071945153db049ff01228862ce0863fdf0",
+      "blockNumber": "61682877",
+      "blockTimestamp": "2026-09-12T05:19:47.000Z",
+      "sender": "0x55c4dd3770a44695735717cb7b7005ac7de9eda1",
+      "expectedStatus": "0x1",
+      "actualStatus": "0x1",
+      "gasUsed": "170313",
+      "coverageBps": 6840,
+      "reasonCode": "BELOW_THRESHOLD",
+      "covenantState": "WAIVED",
+      "events": [
+        {
+          "contract": "0xa68fb25ba98d522ce8326471a6b6bf3732e3bf51",
+          "event": "CovenantSynchronized",
+          "args": {
+            "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+            "previousState": 2,
+            "newState": 2,
+            "coverageBps": 6840,
+            "requiredCoverageBps": 10000,
+            "outstandingValue": "1000000",
+            "grossEligible": "684000",
+            "countedEligible": "684000",
+            "reason": 3,
+            "cureDeadline": "1789619969"
+          }
+        },
+        {
+          "contract": "0xa68fb25ba98d522ce8326471a6b6bf3732e3bf51",
+          "event": "WaiverCreated",
+          "args": {
+            "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+            "reasonCommitment": "0x954d76348692d1dfa9b9542e6994b41319ff3bffdb6d1ed14615986dc999dc51",
+            "startsAt": "1789190387",
+            "endsAt": "1789190687"
+          }
+        }
+      ]
+    },
+    {
+      "criterion": "W-5",
+      "action": "draw 1000000",
+      "transactionHash": "0x2aa35390f0041fb6dde6b9241bdeece769e18171f27c0216a2419e921116337d",
+      "explorer": "https://testnet.arcscan.app/tx/0x2aa35390f0041fb6dde6b9241bdeece769e18171f27c0216a2419e921116337d",
+      "blockNumber": "61682888",
+      "blockTimestamp": "2026-09-12T05:19:52.000Z",
+      "sender": "0x7e09657321f1818825a9a15cedd9d95308130ed4",
+      "expectedStatus": "0x1",
+      "actualStatus": "0x1",
+      "gasUsed": "210986",
+      "coverageBps": 6840,
+      "reasonCode": "BELOW_THRESHOLD",
+      "covenantState": "WAIVED",
+      "events": [
+        {
+          "contract": "0xa68fb25ba98d522ce8326471a6b6bf3732e3bf51",
+          "event": "CovenantSynchronized",
+          "args": {
+            "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+            "previousState": 4,
+            "newState": 4,
+            "coverageBps": 6840,
+            "requiredCoverageBps": 10000,
+            "outstandingValue": "1000000",
+            "grossEligible": "684000",
+            "countedEligible": "684000",
+            "reason": 3,
+            "cureDeadline": "1789619969"
+          }
+        },
+        {
+          "contract": "0xfffffffffffffffffffffffffffffffffffffffe",
+          "event": "Transfer",
+          "args": {
+            "from": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+            "to": "0x7e09657321F1818825a9A15cedd9D95308130ED4",
+            "value": "1000000000000000000"
+          }
+        },
+        {
+          "contract": "0x3600000000000000000000000000000000000000",
+          "event": "Transfer",
+          "args": {
+            "from": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+            "to": "0x7e09657321F1818825a9A15cedd9D95308130ED4",
+            "value": "1000000"
+          }
+        },
+        {
+          "contract": "0xa68fb25ba98d522ce8326471a6b6bf3732e3bf51",
+          "event": "Drawn",
+          "args": {
+            "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+            "operator": "0x7e09657321F1818825a9A15cedd9D95308130ED4",
+            "amount": "1000000",
+            "principal": "4000000"
+          }
+        }
+      ],
+      "note": "Permitted under the waiver while coverage was 6840 of 10000 bps: the exception releases the draw, it does not restore cover.",
+      "calldata": "0x3b30414700000000000000000000000000000000000000000000000000000000000f4240",
+      "gate": {
+        "allowed": true,
+        "reason": "BELOW_THRESHOLD",
+        "pinnedBlock": "61682887"
+      },
+      "vault": {
+        "balanceBefore": "1500000",
+        "balanceAfter": "500000",
+        "principalBefore": "3000000",
+        "principalAfter": "4000000"
+      }
+    },
+    {
+      "criterion": "W-6",
+      "action": "syncCovenant (after the waiver lapsed)",
+      "transactionHash": "0x151680a3f8caab6896945bde3d190dd9620273f248dd9da6ee2d56c14f095fdc",
+      "explorer": "https://testnet.arcscan.app/tx/0x151680a3f8caab6896945bde3d190dd9620273f248dd9da6ee2d56c14f095fdc",
+      "blockNumber": "61684340",
+      "blockTimestamp": "2026-09-12T05:32:14.000Z",
+      "sender": "0x7e09657321f1818825a9a15cedd9d95308130ed4",
+      "expectedStatus": "0x1",
+      "actualStatus": "0x1",
+      "gasUsed": "135105",
+      "coverageBps": 6840,
+      "reasonCode": "BELOW_THRESHOLD",
+      "covenantState": "CURE",
+      "events": [
+        {
+          "contract": "0xa68fb25ba98d522ce8326471a6b6bf3732e3bf51",
+          "event": "CovenantSynchronized",
+          "args": {
+            "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+            "previousState": 4,
+            "newState": 2,
+            "coverageBps": 6840,
+            "requiredCoverageBps": 10000,
+            "outstandingValue": "1000000",
+            "grossEligible": "684000",
+            "countedEligible": "684000",
+            "reason": 3,
+            "cureDeadline": "1789619969"
+          }
+        }
+      ]
+    },
+    {
+      "criterion": "W-7",
+      "action": "submit exposure seq 3 (re-observed, outside the sequence)",
+      "transactionHash": "0xf6395fa9fe654c4651dad8ed475ee94402665c61e5624c43fc03d3e4416ca5ff",
+      "explorer": "https://testnet.arcscan.app/tx/0xf6395fa9fe654c4651dad8ed475ee94402665c61e5624c43fc03d3e4416ca5ff",
+      "blockNumber": "61684351",
+      "blockTimestamp": "2026-09-12T05:32:20.000Z",
+      "sender": "0x7e09657321f1818825a9a15cedd9d95308130ed4",
+      "expectedStatus": "0x1",
+      "actualStatus": "0x1",
+      "gasUsed": "94810",
+      "coverageBps": 6840,
+      "reasonCode": "BELOW_THRESHOLD",
+      "covenantState": "CURE",
+      "events": [
+        {
+          "contract": "0xd921734c9314442a74cd3febab8028b2bb9a7624",
+          "event": "ExposureCredentialAccepted",
+          "args": {
+            "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+            "issuer": "0x4317497399f27d52007d7f2012EAd27f148B6662",
+            "digest": "0x63a465eabcd848974534f0a63bbe5d7211587b34d6ccdabbb7fe97c80de28e26",
+            "sequence": "3",
+            "outstandingValue": "1000000",
+            "acceptedAt": "1789191140"
+          }
+        }
+      ],
+      "note": "Housekeeping, not part of the six steps: the same obligation re-observed, so the facility stays readable after this run. It changes no value and moves no state. Freshness is min(observedAt + credentialMaxAge, validUntil), so this observation is eligible until 2026-09-13T05:32:19.000Z and then goes stale like any other. It moves the expiry; it does not remove it, and a further re-observation is needed before any recording after that time."
+    }
+  ],
+  "credentials": [
+    {
+      "kind": "ExposureCredential",
+      "observedAtBlock": {
+        "number": "61684349",
+        "hash": "0xa258f8624f3731fe51f652e4aa1b69b4b6b952a9655e1d7aebf1b9cf4291b95a",
+        "timestamp": "1789191139"
+      },
+      "sourceRecord": {
+        "mock": true,
+        "disclaimer": "Fictional EUR-denominated loan book. Mock provider and exposure data. Testnet USDC only; no real counterparties.",
+        "portfolio": "Fictional EUR-denominated loan book",
+        "denomination": "EUR",
+        "denominatingAsset": "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a",
+        "settlementObligationUsd": "1.000000",
+        "observedAtBlock": "61684349",
+        "sequence": "3",
+        "reObservationOf": "2"
+      },
+      "issuer": "0x4317497399f27d52007d7f2012EAd27f148B6662",
+      "digest": "0x63a465eabcd848974534f0a63bbe5d7211587b34d6ccdabbb7fe97c80de28e26",
+      "credential": {
+        "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+        "exposureCurrency": "0x455552",
+        "settlementCurrency": "0x555344",
+        "outstandingValue": "1000000",
+        "exposureMaturity": "1805147242",
+        "observedAt": "1789191139",
+        "validUntil": "1789277539",
+        "sequence": "3",
+        "sourceCommitment": "0x5aed39ce948b581a22d80fdbf3ded619698484ecb0636a10de5e364f9fcd6f29"
+      },
+      "signature": "0x3773ce44e047a793a41e3a057a58fe6073f93d3cc6abe26dd972efade7f3fff56315855bafeef906a3ca277aa4e7eb217e67f6a04191f82e0bb7c66df21351771b"
+    }
+  ],
+  "waiver": {
+    "intentId": "r60i4ex2el0w2rqqe0mgdufn",
+    "statedReason": "Hedge replacement in progress with the broker; a bounded 300-second exception while cover is restored. Arc Testnet rehearsal, fictional facility.",
+    "reasonCommitment": "0x954d76348692d1dfa9b9542e6994b41319ff3bffdb6d1ed14615986dc999dc51",
+    "durationSeconds": 300,
+    "endsAt": "2026-09-12T05:24:47.000Z",
+    "admin": {
+      "address": "0x55C4DD3770A44695735717CB7b7005AC7dE9edA1",
+      "privyWalletId": "zc9i4be5osru1qyzfci337mi",
+      "keyQuorumId": "pbf1jtt1knpsl30eyp0z163t",
+      "threshold": 2,
+      "policyId": "y5x9g8gglndai2hosm47zvxf"
+    },
+    "call": {
+      "to": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+      "functionName": "createWaiver",
+      "args": [
+        "300",
+        "\"0x954d76348692d1dfa9b9542e6994b41319ff3bffdb6d1ed14615986dc999dc51\""
+      ],
+      "data": "0x6738bca7000000000000000000000000000000000000000000000000000000000000012c954d76348692d1dfa9b9542e6994b41319ff3bffdb6d1ed14615986dc999dc51"
+    },
+    "pinned": {
+      "chainId": 5042002,
+      "nonce": 5,
+      "gasLimit": "207398",
+      "maxFeePerGasWei": "52000000000"
+    },
+    "readiness": {
+      "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+      "vault": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+      "covenantState": "WAIVED",
+      "activeWaiver": false,
+      "waiverEndsAt": "1789190687",
+      "coverage": {
+        "assessed": true,
+        "compliant": false,
+        "coverageBps": 6840,
+        "requiredCoverageBps": 10000,
+        "eligibleHedgeCount": 1,
+        "totalHedgeCount": 1,
+        "exposureReason": "ELIGIBLE",
+        "resultReason": "BELOW_THRESHOLD"
+      },
+      "maxWaiverDurationSeconds": 259200,
+      "refusals": []
+    },
+    "gas": {
+      "adminBefore": "0.28793051675",
+      "adminAfter": "0.28418363075",
+      "spentOnThisWaiver": "0.003746886",
+      "furtherWaiversAtThisPrice": "75",
+      "topUp": "faucet.circle.com funds 20 USDC per address every two hours"
+    },
+    "approvals": [
+      {
+        "role": "Risk officer",
+        "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEdTLnqVlKlu7pil38bXDIoTeFbbTWO2ILftJpmdIFKHejmkOrh+ssVfpBkr5mNkHLrSRlkC4eIA7FhSOPAIy+0A==",
+        "signedAt": "2026-09-12T04:39:37.940Z",
+        "signedPayloadSha256": null,
+        "signature": null,
+        "signatureVerifies": null
+      },
+      {
+        "role": "Treasury lead",
+        "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAED4DCLEErSAdbIY64mQIcK4ZZHKfpvGP3T+UfA3YXFQsmSPpiQVDmwyoVkU5QsxnSgKjDleBwex40ODQtoZqPvA==",
+        "signedAt": "2026-09-12T04:39:41.004Z",
+        "signedPayloadSha256": null,
+        "signature": null,
+        "signatureVerifies": null
+      }
+    ],
+    "privySigned": {
+      "signedTransaction": "0x02f8b4834cef52058477359400850c1b71080083032a2694a68fb25ba98d522ce8326471a6b6bf3732e3bf5180b8446738bca7000000000000000000000000000000000000000000000000000000000000012c954d76348692d1dfa9b9542e6994b41319ff3bffdb6d1ed14615986dc999dc51c080a0627a1497d5a87e12d58f9b10ef7eb2bac18bfef732d2013e7564bc2d7735a38fa03f1f3efa6af6cc80ab8b84c2785ce766eec328137154fd5bc57b94b17f47a4ce",
+      "recoveredSigner": "0x55C4DD3770A44695735717CB7b7005AC7dE9edA1",
+      "decodedNonce": 5,
+      "decodedTo": "0xa68fb25ba98d522ce8326471a6b6bf3732e3bf51",
+      "decodedValue": "0"
+    },
+    "broadcast": {
+      "transactionHash": "0x665838e29a3ffb39e6b909e5e84e6d071945153db049ff01228862ce0863fdf0",
+      "explorer": "https://testnet.arcscan.app/tx/0x665838e29a3ffb39e6b909e5e84e6d071945153db049ff01228862ce0863fdf0",
+      "blockNumber": "61682877",
+      "blockTimestamp": "2026-09-12T05:19:47.000Z",
+      "sender": "0x55c4dd3770a44695735717cb7b7005ac7de9eda1",
+      "expectedStatus": "0x1",
+      "actualStatus": "0x1",
+      "gasUsed": "170313"
+    },
+    "assertions": {
+      "bothApproversSigned": true,
+      "signaturesReVerifiedHere": "not re-verified in this process: both approvals were made before it started, and Privy holds them. Their timestamps above are Privy's record, not a signature this run checked.",
+      "exactlyOneWaiverCreated": true,
+      "waiverCreatedNamesThisFacility": true,
+      "waiverCreatedCommitsToTheStatedReason": true,
+      "signedByTheAdminWallet": true,
+      "signedTransactionIsTheApprovedOne": true,
+      "receiptStatusIs0x1": true,
+      "covenantStateReadBackWaived": true
+    }
+  },
+  "interruption": {
+    "happened": true,
+    "cause": "Two processes were killed before they finished; each ran in a background shell that ended with the session which started it. The first sent W-1 through W-3 and took both approvals. The second broadcast the waiver and sent W-5, then died inside the wait for the waiver to lapse. Only the first lost a record: its evidence writer ran in a finally block that never ran, so six landed transactions left no trace at all. Every run since journals each step as it lands, which is why the second kill cost nothing.",
+    "whatSurvived": "Both approvals landed in the first attempt, three seconds apart — risk officer 2026-09-12T04:39:37.940Z, treasury lead 2026-09-12T04:39:41.004Z — so Privy met the threshold and signed. The signed transaction then sat unbroadcast for about 40 minutes across a killed process, and was still valid when it was finally sent: nonce 5 had not been taken and the fee cap it was pinned with still stood. Privy holds the signature and we hold the broadcast; neither depends on the other staying alive. The quorum is enforced where the keys are, not in the process that asked for them.",
+    "resumedAt": "2026-09-12T05:32:14.377Z",
+    "minutesBetweenRefusalAndWaiver": 40,
+    "adoptedTransactions": [
+      "W-1 0xf490374765312d104c3c5c2742f66a0cc101efc0ad9ac3781f8eed881fc9bd3c",
+      "W-1 0xb84fac35ef8680841cceedc55d71c4594014765ca65501ef967eb04a2b4d20e3",
+      "W-1 0xc02108e763210c08859f60c5f6c23994833fdc33b78c04dc4b3bce67d13e6ccd",
+      "W-2 0xfbee0cd95352a78804188c09c988b15d975c722e050885bad3479af980ae027e",
+      "W-2 0x8d6a5e03fa7590e9231d3fff3c244f1978328eb432dddf88f0cf22bc87ba8dfd",
+      "W-3 0xe4f039a990dd4e2a1f8663a92b4a6d476dff4fc5566643e7958a79269c88194f",
+      "W-5 0x2aa35390f0041fb6dde6b9241bdeece769e18171f27c0216a2419e921116337d",
+      "W-4 0x665838e29a3ffb39e6b909e5e84e6d071945153db049ff01228862ce0863fdf0"
+    ],
+    "note": "The sequence is therefore one facility and one unbroken chain of state, but not one tight block range. The block numbers show the seam, and every adopted transaction was re-read from the chain and re-asserted here rather than taken on trust."
+  },
+  "ending": {
+    "covenantState": "CURE",
+    "byDesign": true,
+    "statement": "The facility is left in CURE on purpose. Step six of this run is the waiver lapsing, and a lapsed waiver returns the vault to the state it was in before the exception. Cover is still below policy because nothing in this run restored it. A reader who checks the chain after the run and finds CURE is seeing the last step succeed, not the run fail."
+  }
+}

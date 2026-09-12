@@ -1,0 +1,129 @@
+{
+  "title": "Signa Covenant: the waiver inside the one-run sequence",
+  "generatedAt": "2026-09-12T05:32:03.376Z",
+  "outcome": "complete",
+  "network": {
+    "chainId": 5042002,
+    "rpcUrl": "https://rpc.testnet.arc.network",
+    "explorer": "https://testnet.arcscan.app"
+  },
+  "deployment": {
+    "sourceCommit": "5fefd2322f148cdbd713fa9b266c74b6f044b940",
+    "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+    "facilityRegistry": "0xB54fe913C4a7dE73Bc285338dCbb384AEec5e448",
+    "credentialRegistry": "0xD921734C9314442a74Cd3FEBAB8028b2Bb9A7624",
+    "coverageEngine": "0x3341B76fEFF4CE691781fEAa4C76EA95479b9b6b",
+    "covenantVault": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+    "settlementAsset": "0x3600000000000000000000000000000000000000",
+    "exposureDenomination": {
+      "currency": "EUR",
+      "referenceAsset": {
+        "address": "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a",
+        "decimals": 6,
+        "symbol": "EURC"
+      },
+      "note": "Denominating asset of the exposure, referenced only (E-DEC-2). No EURC is transferred, held or approved. The exposure is a EUR-denominated loan book asserted by ExposureCredential; the facility is funded, drawn and repaid in USDC."
+    }
+  },
+  "sequence": "scenarios/arc-waiver-run.ts — see scenarios/output/arc-waiver-run-evidence.json for the draws either side of it",
+  "intentId": "r60i4ex2el0w2rqqe0mgdufn",
+  "statedReason": "Hedge replacement in progress with the broker; a bounded 300-second exception while cover is restored. Arc Testnet rehearsal, fictional facility.",
+  "reasonCommitment": "0x954d76348692d1dfa9b9542e6994b41319ff3bffdb6d1ed14615986dc999dc51",
+  "durationSeconds": 300,
+  "endsAt": "2026-09-12T05:24:47.000Z",
+  "admin": {
+    "address": "0x55C4DD3770A44695735717CB7b7005AC7dE9edA1",
+    "privyWalletId": "zc9i4be5osru1qyzfci337mi",
+    "keyQuorumId": "pbf1jtt1knpsl30eyp0z163t",
+    "threshold": 2,
+    "policyId": "y5x9g8gglndai2hosm47zvxf"
+  },
+  "call": {
+    "to": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+    "functionName": "createWaiver",
+    "args": [
+      "300",
+      "\"0x954d76348692d1dfa9b9542e6994b41319ff3bffdb6d1ed14615986dc999dc51\""
+    ],
+    "data": "0x6738bca7000000000000000000000000000000000000000000000000000000000000012c954d76348692d1dfa9b9542e6994b41319ff3bffdb6d1ed14615986dc999dc51"
+  },
+  "pinned": {
+    "chainId": 5042002,
+    "nonce": 5,
+    "gasLimit": "207398",
+    "maxFeePerGasWei": "52000000000"
+  },
+  "readiness": {
+    "facilityId": "0x899dc705b298baf794bb1fab7734bdd59b48f7eda766f6830d6c30768cc0d5e2",
+    "vault": "0xa68fB25ba98d522ce8326471A6b6BF3732E3bF51",
+    "covenantState": "WAIVED",
+    "activeWaiver": false,
+    "waiverEndsAt": "1789190687",
+    "coverage": {
+      "assessed": true,
+      "compliant": false,
+      "coverageBps": 6840,
+      "requiredCoverageBps": 10000,
+      "eligibleHedgeCount": 1,
+      "totalHedgeCount": 1,
+      "exposureReason": "ELIGIBLE",
+      "resultReason": "BELOW_THRESHOLD"
+    },
+    "maxWaiverDurationSeconds": 259200,
+    "refusals": []
+  },
+  "gas": {
+    "adminBefore": "0.28793051675",
+    "adminAfter": "0.28418363075",
+    "spentOnThisWaiver": "0.003746886",
+    "furtherWaiversAtThisPrice": "75",
+    "topUp": "faucet.circle.com funds 20 USDC per address every two hours"
+  },
+  "approvals": [
+    {
+      "role": "Risk officer",
+      "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEdTLnqVlKlu7pil38bXDIoTeFbbTWO2ILftJpmdIFKHejmkOrh+ssVfpBkr5mNkHLrSRlkC4eIA7FhSOPAIy+0A==",
+      "signedAt": "2026-09-12T04:39:37.940Z",
+      "signedPayloadSha256": null,
+      "signature": null,
+      "signatureVerifies": null
+    },
+    {
+      "role": "Treasury lead",
+      "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAED4DCLEErSAdbIY64mQIcK4ZZHKfpvGP3T+UfA3YXFQsmSPpiQVDmwyoVkU5QsxnSgKjDleBwex40ODQtoZqPvA==",
+      "signedAt": "2026-09-12T04:39:41.004Z",
+      "signedPayloadSha256": null,
+      "signature": null,
+      "signatureVerifies": null
+    }
+  ],
+  "privySigned": {
+    "signedTransaction": "0x02f8b4834cef52058477359400850c1b71080083032a2694a68fb25ba98d522ce8326471a6b6bf3732e3bf5180b8446738bca7000000000000000000000000000000000000000000000000000000000000012c954d76348692d1dfa9b9542e6994b41319ff3bffdb6d1ed14615986dc999dc51c080a0627a1497d5a87e12d58f9b10ef7eb2bac18bfef732d2013e7564bc2d7735a38fa03f1f3efa6af6cc80ab8b84c2785ce766eec328137154fd5bc57b94b17f47a4ce",
+    "recoveredSigner": "0x55C4DD3770A44695735717CB7b7005AC7dE9edA1",
+    "decodedNonce": 5,
+    "decodedTo": "0xa68fb25ba98d522ce8326471a6b6bf3732e3bf51",
+    "decodedValue": "0"
+  },
+  "broadcast": {
+    "transactionHash": "0x665838e29a3ffb39e6b909e5e84e6d071945153db049ff01228862ce0863fdf0",
+    "explorer": "https://testnet.arcscan.app/tx/0x665838e29a3ffb39e6b909e5e84e6d071945153db049ff01228862ce0863fdf0",
+    "blockNumber": "61682877",
+    "blockTimestamp": "2026-09-12T05:19:47.000Z",
+    "sender": "0x55c4dd3770a44695735717cb7b7005ac7de9eda1",
+    "expectedStatus": "0x1",
+    "actualStatus": "0x1",
+    "gasUsed": "170313"
+  },
+  "assertions": {
+    "bothApproversSigned": true,
+    "signaturesReVerifiedHere": "not re-verified in this process: both approvals were made before it started, and Privy holds them. Their timestamps above are Privy's record, not a signature this run checked.",
+    "exactlyOneWaiverCreated": true,
+    "waiverCreatedNamesThisFacility": true,
+    "waiverCreatedCommitsToTheStatedReason": true,
+    "signedByTheAdminWallet": true,
+    "signedTransactionIsTheApprovedOne": true,
+    "receiptStatusIs0x1": true,
+    "covenantStateReadBackWaived": true
+  },
+  "disclaimer": "Fictional EUR-denominated loan book. Mock provider and exposure data. Testnet USDC only; no real counterparties."
+}
