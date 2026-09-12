@@ -31,7 +31,9 @@ const LOCAL_PATHS: [needle: string, label: string][] = [
  */
 const THIRD_PARTY_EXAMPLES: { file: RegExp; literal: string }[] = [{ file: /^playground-modal\.client-[\w-]+\.js$/, literal: "/home/user/" }];
 const FORBIDDEN = [
-  /PRIVY_APP_SECRET/,
+  // The variable's NAME belongs in the docs: an operator has to be told which one to set. What
+  // must never appear is a value assigned to it.
+  /PRIVY_APP_SECRET["']?\s*[:=]\s*["']?[A-Za-z0-9_\-]{8,}/,
   // A PEM header followed by key material. A bare header is not a key: the bundled OpenAPI
   // playground uses `-----BEGIN PRIVATE KEY-----` as an input placeholder.
   /-----BEGIN (?:EC |RSA |OPENSSH )?PRIVATE KEY-----(?:\\n|\s)*[A-Za-z0-9+/]{40,}/,
@@ -39,6 +41,16 @@ const FORBIDDEN = [
   /"privateKey"/,
   /PRODUCT-THESIS|CUTLIST|SPONSOR-STRATEGY-REVIEW|ETHONLINE-WORKSTREAMS/,
 ];
+
+/**
+ * The name and its value do not have to appear together. `{"key":"PRIVY_APP_SECRET","value":"…"}`
+ * defeats the name pattern above, and a minified bundle can carry the value with the name nowhere
+ * in sight. So when the secret is in this environment, assert no built file contains it literally,
+ * in any file, text or not. Skipped when the variable is unset, which is the usual case: the name
+ * pattern above still covers that. The value is never printed, only the file that carries it.
+ */
+const SECRET = process.env["PRIVY_APP_SECRET"]?.trim();
+const SECRET_BYTES = SECRET && SECRET.length >= 8 ? Buffer.from(SECRET) : undefined;
 
 const problems: string[] = [];
 for (const page of ALLOWED_PAGES) {
@@ -63,6 +75,9 @@ const walk = (directory: URL, relative: string): void => {
       walk(new URL(`${name}/`, directory), `${relative}${name}/`);
       continue;
     }
+    if (SECRET_BYTES && readFileSync(entry).includes(SECRET_BYTES)) {
+      problems.push(`${relative}${name} contains the literal value of PRIVY_APP_SECRET`);
+    }
     if (!TEXT.test(name)) continue;
     scanned += 1;
     const text = readFileSync(entry, "utf8");
@@ -83,5 +98,6 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log(
-  `docs build verified: ${PAGES.length} pages with Markdown twins, llms.txt and llms-full.txt; ${scanned} text files scanned, no local paths or secrets`,
+  `docs build verified: ${PAGES.length} pages with Markdown twins, llms.txt and llms-full.txt; ${scanned} text files scanned, no local paths or secrets` +
+    `; PRIVY_APP_SECRET value check ${SECRET_BYTES ? "ran against every file" : "skipped (unset in this environment)"}`,
 );

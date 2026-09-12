@@ -624,3 +624,278 @@ Reads only: no key, no transaction.
 ```bash
 pnpm signa tx show 0x38b3fd96e8a065030cdc1e551394e8aa9784e59edd0f225544614069e099d414
 ```
+
+## signa waiver approve
+
+Approve the proposal in flight as one of the two quorum members, signing a freshly stamped payload
+
+```bash
+pnpm signa waiver approve --role <role> [options]
+```
+
+**Changes a proposal, not the chain.** It authorizes a Privy intent; nothing reaches Arc until `signa waiver broadcast`. No keystore is involved, and Privy credentials come from the environment, never a flag.
+
+### Options
+
+| Option | Type | Required | Description |
+|---|---|---|---|
+| `--manifest` | `string` | no | Deployment manifest file. Default: SIGNA_MANIFEST, then the bundled Arc Testnet manifest |
+| `--rpc-url` | `string` | no | RPC URL. Default: SIGNA_RPC_URL, then the manifest's rpcUrl |
+| `--role` | `"risk-officer" \| "treasury-lead"` | yes | Which approver key signs |
+| `--intent` | `string` | no | The proposal to act on. Defaults to the one in flight, since only one can be |
+
+### Environment variables
+
+| Variable | Type | Description |
+|---|---|---|
+| `SIGNA_MANIFEST` | `string` | Deployment manifest file, used when --manifest is not given |
+| `SIGNA_RPC_URL` | `string` | RPC URL, used when --rpc-url is not given |
+| `PRIVY_APP_ID` | `string` | Privy app id. Required by every waiver command except status |
+| `PRIVY_APP_SECRET` | `string` | Privy app secret. Read from the environment only, never from a flag, which would land in shell history |
+| `PRIVY_API_URL` | `string` | Privy API base URL. Defaults to https://api.privy.io |
+| `PRIVY_WALLET_ID` | `string` | Overrides the quorum wallet the manifest names |
+| `PRIVY_APPROVER_KEY_DIR` | `string` | Approver key directory. Defaults to ~/.signa-privy-waiver/approvers |
+| `PRIVY_WAIVER_STORE` | `string` | Where proposals are recorded. Defaults to ~/.signa-privy-waiver/actions.json |
+| `SIGNA_JOURNAL` | `string` | Operation journal file. Must be outside the repository. Default $XDG_STATE_HOME/signa/operations.jsonl |
+| `XDG_STATE_HOME` | `string` | Base directory for the default operation journal location |
+
+### Output
+
+| Field | Type | Description |
+|---|---|---|
+| `schemaVersion` | `1` |  |
+| `kind` | `"proposal"` | Not a chain transaction: a Privy intent, which only broadcast puts on chain |
+| `dataMode` | `"live"` |  |
+| `context` | `object` |  |
+| `proposal` | `object` |  |
+| `store` | `object` |  |
+| `scope` | `string` |  |
+| `approved` | `object` |  |
+| `remaining` | `number` | Approvals still needed before Privy will sign |
+
+### Examples
+
+- Approve as the risk officer:
+
+```bash
+pnpm signa waiver approve --role risk-officer
+```
+
+## signa waiver broadcast
+
+Broadcast the transaction Privy signed once both approvals are in, and decide by the receipt
+
+```bash
+pnpm signa waiver broadcast [options]
+```
+
+**Broadcasts one transaction**, the one the key quorum already signed. Its hash is recorded before any receipt wait, and success is decided by the receipt, never by the signing service.
+
+### Options
+
+| Option | Type | Required | Description |
+|---|---|---|---|
+| `--manifest` | `string` | no | Deployment manifest file. Default: SIGNA_MANIFEST, then the bundled Arc Testnet manifest |
+| `--rpc-url` | `string` | no | RPC URL. Default: SIGNA_RPC_URL, then the manifest's rpcUrl |
+| `--intent` | `string` | no | The proposal to act on. Defaults to the one in flight, since only one can be |
+
+### Environment variables
+
+| Variable | Type | Description |
+|---|---|---|
+| `SIGNA_MANIFEST` | `string` | Deployment manifest file, used when --manifest is not given |
+| `SIGNA_RPC_URL` | `string` | RPC URL, used when --rpc-url is not given |
+| `PRIVY_APP_ID` | `string` | Privy app id. Required by every waiver command except status |
+| `PRIVY_APP_SECRET` | `string` | Privy app secret. Read from the environment only, never from a flag, which would land in shell history |
+| `PRIVY_API_URL` | `string` | Privy API base URL. Defaults to https://api.privy.io |
+| `PRIVY_WALLET_ID` | `string` | Overrides the quorum wallet the manifest names |
+| `PRIVY_APPROVER_KEY_DIR` | `string` | Approver key directory. Defaults to ~/.signa-privy-waiver/approvers |
+| `PRIVY_WAIVER_STORE` | `string` | Where proposals are recorded. Defaults to ~/.signa-privy-waiver/actions.json |
+| `SIGNA_JOURNAL` | `string` | Operation journal file. Must be outside the repository. Default $XDG_STATE_HOME/signa/operations.jsonl |
+| `XDG_STATE_HOME` | `string` | Base directory for the default operation journal location |
+
+### Output
+
+| Field | Type | Description |
+|---|---|---|
+| `schemaVersion` | `1` |  |
+| `kind` | `"transaction"` |  |
+| `dataMode` | `"live"` |  |
+| `context` | `object` |  |
+| `proposal` | `object` |  |
+| `broadcast` | `true` |  |
+| `transaction` | `object` |  |
+| `waiverCreated` | `object \| null` | The event the receipt must carry, checked against this facility and the stated reason |
+| `journal` | `object` |  |
+| `scope` | `string` |  |
+
+### Examples
+
+- Broadcast the approved waiver:
+
+```bash
+pnpm signa waiver broadcast
+```
+
+## signa waiver propose
+
+Propose a waiver as a Privy intent, after checking the contract would accept it. Nothing is signed or sent
+
+```bash
+pnpm signa waiver propose --duration <duration> --reason <reason> [options]
+```
+
+**Changes a proposal, not the chain.** It authorizes a Privy intent; nothing reaches Arc until `signa waiver broadcast`. No keystore is involved, and Privy credentials come from the environment, never a flag.
+
+### Options
+
+| Option | Type | Required | Description |
+|---|---|---|---|
+| `--manifest` | `string` | no | Deployment manifest file. Default: SIGNA_MANIFEST, then the bundled Arc Testnet manifest |
+| `--rpc-url` | `string` | no | RPC URL. Default: SIGNA_RPC_URL, then the manifest's rpcUrl |
+| `--duration` | `string` | yes | How long the waiver lasts, in whole seconds. Rehearse with 300: a waiver cannot be revoked |
+| `--reason` | `string` | yes | Why the covenant is being overridden. Only its keccak256 goes on chain |
+
+### Environment variables
+
+| Variable | Type | Description |
+|---|---|---|
+| `SIGNA_MANIFEST` | `string` | Deployment manifest file, used when --manifest is not given |
+| `SIGNA_RPC_URL` | `string` | RPC URL, used when --rpc-url is not given |
+| `PRIVY_APP_ID` | `string` | Privy app id. Required by every waiver command except status |
+| `PRIVY_APP_SECRET` | `string` | Privy app secret. Read from the environment only, never from a flag, which would land in shell history |
+| `PRIVY_API_URL` | `string` | Privy API base URL. Defaults to https://api.privy.io |
+| `PRIVY_WALLET_ID` | `string` | Overrides the quorum wallet the manifest names |
+| `PRIVY_APPROVER_KEY_DIR` | `string` | Approver key directory. Defaults to ~/.signa-privy-waiver/approvers |
+| `PRIVY_WAIVER_STORE` | `string` | Where proposals are recorded. Defaults to ~/.signa-privy-waiver/actions.json |
+| `SIGNA_JOURNAL` | `string` | Operation journal file. Must be outside the repository. Default $XDG_STATE_HOME/signa/operations.jsonl |
+| `XDG_STATE_HOME` | `string` | Base directory for the default operation journal location |
+
+### Output
+
+| Field | Type | Description |
+|---|---|---|
+| `schemaVersion` | `1` |  |
+| `kind` | `"proposal"` | Not a chain transaction: a Privy intent, which only broadcast puts on chain |
+| `dataMode` | `"live"` |  |
+| `context` | `object` |  |
+| `proposal` | `object` |  |
+| `store` | `object` |  |
+| `scope` | `string` |  |
+| `willSign` | `string` | Exactly what each approver will authorize |
+
+### Examples
+
+- Propose a five-minute waiver:
+
+```bash
+pnpm signa waiver propose --duration 300 --reason Hedge rolled early; replacement confirmed for value tomorrow
+```
+
+## signa waiver reject
+
+Reject the proposal in flight, releasing the wallet nonce it pinned so a later waiver can be proposed
+
+```bash
+pnpm signa waiver reject [options]
+```
+
+**Changes a proposal, not the chain.** It authorizes a Privy intent; nothing reaches Arc until `signa waiver broadcast`. No keystore is involved, and Privy credentials come from the environment, never a flag.
+
+### Options
+
+| Option | Type | Required | Description |
+|---|---|---|---|
+| `--manifest` | `string` | no | Deployment manifest file. Default: SIGNA_MANIFEST, then the bundled Arc Testnet manifest |
+| `--rpc-url` | `string` | no | RPC URL. Default: SIGNA_RPC_URL, then the manifest's rpcUrl |
+| `--intent` | `string` | no | The proposal to act on. Defaults to the one in flight, since only one can be |
+
+### Environment variables
+
+| Variable | Type | Description |
+|---|---|---|
+| `SIGNA_MANIFEST` | `string` | Deployment manifest file, used when --manifest is not given |
+| `SIGNA_RPC_URL` | `string` | RPC URL, used when --rpc-url is not given |
+| `PRIVY_APP_ID` | `string` | Privy app id. Required by every waiver command except status |
+| `PRIVY_APP_SECRET` | `string` | Privy app secret. Read from the environment only, never from a flag, which would land in shell history |
+| `PRIVY_API_URL` | `string` | Privy API base URL. Defaults to https://api.privy.io |
+| `PRIVY_WALLET_ID` | `string` | Overrides the quorum wallet the manifest names |
+| `PRIVY_APPROVER_KEY_DIR` | `string` | Approver key directory. Defaults to ~/.signa-privy-waiver/approvers |
+| `PRIVY_WAIVER_STORE` | `string` | Where proposals are recorded. Defaults to ~/.signa-privy-waiver/actions.json |
+| `SIGNA_JOURNAL` | `string` | Operation journal file. Must be outside the repository. Default $XDG_STATE_HOME/signa/operations.jsonl |
+| `XDG_STATE_HOME` | `string` | Base directory for the default operation journal location |
+
+### Output
+
+| Field | Type | Description |
+|---|---|---|
+| `schemaVersion` | `1` |  |
+| `kind` | `"proposal"` | Not a chain transaction: a Privy intent, which only broadcast puts on chain |
+| `dataMode` | `"live"` |  |
+| `context` | `object` |  |
+| `proposal` | `object` |  |
+| `store` | `object` |  |
+| `scope` | `string` |  |
+
+### Examples
+
+- Reject the proposal in flight:
+
+```bash
+pnpm signa waiver reject
+```
+
+## signa waiver status
+
+Report whether the contract would accept a waiver now, and every reason it would refuse one
+
+```bash
+pnpm signa waiver status [options]
+```
+
+Reads only: no key, no transaction.
+
+### Options
+
+| Option | Type | Required | Description |
+|---|---|---|---|
+| `--manifest` | `string` | no | Deployment manifest file. Default: SIGNA_MANIFEST, then the bundled Arc Testnet manifest |
+| `--rpc-url` | `string` | no | RPC URL. Default: SIGNA_RPC_URL, then the manifest's rpcUrl |
+
+### Environment variables
+
+| Variable | Type | Description |
+|---|---|---|
+| `SIGNA_MANIFEST` | `string` | Deployment manifest file, used when --manifest is not given |
+| `SIGNA_RPC_URL` | `string` | RPC URL, used when --rpc-url is not given |
+| `PRIVY_APP_ID` | `string` | Privy app id. Required by every waiver command except status |
+| `PRIVY_APP_SECRET` | `string` | Privy app secret. Read from the environment only, never from a flag, which would land in shell history |
+| `PRIVY_API_URL` | `string` | Privy API base URL. Defaults to https://api.privy.io |
+| `PRIVY_WALLET_ID` | `string` | Overrides the quorum wallet the manifest names |
+| `PRIVY_APPROVER_KEY_DIR` | `string` | Approver key directory. Defaults to ~/.signa-privy-waiver/approvers |
+| `PRIVY_WAIVER_STORE` | `string` | Where proposals are recorded. Defaults to ~/.signa-privy-waiver/actions.json |
+| `SIGNA_JOURNAL` | `string` | Operation journal file. Must be outside the repository. Default $XDG_STATE_HOME/signa/operations.jsonl |
+| `XDG_STATE_HOME` | `string` | Base directory for the default operation journal location |
+
+### Output
+
+| Field | Type | Description |
+|---|---|---|
+| `schemaVersion` | `1` |  |
+| `kind` | `"report"` |  |
+| `dataMode` | `"live"` |  |
+| `context` | `object` |  |
+| `wouldAccept` | `boolean` | Whether createWaiver would be accepted now. A refusal is an answer, so this exits 0 either way |
+| `refusals` | `array of string` | Every reason the contract would refuse a waiver of any duration. Empty when it would accept one |
+| `covenant` | `object` |  |
+| `coverage` | `object` | A fresh evaluation, because createWaiver syncs before it checks |
+| `maxWaiverDurationSeconds` | `number` |  |
+| `scope` | `string` |  |
+
+### Examples
+
+- Check whether a waiver could be created now:
+
+```bash
+pnpm signa waiver status
+```

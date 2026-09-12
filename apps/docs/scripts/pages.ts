@@ -35,6 +35,7 @@ export const PAGES: readonly Page[] = [
   page("/guides/explain-a-refused-draw", "guides/explain-a-refused-draw.md"),
   page("/guides/submit-a-credential", "guides/submit-a-credential.md"),
   page("/guides/send-and-reconcile", "guides/send-and-reconcile.md"),
+  page("/guides/approve-a-waiver", "guides/approve-a-waiver.md"),
   page("/reference/commands", "reference/commands.md"),
   page("/reference/errors", "reference/errors.md"),
   page("/reference/envelope", "reference/envelope.md"),

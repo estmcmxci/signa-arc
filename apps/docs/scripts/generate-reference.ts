@@ -66,13 +66,7 @@ export async function renderCommandsPage(): Promise<string> {
     const { args, options, env, output } = command.schema ?? {};
     lines.push(`## signa ${command.name}`, "", command.description ?? "", "");
     lines.push("```bash", `pnpm signa ${command.name}${usage(args, options)}`, "```", "");
-    const signs = Boolean(options?.properties?.["account"]);
-    lines.push(
-      signs
-        ? "**Signs and sends one transaction.** It is simulated first as the named signer; if that refuses, nothing is broadcast. The hash is recorded in the operation journal before any receipt wait, and success is decided by the receipt."
-        : `Reads only: no key, no transaction${needsRpc(command.name) ? "" : ", and no RPC"}.`,
-      "",
-    );
+    lines.push(classify(command.name, options, output), "");
     if (args?.properties) lines.push(...fields("Arguments", args, "Argument"));
     if (options?.properties) lines.push(...fields("Options", options, "Option", true));
     if (env?.properties) lines.push(...fields("Environment variables", env, "Variable"));
@@ -332,6 +326,24 @@ function typeName(schema: JsonSchema): string {
   if (schema.anyOf) return schema.anyOf.map(typeName).join(" | ");
   if (schema.type === "array") return `array of ${schema.items ? typeName(schema.items) : "values"}`;
   return Array.isArray(schema.type) ? schema.type.join(" | ") : (schema.type ?? "value");
+}
+
+/**
+ * What a command can change, taken from the `kind` its own output schema declares, so it cannot
+ * drift from the binary: `transaction` puts something on chain, `proposal` authorizes a Privy
+ * intent that only `waiver broadcast` puts on chain, and anything else only reads.
+ */
+function classify(name: string, options: JsonSchema | undefined, output: JsonSchema | undefined): string {
+  const kind = output?.properties?.["kind"]?.const;
+  if (kind === "transaction") {
+    return options?.properties?.["account"]
+      ? "**Signs and sends one transaction.** It is simulated first as the named signer; if that refuses, nothing is broadcast. The hash is recorded in the operation journal before any receipt wait, and success is decided by the receipt."
+      : "**Broadcasts one transaction**, the one the key quorum already signed. Its hash is recorded before any receipt wait, and success is decided by the receipt, never by the signing service.";
+  }
+  if (kind === "proposal") {
+    return "**Changes a proposal, not the chain.** It authorizes a Privy intent; nothing reaches Arc until `signa waiver broadcast`. No keystore is involved, and Privy credentials come from the environment, never a flag.";
+  }
+  return `Reads only: no key, no transaction${needsRpc(name) ? "" : ", and no RPC"}.`;
 }
 
 function needsRpc(name: string): boolean {
