@@ -985,6 +985,8 @@ function gitState() {
 }
 
 async function writeEvidence({ quiet = false }: { quiet?: boolean } = {}) {
+  // Chronological by the chain, whatever order this process recorded them in.
+  evidence.steps.sort((a, b) => (BigInt(a.blockNumber) < BigInt(b.blockNumber) ? -1 : BigInt(a.blockNumber) > BigInt(b.blockNumber) ? 1 : 0));
   await mkdir(EVIDENCE_DIR, { recursive: true });
   await mkdir(WAIVER_EVIDENCE_DIR, { recursive: true });
   const json = (value: unknown) => `${JSON.stringify(value, (_key, item: unknown) => (typeof item === "bigint" ? item.toString() : item), 2)}\n`;
