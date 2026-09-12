@@ -66,7 +66,7 @@ pnpm install --frozen-lockfile
 pnpm check
 ```
 
-`pnpm check` builds the Solidity artifacts, typechecks all TypeScript, runs 28 TypeScript tests across typed data, the decimals boundary, the provider adapter, and the Arc fixtures, runs 31 Solidity tests, and builds the dashboard. `contracts/out/` is gitignored, so a fresh checkout fails a bare `tsc` until `forge build` has run — use `pnpm check`, not `pnpm typecheck` alone.
+`pnpm check` builds the Solidity artifacts, typechecks all TypeScript, runs 170 TypeScript tests across typed data, the decimals boundary, the provider adapter, the Arc fixtures, the CLI, and the Privy waiver quorum service, runs 31 Solidity tests, builds the dashboard, and builds 16 documentation pages. `contracts/out/` is gitignored, so a fresh checkout fails a bare `tsc` until `forge build` has run — use `pnpm check`, not `pnpm typecheck` alone.
 
 The tested toolchain is Node.js `24.1.0`, pnpm `10.17.1`, Foundry `1.5.0`, and Solidity `0.8.30`. The lockfile and Solidity configuration pin dependency resolution, compiler version, and the `prague` EVM target. The first build may fetch the pinned Solidity compiler if it is absent from Foundry's cache; contract tests then run offline. [GitHub Actions](./.github/workflows/check.yml) runs this same sequence on every push.
 
@@ -105,6 +105,14 @@ Arc is Circle's EVM-compatible L1 where **USDC is the native gas token**. Canoni
 Deployed from source commit `7d66394654fa2147da495027af6d64cac38d2cf8`. Facility policy: minimum coverage 100.00%, default haircut 5.00%, 24-hour credential freshness, 7-day maturity tolerance, 5-day cure window, 3-day maximum waiver.
 
 **The facility admin is a Privy 2-of-2 key quorum** at [`0x55C4DD3770A44695735717CB7b7005AC7dE9edA1`](https://testnet.arcscan.app/address/0x55C4DD3770A44695735717CB7b7005AC7dE9edA1) — two named approvers, neither sufficient alone. `FacilityRegistry` writes `admin` once and has no setter, so that is permanent. Creating a waiver — the one action that overrides the covenant — therefore requires both. See `packages/privy-waiver/`.
+
+### Privy: the lender's override, not a single key
+
+The facility admin above is a **Privy-owned server wallet**, governed by a 2-of-2 key quorum: a risk officer and a treasury lead, each holding a non-extractable P-256 key in their own browser. Privy's own calldata policy restricts that wallet to one action, ever — `createWaiver` on this vault, on this chain, moving no value. Every other call, including `revokeWaiver`, is denied by Privy before it ever reaches a signature; the contract's own `maxWaiverDuration` bounds the exception, since a calldata policy cannot compare a `uint32`.
+
+`packages/privy-waiver` runs the approver console (`node --import tsx packages/privy-waiver/src/main.ts`): it pre-validates a proposed waiver against the live chain — refusing what the contract would refuse — collects both P-256 signatures over a fresh, timestamped payload, forwards them to Privy for the actual signature, then broadcasts and verifies the receipt and the `WaiverCreated` event. The operator desk's waiver panel at `/app/` is the same flow, live: propose → risk officer approves (1 of 2, nothing executes) → treasury lead approves (2 of 2) → Privy signs → broadcast → checked receipt. The `signa waiver status | propose | approve | broadcast` CLI commands expose the identical service.
+
+**What Privy enables here:** custody of the one key that can override the covenant, without that key ever sitting in one person's hands, and without a general-purpose signer that could be tricked into approving anything else.
 
 ### EURC is referenced, never moved
 
