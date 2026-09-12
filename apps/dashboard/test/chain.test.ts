@@ -19,7 +19,7 @@ import { arcTestnet } from 'viem/chains';
 import { answer, ARC_CHAIN_ID, CHAIN_ABI, chainAddresses, FixtureChain, type ReplacementReason } from '../src/test/chain.ts';
 import { FIXTURE_STATES, fixtureSnapshot, fixtureVerdict } from '../src/test/fixtures.ts';
 import { routeRequest } from '../src/test/harness.ts';
-import { FixtureWallet, OTHER_ACCOUNT, OTHER_CHAIN } from '../src/test/wallet.ts';
+import { FixtureWallet, OTHER_ACCOUNT, OTHER_CHAIN } from './support/fixtureWallet.ts';
 
 const root = new URL('../', import.meta.url);
 const json = async (path: string) => JSON.parse(await readFile(new URL(path, root), 'utf8')) as unknown;
@@ -258,14 +258,20 @@ test('the page may reach only its own origin and the fixture node', async () => 
   assert.equal(new FixtureChain('slow', A).transport, 'slow');
 });
 
-test('the chain and wallet fixtures hold no key and open no connection of their own', async () => {
-  for (const file of ['chain', 'wallet', 'harness', 'entry']) {
+test('the chain fixture and dev harness hold no key and open no connection of their own', async () => {
+  for (const file of ['chain', 'harness', 'entry']) {
     const source = await readFile(new URL(`src/test/${file}.ts`, root), 'utf8');
     for (const forbidden of ['wagmi', 'privateKey', 'mnemonic', 'createWalletClient', 'createPublicClient', 'signTransaction(', 'sendRawTransaction(', 'http(', '../data/client']) {
       assert.equal(source.includes(forbidden), false, `${file}: ${forbidden}`);
     }
-    if (file === 'chain' || file === 'wallet') {
+    if (file === 'chain') {
       for (const forbidden of ['fetch(', 'WebSocket', 'XMLHttpRequest', 'navigator.']) assert.equal(source.includes(forbidden), false, `${file}: ${forbidden}`);
     }
+  }
+  // The test-only fixture wallet (test/support/fixtureWallet.ts) lives outside src/,
+  // so it can never reach the bundle regardless of what it imports.
+  const walletSource = await readFile(new URL('test/support/fixtureWallet.ts', root), 'utf8');
+  for (const forbidden of ['privateKey', 'mnemonic', 'fetch(', 'WebSocket', 'XMLHttpRequest', 'navigator.']) {
+    assert.equal(walletSource.includes(forbidden), false, `fixtureWallet: ${forbidden}`);
   }
 });

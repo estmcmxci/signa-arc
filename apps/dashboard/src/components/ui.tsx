@@ -3,8 +3,14 @@ import { Tooltip } from '@base-ui/react/tooltip';
 import { Dialog } from '@base-ui/react/dialog';
 import { short } from '../data/format';
 
+// Waiver-action statuses (Privy's own vocabulary, packages/privy-waiver) join the same
+// four-tone system: 'executed' is every approval gathered, not yet broadcast — ok, like
+// a permitted verdict. 'pending'/'rejected'/'expired' are holds, not breaches or errors:
+// nothing here is a covenant breaking or the software failing. 'failed' is the service
+// or Privy itself not completing a step, which is this system's error tone.
+const EXPLICIT_TONES=new Set(['ok','hold','breach','waiver','error','neutral']);
 export function Badge({state,children}:{state:string;children?:ReactNode}){
-  const tone=state==='COMPLIANT'||state==='PERMITTED'||state==='FRESH'||state==='confirmed'?'ok':state==='BREACH'||state==='STALE'?'breach':state==='WAIVED'?'waiver':state==='READ FAILED'?'error':state==='CURE'||state==='HELD'||state==='AGEING'||state==='reverted'?'hold':'neutral';
+  const tone=EXPLICIT_TONES.has(state)?state:state==='COMPLIANT'||state==='PERMITTED'||state==='FRESH'||state==='confirmed'||state==='executed'?'ok':state==='BREACH'||state==='STALE'?'breach':state==='WAIVED'?'waiver':state==='READ FAILED'||state==='failed'?'error':state==='CURE'||state==='HELD'||state==='AGEING'||state==='reverted'||state==='pending'||state==='rejected'||state==='expired'?'hold':'neutral';
   const glyph={ok:'●',hold:'▣',breach:'⬡',waiver:'⊘',error:'■',neutral:'○'}[tone];
   return <span className={`badge ${tone}`} role="status"><span aria-hidden="true">{glyph}</span>{children??state}</span>;
 }
