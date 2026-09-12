@@ -655,7 +655,10 @@ async function waive() {
   const decoded = parseTransaction(signedTransaction);
   const recoveredSigner = await recoverTransactionAddress({ serializedTransaction: signedTransaction });
   const step = await record("W-4", `createWaiver(${durationSeconds} s) by the 2-of-2 quorum`, broadcast.hash, "0x1");
-  const commitment = reasonCommitment(statedReason);
+  // The reason the intent carries, not the one retyped on the command line: the commitment check
+  // is only worth making against what was actually proposed and approved.
+  const recordedReason = proposed.reason ?? statedReason;
+  const commitment = reasonCommitment(recordedReason);
   const created = step.events.find((event) => event.event === "WaiverCreated")?.args as { facilityId?: Hex; reasonCommitment?: Hex; endsAt?: bigint } | undefined;
   assert(created, "the receipt carries no WaiverCreated");
   assert.equal(String(created.facilityId).toLowerCase(), facilityId.toLowerCase(), "WaiverCreated names another facility");
@@ -682,7 +685,7 @@ async function waive() {
   });
   evidence.waiver = {
     intentId: proposed.intentId,
-    statedReason,
+    statedReason: recordedReason,
     reasonCommitment: commitment,
     durationSeconds,
     endsAt: iso(endsAt),
